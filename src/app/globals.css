@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/*
+ * Paleta em variáveis CSS.
+ *
+ * A ideia: nenhum componente escreve uma cor literal. Todos usam estes nomes.
+ * Assim, trocar o visual do app inteiro é mexer só neste arquivo — e o modo
+ * escuro funciona sozinho, porque só os valores mudam lá embaixo.
+ */
+:root {
+  --fundo: #f7f7f8;
+  --painel: #ffffff;
+  --borda: #e3e3e6;
+  --texto: #1c1c1e;
+  --texto-suave: #6b6b73;
+  --destaque: #6d5bd0;
+  --destaque-suave: #efecfb;
+  --bolha-usuario: #6d5bd0;
+  --bolha-usuario-texto: #ffffff;
+  --bolha-agente: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #131316;
+    --painel: #1a1a1f;
+    --borda: #2c2c33;
+    --texto: #ececee;
+    --texto-suave: #9a9aa4;
+    --destaque: #9b8cf0;
+    --destaque-suave: #26233a;
+    --bolha-usuario: #6d5bd0;
+    --bolha-usuario-texto: #ffffff;
+    --bolha-agente: #22222a;
+  }
+}
+
+/*
+ * `@theme inline` registra as variáveis no Tailwind. É isso que faz classes
+ * como `bg-painel`, `text-suave` e `border-borda` existirem nos componentes.
+ */
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-painel: var(--painel);
+  --color-borda: var(--borda);
+  --color-texto: var(--texto);
+  --color-suave: var(--texto-suave);
+  --color-destaque: var(--destaque);
+  --color-destaque-suave: var(--destaque-suave);
+  --color-bolha-usuario: var(--bolha-usuario);
+  --color-bolha-usuario-texto: var(--bolha-usuario-texto);
+  --color-bolha-agente: var(--bolha-agente);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
