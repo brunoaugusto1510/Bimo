@@ -4,17 +4,21 @@
  *
  * Guarda o resultado em cache por alguns minutos: cada visita à página não
  * precisa refazer a chamada ao GitHub, e o preço é que uma nota criada direto
- * no Obsidian pode levar até `CACHE_TTL_MS` para aparecer aqui.
+ * no Obsidian pode levar até `CACHE_TTL_MS` para aparecer aqui. Toda escrita
+ * (quando ela existir, na Etapa 5) vai precisar invalidar esse cache.
  */
 
-import { getGitHubConfig, listTree, type GitHubConfig } from "./github";
+import { getGitHubConfig, listTree, readBlob, type GitHubConfig } from "./github";
 import type { ItemVault } from "./types";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Uma nota, sem conteúdo carregado ainda — só o suficiente para montar a árvore ou pedir o conteúdo depois. */
+export type NotaPlana = { caminho: string; sha: string };
+
 type Cache = {
   carregadoEm: number;
-  itens: ItemVault[];
+  notas: NotaPlana[];
   truncado: boolean;
 };
 
@@ -29,9 +33,30 @@ function ehNota(path: string, cfg: GitHubConfig): boolean {
   return true;
 }
 
-/** Remove o prefixo da subpasta: a árvore mostrada só conhece caminhos relativos ao vault. */
+/** Remove o prefixo da subpasta: o resto do app só conhece caminhos relativos ao vault. */
 function paraCaminhoVault(path: string, cfg: GitHubConfig): string {
   return cfg.subpath ? path.slice(cfg.subpath.length + 1) : path;
+}
+
+/**
+ * A lista plana de notas (caminho + sha), usada tanto para montar a árvore
+ * da barra lateral quanto para o grafo de links e a leitura de conteúdo.
+ * É a única função aqui que fala com a API do GitHub.
+ */
+export async function obterNotasPlanas(): Promise<{ notas: NotaPlana[]; aviso?: string }> {
+  if (cache && Date.now() - cache.carregadoEm < CACHE_TTL_MS) {
+    return { notas: cache.notas, aviso: cache.truncado ? avisoTruncamento() : undefined };
+  }
+
+  const cfg = getGitHubConfig();
+  const { entries, truncated } = await listTree(cfg);
+
+  const notas = entries
+    .filter((entry) => ehNota(entry.path, cfg))
+    .map((entry) => ({ caminho: paraCaminhoVault(entry.path, cfg), sha: entry.sha }));
+
+  cache = { carregadoEm: Date.now(), notas, truncado: truncated };
+  return { notas, aviso: truncated ? avisoTruncamento() : undefined };
 }
 
 /**
@@ -86,26 +111,24 @@ function construirArvore(caminhos: string[]): ItemVault[] {
   return paraItens(raiz, "");
 }
 
-/** Busca a árvore do vault, usando o cache quando possível. */
+/** Busca a árvore do vault (para a barra lateral), usando o cache quando possível. */
 export async function obterArvoreDoVault(): Promise<{
   itens: ItemVault[];
   aviso?: string;
 }> {
-  if (cache && Date.now() - cache.carregadoEm < CACHE_TTL_MS) {
-    return { itens: cache.itens, aviso: cache.truncado ? avisoTruncamento() : undefined };
-  }
+  const { notas, aviso } = await obterNotasPlanas();
+  const itens = construirArvore(notas.map((n) => n.caminho));
+  return { itens, aviso };
+}
+
+/** Lê o conteúdo de uma nota específica, para o painel de leitura. `null` se ela não existir. */
+export async function lerConteudoDaNota(caminho: string): Promise<string | null> {
+  const { notas } = await obterNotasPlanas();
+  const nota = notas.find((n) => n.caminho === caminho);
+  if (!nota) return null;
 
   const cfg = getGitHubConfig();
-  const { entries, truncated } = await listTree(cfg);
-
-  const caminhos = entries
-    .filter((entry) => ehNota(entry.path, cfg))
-    .map((entry) => paraCaminhoVault(entry.path, cfg));
-
-  const itens = construirArvore(caminhos);
-
-  cache = { carregadoEm: Date.now(), itens, truncado: truncated };
-  return { itens, aviso: truncated ? avisoTruncamento() : undefined };
+  return readBlob(cfg, nota.sha);
 }
 
 function avisoTruncamento(): string {

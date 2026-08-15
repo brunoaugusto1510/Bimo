@@ -8,6 +8,8 @@ type Props = {
   /** O texto do campo vive no componente pai, porque clicar numa nota da barra lateral também escreve nele. */
   rascunho: string;
   onRascunhoChange: (texto: string) => void;
+  /** Chamado toda vez que uma resposta do agente chega — o grafo de fundo usa isso para "reagir". */
+  onRespostaAgente?: () => void;
 };
 
 const SUGESTOES = [
@@ -17,7 +19,7 @@ const SUGESTOES = [
   "Aonde paramos sobre aquele assunto de ontem?",
 ];
 
-export default function Chat({ rascunho, onRascunhoChange }: Props) {
+export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: Props) {
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
 
@@ -69,6 +71,7 @@ export default function Chat({ rascunho, onRascunhoChange }: Props) {
         },
       ]);
       setPensando(false);
+      onRespostaAgente?.();
     }, 700);
   }
 
@@ -81,7 +84,11 @@ export default function Chat({ rascunho, onRascunhoChange }: Props) {
   }
 
   return (
-    <section className="flex h-full flex-col bg-fundo">
+    // Sem cor de fundo sólida aqui: é essa transparência que deixa o
+    // GrafoDeFundo (renderizado atrás, no PaginaPrincipal) aparecer por trás
+    // das mensagens. As bolhas de mensagem continuam opacas — só o "vazio"
+    // ao redor delas mostra o grafo.
+    <section className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-5">
           {mensagens.length === 0 ? (
@@ -99,7 +106,7 @@ export default function Chat({ rascunho, onRascunhoChange }: Props) {
         </div>
       </div>
 
-      <div className="border-t border-borda bg-painel px-4 py-3">
+      <div className="border-t border-borda bg-painel/90 px-4 py-3 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-end gap-2">
           <textarea
             ref={campo}

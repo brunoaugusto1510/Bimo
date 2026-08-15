@@ -3,28 +3,41 @@
 import { useState } from "react";
 import BarraLateral from "@/components/BarraLateral";
 import Chat from "@/components/Chat";
+import GrafoDeFundo from "@/components/GrafoDeFundo";
+import LeitorDeNota from "@/components/LeitorDeNota";
+import type { Grafo } from "@/lib/grafo";
 import type { ItemVault } from "@/lib/types";
 
 type Props = {
-  /** Já vem pronta do servidor — este componente só cuida da interatividade. */
+  /** Já vem pronto do servidor — este componente só cuida da interatividade. */
   itens: ItemVault[];
+  grafo: Grafo;
   aviso?: string;
 };
 
-export default function PaginaPrincipal({ itens, aviso }: Props) {
-  // Estes dois estados moram aqui porque são compartilhados: a barra lateral
-  // escreve neles e o chat lê. Estado usado por um componente só (as mensagens,
-  // por exemplo) fica dentro do próprio componente.
-  const [notaSelecionada, setNotaSelecionada] = useState<string | null>(null);
+export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
+  // Caminho da nota aberta no painel de leitura — também é o que fica
+  // destacado na barra lateral e no grafo, então um estado só serve aos dois.
+  const [notaAberta, setNotaAberta] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState("");
 
   // No celular não cabem os dois painéis lado a lado, então a lista vira um menu.
   const [menuAberto, setMenuAberto] = useState(false);
 
-  function selecionarNota({ caminho, nome }: { caminho: string; nome: string }) {
-    setNotaSelecionada(caminho);
-    setRascunho(`O que eu anotei em "${nome}"?`);
+  // Incrementar isto é o sinal para o grafo dar um pulso de movimento —
+  // acontece na resposta falsa de hoje e vai continuar acontecendo quando a
+  // Etapa 4 trocar isso pela resposta de verdade do Gemini.
+  const [pulsoDoGrafo, setPulsoDoGrafo] = useState(0);
+
+  function abrirNota(caminho: string) {
+    setNotaAberta(caminho);
     setMenuAberto(false);
+  }
+
+  function perguntarSobreNota(caminho: string) {
+    const nome = caminho.split("/").pop()!.replace(/\.md$/i, "");
+    setRascunho(`O que eu anotei em "${nome}"?`);
+    setNotaAberta(null);
   }
 
   return (
@@ -47,9 +60,9 @@ export default function PaginaPrincipal({ itens, aviso }: Props) {
         <span aria-hidden className="w-9 md:hidden" />
       </header>
 
-      {aviso && (
+      {(aviso || grafo.aviso) && (
         <p className="shrink-0 border-b border-borda bg-destaque-suave px-4 py-1.5 text-center text-xs text-suave">
-          {aviso}
+          {aviso ?? grafo.aviso}
         </p>
       )}
 
@@ -59,16 +72,37 @@ export default function PaginaPrincipal({ itens, aviso }: Props) {
         >
           <BarraLateral
             itens={itens}
-            notaSelecionada={notaSelecionada}
-            onSelecionarNota={selecionarNota}
+            notaSelecionada={notaAberta}
+            onSelecionarNota={(nota) => abrirNota(nota.caminho)}
           />
         </div>
 
+        {/* relative: é a referência de posicionamento do GrafoDeFundo, que usa "absolute inset-0". */}
         {/* min-w-0 impede que uma mensagem longa estique este painel e quebre o layout. */}
-        <div className={`${menuAberto ? "hidden" : "block"} min-w-0 flex-1 md:block`}>
-          <Chat rascunho={rascunho} onRascunhoChange={setRascunho} />
+        <div className={`${menuAberto ? "hidden" : "block"} relative min-w-0 flex-1 md:block`}>
+          <GrafoDeFundo
+            nos={grafo.nos}
+            arestas={grafo.arestas}
+            notaAberta={notaAberta}
+            pulso={pulsoDoGrafo}
+            onAbrirNota={abrirNota}
+          />
+          <div className="relative h-full">
+            <Chat
+              rascunho={rascunho}
+              onRascunhoChange={setRascunho}
+              onRespostaAgente={() => setPulsoDoGrafo((n) => n + 1)}
+            />
+          </div>
         </div>
       </div>
+
+      <LeitorDeNota
+        key={notaAberta ?? "fechado"}
+        caminho={notaAberta}
+        onFechar={() => setNotaAberta(null)}
+        onPerguntar={perguntarSobreNota}
+      />
     </div>
   );
 }

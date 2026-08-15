@@ -1,12 +1,13 @@
 /**
  * Fala HTTP com a API REST do GitHub.
  *
- * Nada aqui sabe o que é uma "nota" ou o que é o Obsidian — isso fica em
- * `vault-real.ts`. Aqui só existem repositórios, branches e árvores de arquivo.
+ * Nada aqui sabe o que é uma "nota" ou o que é o Obsidian, nem o que é um
+ * grafo de links — isso fica em `vault-real.ts` e `grafo.ts`. Aqui só existem
+ * repositórios, branches, árvores de arquivo e blobs.
  *
- * Por enquanto só lê (`listTree`). Ler o conteúdo de um arquivo e escrever
- * commits fica para as etapas em que o Gemini precisar disso de verdade —
- * veja `etapas-futuras/github.ts` para essa versão mais completa.
+ * Por enquanto só lê. Escrever (criar/editar nota, o que gera um commit) fica
+ * para quando o Gemini precisar disso de verdade — veja `etapas-futuras/github.ts`
+ * para essa versão mais completa.
  */
 
 const GITHUB_API = "https://api.github.com";
@@ -64,15 +65,20 @@ export class GitHubError extends Error {
   }
 }
 
-async function request(cfg: GitHubConfig, path: string): Promise<Response> {
+async function request(
+  cfg: GitHubConfig,
+  path: string,
+  /** "raw" faz o GitHub devolver o arquivo em texto puro, em vez de JSON. */
+  accept: string = "application/vnd.github+json",
+): Promise<Response> {
   const res = await fetch(`${GITHUB_API}${path}`, {
     headers: {
       Authorization: `Bearer ${cfg.token}`,
-      Accept: "application/vnd.github+json",
+      Accept: accept,
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "bimo-vault-chat",
     },
-    // Sempre buscar do GitHub: o cache é nosso (vault-real.ts), não do fetch.
+    // Sempre buscar do GitHub: o cache é nosso (vault-real.ts / grafo.ts), não do fetch.
     cache: "no-store",
   });
 
@@ -90,6 +96,8 @@ async function request(cfg: GitHubConfig, path: string): Promise<Response> {
 export type TreeEntry = {
   /** Caminho completo dentro do repositório */
   path: string;
+  /** Hash do conteúdo — é o que `readBlob` usa para baixar o arquivo */
+  sha: string;
   size: number;
 };
 
@@ -107,7 +115,7 @@ export async function listTree(
     `/repos/${cfg.repo}/git/trees/${encodeURIComponent(cfg.branch)}?recursive=1`,
   );
   const data = (await res.json()) as {
-    tree?: Array<{ path: string; type: string; size?: number }>;
+    tree?: Array<{ path: string; type: string; sha: string; size?: number }>;
     truncated?: boolean;
   };
 
@@ -115,7 +123,17 @@ export async function listTree(
     // "blob" = arquivo. O outro tipo é "tree" (pasta), que não interessa aqui:
     // a estrutura de pastas é reconstruída a partir dos caminhos dos arquivos.
     .filter((item) => item.type === "blob")
-    .map((item) => ({ path: item.path, size: item.size ?? 0 }));
+    .map((item) => ({ path: item.path, sha: item.sha, size: item.size ?? 0 }));
 
   return { entries, truncated: data.truncated ?? false };
+}
+
+/** Baixa o conteúdo de um arquivo pelo hash do blob (texto puro). */
+export async function readBlob(cfg: GitHubConfig, sha: string): Promise<string> {
+  const res = await request(
+    cfg,
+    `/repos/${cfg.repo}/git/blobs/${sha}`,
+    "application/vnd.github.raw",
+  );
+  return res.text();
 }

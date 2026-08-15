@@ -1,0 +1,133 @@
+/**
+ * Constrói o grafo de ligações entre notas, no estilo "grafo local" do
+ * Obsidian: cada nota é um nó, e cada link `[[assim]]` dentro dela vira uma
+ * ligação até a nota citada.
+ *
+ * Diferente da árvore de pastas (que só precisa dos caminhos), montar o grafo
+ * exige baixar o *conteúdo* de cada nota para achar os links — por isso baixa
+ * em lote, com um limite de quantas notas ficam de fora de vaults enormes.
+ */
+
+import { getGitHubConfig, readBlob } from "./github";
+import { obterNotasPlanas, type NotaPlana } from "./vault-real";
+
+const CACHE_TTL_MS = 5 * 60 * 1000;
+/** Teto de notas cujo conteúdo baixamos para achar links — protege vaults enormes. */
+const MAX_NOTAS_NO_GRAFO = 800;
+/** Quantos downloads de nota rodam ao mesmo tempo. */
+const CONCORRENCIA = 8;
+
+export type NoDoGrafo = { caminho: string; titulo: string };
+export type ArestaDoGrafo = { de: string; para: string };
+
+export type Grafo = {
+  nos: NoDoGrafo[];
+  arestas: ArestaDoGrafo[];
+  aviso?: string;
+};
+
+type Cache = { carregadoEm: number; grafo: Grafo };
+let cache: Cache | null = null;
+
+/** Minúsculas e sem acentos — "Álgebra" e "algebra" precisam casar. */
+function normalizar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+/**
+ * Acha todos os links `[[Nome da Nota]]` num texto.
+ *
+ * O Obsidian aceita variações no que vem depois do nome: `[[Nota#Título]]`
+ * (link para uma seção), `[[Nota^bloco]]` (link para um bloco) e
+ * `[[Nota|texto exibido]]` (apelido). Para o grafo, todas apontam para a
+ * mesma nota — então cortamos tudo isso e ficamos só com o nome.
+ */
+function extrairNomesLinkados(conteudo: string): string[] {
+  const nomes: string[] = [];
+  const regex = /\[\[([^\]|#^]+)/g;
+  let combinou: RegExpExecArray | null;
+
+  while ((combinou = regex.exec(conteudo)) !== null) {
+    const nome = combinou[1].trim();
+    if (nome) nomes.push(nome);
+  }
+
+  return nomes;
+}
+
+/** Acha a nota cujo nome ou caminho bate com o texto do link. `undefined` se nenhuma existir (link quebrado). */
+function resolverLink(nomeLinkado: string, notas: NotaPlana[]): NotaPlana | undefined {
+  const alvo = normalizar(nomeLinkado.replace(/\.md$/i, ""));
+  const semExtensao = (caminho: string) => normalizar(caminho.replace(/\.md$/i, ""));
+  const titulo = (caminho: string) => normalizar(caminho.split("/").pop()!.replace(/\.md$/i, ""));
+
+  return (
+    notas.find((n) => semExtensao(n.caminho) === alvo) ??
+    notas.find((n) => titulo(n.caminho) === alvo) ??
+    notas.find((n) => semExtensao(n.caminho).endsWith(`/${alvo}`))
+  );
+}
+
+/** Baixa o conteúdo de várias notas ao mesmo tempo, limitado a `CONCORRENCIA` por vez. */
+async function baixarConteudos(notas: NotaPlana[]): Promise<Map<string, string>> {
+  const cfg = getGitHubConfig();
+  const conteudos = new Map<string, string>();
+  const fila = [...notas];
+
+  const trabalhadores = Array.from({ length: Math.min(CONCORRENCIA, fila.length) }, async () => {
+    while (fila.length > 0) {
+      const nota = fila.shift();
+      if (!nota) return;
+      try {
+        conteudos.set(nota.caminho, await readBlob(cfg, nota.sha));
+      } catch {
+        // Uma nota que falhou ao baixar não pode derrubar o grafo inteiro.
+        conteudos.set(nota.caminho, "");
+      }
+    }
+  });
+
+  await Promise.all(trabalhadores);
+  return conteudos;
+}
+
+/** Monta o grafo do vault inteiro, usando o cache quando possível. */
+export async function obterGrafoDoVault(): Promise<Grafo> {
+  if (cache && Date.now() - cache.carregadoEm < CACHE_TTL_MS) {
+    return cache.grafo;
+  }
+
+  const { notas, aviso: avisoDaListagem } = await obterNotasPlanas();
+
+  const notasNoGrafo = notas.slice(0, MAX_NOTAS_NO_GRAFO);
+  const conteudos = await baixarConteudos(notasNoGrafo);
+
+  const arestas: ArestaDoGrafo[] = [];
+  for (const nota of notasNoGrafo) {
+    const conteudo = conteudos.get(nota.caminho) ?? "";
+    for (const nomeLinkado of extrairNomesLinkados(conteudo)) {
+      const alvo = resolverLink(nomeLinkado, notas);
+      // Ignora links quebrados (apontam para uma nota que não existe) e auto-links.
+      if (alvo && alvo.caminho !== nota.caminho) {
+        arestas.push({ de: nota.caminho, para: alvo.caminho });
+      }
+    }
+  }
+
+  const nos: NoDoGrafo[] = notas.map((n) => ({
+    caminho: n.caminho,
+    titulo: n.caminho.split("/").pop()!.replace(/\.md$/i, ""),
+  }));
+
+  const avisoDeCorte =
+    notas.length > MAX_NOTAS_NO_GRAFO
+      ? `O vault tem ${notas.length} notas; os links foram lidos só nas primeiras ${MAX_NOTAS_NO_GRAFO}.`
+      : undefined;
+
+  const grafo: Grafo = { nos, arestas, aviso: avisoDaListagem ?? avisoDeCorte };
+  cache = { carregadoEm: Date.now(), grafo };
+  return grafo;
+}
