@@ -14,6 +14,7 @@ const SUGESTOES = [
   "O que eu sei sobre normalização de banco de dados?",
   "Resuma minhas anotações de redes",
   "Quais notas eu tenho sobre React?",
+  "Aonde paramos sobre aquele assunto de ontem?",
 ];
 
 export default function Chat({ rascunho, onRascunhoChange }: Props) {

@@ -82,6 +82,7 @@ function ItemDaArvore({
     );
   }
 
+  const totalDeNotas = contarNotas(item.filhos);
   return (
     <div>
       <button
@@ -98,6 +99,10 @@ function ItemDaArvore({
           {aberta ? "📂" : "📁"}
         </span>
         <span className="truncate">{item.nome}</span>
+        <span 
+          className="ml-auto text-xs text-suave">
+          {totalDeNotas} nota{totalDeNotas === 1 ? "" : "s"}
+        </span>
       </button>
 
       {aberta && (
