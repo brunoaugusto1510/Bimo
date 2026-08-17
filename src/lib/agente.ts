@@ -21,7 +21,7 @@ import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
 import type { Mensagem, UsoDeFerramenta } from "./types";
 
 /** Trava de segurança: sem isso um modelo confuso pediria ferramentas para sempre. */
-const MAX_VOLTAS = 8;
+const MAX_VOLTAS = 5;
 
 const MODELO = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
