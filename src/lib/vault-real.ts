@@ -172,8 +172,32 @@ export async function lerConteudoDaNota(caminho: string): Promise<string | null>
 }
 
 /** Nome do arquivo sem a extensão — é como a nota aparece no Obsidian. */
-function tituloDoCaminho(caminho: string): string {
+export function tituloDoCaminho(caminho: string): string {
   return caminho.split("/").pop()!.replace(/\.md$/i, "");
+}
+
+/** Lista os caminhos das notas do vault, opcionalmente filtrando por pasta. */
+export async function listarNotas(pasta?: string): Promise<NotaPlana[]> {
+  const { notas } = await obterNotasPlanas();
+  if (!pasta) return notas;
+
+  const prefixo = normalizar(pasta.replace(/^\/+|\/+$/g, ""));
+  return notas.filter((nota) => normalizar(nota.caminho).startsWith(prefixo));
+}
+
+/**
+ * Resolve um caminho aproximado e devolve a nota junto com o conteúdo já
+ * carregado — usado pela ferramenta `ler_nota` do agente, que raramente
+ * recebe o caminho exato.
+ */
+export async function lerNota(
+  entrada: string,
+): Promise<{ nota: NotaPlana; conteudo: string } | null> {
+  const nota = await resolverNota(entrada);
+  if (!nota) return null;
+
+  const conteudo = await carregarConteudo(nota);
+  return { nota, conteudo };
 }
 
 /** Minúsculas e sem acentos — "Álgebra" e "algebra" precisam casar. */

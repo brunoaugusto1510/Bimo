@@ -22,6 +22,7 @@ const SUGESTOES = [
 export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: Props) {
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const fimDaLista = useRef<HTMLDivElement>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -39,7 +40,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
     elemento.style.height = `${Math.min(elemento.scrollHeight, 160)}px`;
   }, [rascunho]);
 
-  function enviar() {
+  async function enviar() {
     const texto = rascunho.trim();
     if (!texto || pensando) return;
 
@@ -49,30 +50,49 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
       conteudo: texto,
     };
 
-    setMensagens((anteriores) => [...anteriores, doUsuario]);
+    // Guardamos o histórico completo (incluindo a mensagem que acabou de
+    // entrar) para mandar pro agente — ele precisa da conversa toda, não só
+    // da última pergunta.
+    const historico = [...mensagens, doUsuario];
+
+    setMensagens(historico);
     onRascunhoChange("");
     setPensando(true);
+    setErro(null);
 
-    // Resposta de mentira. Na próxima etapa, este trecho vira uma chamada
-    // para /api/chat — o resto do componente continua igual.
-    setTimeout(() => {
+    try {
+      const resposta = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mensagens: historico.map((m) => ({ papel: m.papel, conteudo: m.conteudo })),
+        }),
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados.erro || "O agente não conseguiu responder.");
+      }
+
       setMensagens((anteriores) => [
         ...anteriores,
         {
           id: crypto.randomUUID(),
           papel: "agente",
-          conteudo:
-            "Ainda **não estou conectado** ao Gemini nem ao seu vault de verdade — " +
-            "esta etapa é só a interface.\n\nO que já funciona aqui:\n\n" +
-            "- a árvore de pastas da esquerda (com dados de exemplo)\n" +
-            "- clicar numa nota para começar uma pergunta sobre ela\n" +
-            "- o histórico da conversa e o campo de mensagem\n\n" +
-            "Na próxima etapa, esta resposta passa a vir do modelo lendo as suas notas.",
+          conteudo: dados.resposta as string,
         },
       ]);
-      setPensando(false);
       onRespostaAgente?.();
-    }, 700);
+    } catch (falha) {
+      setErro(
+        falha instanceof Error
+          ? falha.message
+          : "Não consegui falar com o agente. Tente de novo.",
+      );
+    } finally {
+      setPensando(false);
+    }
   }
 
   function aoTeclar(evento: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -107,6 +127,12 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
       </div>
 
       <div className="border-t border-borda bg-painel/90 px-4 py-3 backdrop-blur-sm">
+        {erro && (
+          <div className="mx-auto mb-2 max-w-2xl rounded-lg bg-erro-suave px-3 py-2 text-xs text-erro">
+            {erro}
+          </div>
+        )}
+
         <div className="mx-auto flex max-w-2xl items-end gap-2">
           <textarea
             ref={campo}

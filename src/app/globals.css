@@ -18,6 +18,8 @@
   --bolha-usuario: #6d5bd0;
   --bolha-usuario-texto: #ffffff;
   --bolha-agente: #ffffff;
+  --erro: #c53030;
+  --erro-suave: #fbeaea;
 
   /*
    * Paleta categórica do grafo de notas — uma cor por grupo de pasta
@@ -47,6 +49,8 @@
     --bolha-usuario: #6d5bd0;
     --bolha-usuario-texto: #ffffff;
     --bolha-agente: #22222a;
+    --erro: #ff8080;
+    --erro-suave: #3a1f1f;
 
     /* Mesmos 8 grupos, com os tons já ajustados para o fundo escuro. */
     --grafo-cor-1: #3987e5;
@@ -75,6 +79,8 @@
   --color-bolha-usuario: var(--bolha-usuario);
   --color-bolha-usuario-texto: var(--bolha-usuario-texto);
   --color-bolha-agente: var(--bolha-agente);
+  --color-erro: var(--erro);
+  --color-erro-suave: var(--erro-suave);
   --color-grafo-cor-1: var(--grafo-cor-1);
   --color-grafo-cor-2: var(--grafo-cor-2);
   --color-grafo-cor-3: var(--grafo-cor-3);

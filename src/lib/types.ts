@@ -24,3 +24,12 @@ export type Mensagem = {
 export type ItemVault =
   | { tipo: "pasta"; nome: string; filhos: ItemVault[] }
   | { tipo: "nota"; nome: string; caminho: string };
+
+/** Um uso de ferramenta pelo agente, para mostrar na interface o que ele consultou. */
+export type UsoDeFerramenta = {
+  nome: string;
+  argumentos: Record<string, unknown>;
+  /** Frase curta para exibir na UI, ex: 'Buscou "TCP" — 3 nota(s)' */
+  resumo: string;
+  erro?: boolean;
+};
