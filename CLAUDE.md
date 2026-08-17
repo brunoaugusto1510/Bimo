@@ -49,6 +49,19 @@ serving the whole vault to the internet. Don't "fix" that into a fail-soft.
 
 Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind CSS 4.
 
+### Auth
+
+`src/proxy.ts` gates **every** request with basic auth before any route runs.
+Next 16 deprecated `middleware.ts` and renamed it to `proxy.ts` (function named
+`proxy`, always Node runtime — setting `runtime` throws). Its `matcher`
+deliberately does **not** exclude `api`: `/api/notas/...` serves raw note
+content, so excluding it would leave the vault readable. Only `_next/static`,
+`_next/image` and `favicon.ico` are exempt.
+
+Both API routes *also* call `verificarCredenciais` themselves. That duplication
+is intentional — the Next docs warn that a `matcher` change can silently uncover
+a route, so the proxy is the fence, not the only lock.
+
 ### Server/client split
 
 `src/app/page.tsx` is a server component (`dynamic = "force-dynamic"`, no static
