@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { responder } from "@/lib/agente";
+import { respostaDeDesafio, verificarCredenciais } from "@/lib/autenticacao";
 import type { Mensagem } from "@/lib/types";
 
 /**
@@ -10,6 +11,12 @@ import type { Mensagem } from "@/lib/types";
  * lugar — além da rota de notas — que usa GEMINI_API_KEY/GITHUB_TOKEN.
  */
 export async function POST(request: Request) {
+  // O `proxy.ts` já barra isso na borda; conferir aqui também é de propósito.
+  // A doc do Next 16 avisa que uma mudança de `matcher` pode descobrir uma rota
+  // sem ninguém notar — e esta gasta cota do Gemini, além de ler o vault.
+  const autenticacao = verificarCredenciais(request);
+  if (autenticacao.tipo !== "ok") return respostaDeDesafio(autenticacao);
+
   let corpo: unknown;
   try {
     corpo = await request.json();

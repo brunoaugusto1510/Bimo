@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { respostaDeDesafio, verificarCredenciais } from "@/lib/autenticacao";
 import { lerConteudoDaNota } from "@/lib/vault-real";
 
 /**
@@ -10,9 +11,14 @@ import { lerConteudoDaNota } from "@/lib/vault-real";
  * usar o GITHUB_TOKEN com segurança — o cliente só recebe o conteúdo já lido.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ caminho: string[] }> },
 ) {
+  // Mesma checagem do `proxy.ts`, repetida de propósito: esta rota entrega o
+  // conteúdo cru de qualquer nota, então é a última que deve ficar sem tranca.
+  const autenticacao = verificarCredenciais(request);
+  if (autenticacao.tipo !== "ok") return respostaDeDesafio(autenticacao);
+
   const { caminho } = await params;
   const caminhoDaNota = caminho.join("/");
 

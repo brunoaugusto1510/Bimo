@@ -31,13 +31,19 @@ the README mentioning one — check with the user before assuming its shape):
 
 - `VAULT_REPO` — GitHub repo holding the vault, `owner/repo`
 - `GITHUB_TOKEN` — PAT with read access to that repo
+- `BASIC_USER` / `BASIC_PASS` — basic-auth credentials that gate the whole app
 - `VAULT_BRANCH` — optional, defaults to `main`
 - `VAULT_SUBPATH` — optional, subfolder inside the repo where notes live
 
-Missing/invalid env vars don't crash the app — `src/lib/github.ts`'s
+Missing/invalid *vault* env vars don't crash the app — `src/lib/github.ts`'s
 `getGitHubConfig()` throws a descriptive error that `src/app/page.tsx` catches and
 renders as `ConfiguracaoNecessaria` instead of the main UI. Preserve this
 fail-soft pattern when touching config loading.
+
+`BASIC_USER`/`BASIC_PASS` are the deliberate exception: they fail **closed**.
+`src/lib/autenticacao.ts` treats missing-or-empty credentials as "refuse
+everything" and returns 503, because the failure mode of a fail-soft auth gate is
+serving the whole vault to the internet. Don't "fix" that into a fail-soft.
 
 ## Architecture
 
