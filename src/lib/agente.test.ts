@@ -115,14 +115,14 @@ describe("responder", () => {
     expect(resultado.resposta).toBe("Não encontrei essa nota.");
   });
 
-  it("para depois de MAX_VOLTAS (8) chamadas seguidas e devolve uma mensagem de desistência", async () => {
+  it("para depois de MAX_VOLTAS (5) chamadas seguidas e devolve uma mensagem de desistência", async () => {
     generateContentMock.mockResolvedValue(turnoComChamada("buscar_notas", { consulta: "x" }));
     vi.mocked(executarFerramenta).mockResolvedValue({ resposta: {}, resumo: "ok" });
 
     const resultado = await responder([{ papel: "usuario", conteudo: "pergunta difícil" }]);
 
-    expect(generateContentMock).toHaveBeenCalledTimes(8);
+    expect(generateContentMock).toHaveBeenCalledTimes(5);
     expect(resultado.resposta).toMatch(/não cheguei a uma resposta final/);
-    expect(resultado.ferramentas).toHaveLength(8);
+    expect(resultado.ferramentas).toHaveLength(5);
   });
 });
