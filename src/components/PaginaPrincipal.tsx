@@ -53,7 +53,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
         </button>
 
         <h1 className="flex-1 text-center text-base font-semibold tracking-tight md:text-left">
-          Personal Brain
+          Bimo
         </h1>
 
         {/* Espaçador para o título ficar centralizado no celular, já que o ☰ ocupa a esquerda. */}

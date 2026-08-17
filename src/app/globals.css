@@ -18,6 +18,21 @@
   --bolha-usuario: #6d5bd0;
   --bolha-usuario-texto: #ffffff;
   --bolha-agente: #ffffff;
+
+  /*
+   * Paleta categórica do grafo de notas — uma cor por grupo de pasta
+   * (ver `obterGrupoDoCaminho` em `src/lib/grafo.ts`). Ordem fixa, validada
+   * com o script de acessibilidade do skill de dataviz (segura para
+   * daltonismo e com contraste mínimo contra `--fundo`, claro e escuro).
+   */
+  --grafo-cor-1: #2a78d6;
+  --grafo-cor-2: #eb6834;
+  --grafo-cor-3: #1baf7a;
+  --grafo-cor-4: #eda100;
+  --grafo-cor-5: #e87ba4;
+  --grafo-cor-6: #008300;
+  --grafo-cor-7: #4a3aa7;
+  --grafo-cor-8: #e34948;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +47,16 @@
     --bolha-usuario: #6d5bd0;
     --bolha-usuario-texto: #ffffff;
     --bolha-agente: #22222a;
+
+    /* Mesmos 8 grupos, com os tons já ajustados para o fundo escuro. */
+    --grafo-cor-1: #3987e5;
+    --grafo-cor-2: #d95926;
+    --grafo-cor-3: #199e70;
+    --grafo-cor-4: #c98500;
+    --grafo-cor-5: #d55181;
+    --grafo-cor-6: #008300;
+    --grafo-cor-7: #9085e9;
+    --grafo-cor-8: #e66767;
   }
 }
 
@@ -50,6 +75,14 @@
   --color-bolha-usuario: var(--bolha-usuario);
   --color-bolha-usuario-texto: var(--bolha-usuario-texto);
   --color-bolha-agente: var(--bolha-agente);
+  --color-grafo-cor-1: var(--grafo-cor-1);
+  --color-grafo-cor-2: var(--grafo-cor-2);
+  --color-grafo-cor-3: var(--grafo-cor-3);
+  --color-grafo-cor-4: var(--grafo-cor-4);
+  --color-grafo-cor-5: var(--grafo-cor-5);
+  --color-grafo-cor-6: var(--grafo-cor-6);
+  --color-grafo-cor-7: var(--grafo-cor-7);
+  --color-grafo-cor-8: var(--grafo-cor-8);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

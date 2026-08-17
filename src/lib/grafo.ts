@@ -17,8 +17,18 @@ const MAX_NOTAS_NO_GRAFO = 800;
 /** Quantos downloads de nota rodam ao mesmo tempo. */
 const CONCORRENCIA = 8;
 
-export type NoDoGrafo = { caminho: string; titulo: string };
+export type NoDoGrafo = { caminho: string; titulo: string; grupo: string };
 export type ArestaDoGrafo = { de: string; para: string };
+
+/**
+ * Grupo de uma nota, usado para colorir o grafo — o primeiro segmento do
+ * caminho (a pasta de topo). Notas soltas na raiz do vault caem no grupo
+ * "Raiz".
+ */
+export function obterGrupoDoCaminho(caminho: string): string {
+  const primeiraBarra = caminho.indexOf("/");
+  return primeiraBarra === -1 ? "Raiz" : caminho.slice(0, primeiraBarra);
+}
 
 export type Grafo = {
   nos: NoDoGrafo[];
@@ -106,20 +116,35 @@ export async function obterGrafoDoVault(): Promise<Grafo> {
   const conteudos = await baixarConteudos(notasNoGrafo);
 
   const arestas: ArestaDoGrafo[] = [];
+  // Cada par de notas conta uma única vez. Sem isso o mesmo par entra várias
+  // vezes — uma nota pode citar `[[X]]` em vários trechos, e `A -> B` mais
+  // `B -> A` desenham a mesma linha. Duplicatas distorcem o grafo duas vezes:
+  // multiplicam a força do link naquele par na simulação e inflam o "grau",
+  // que é o que define o tamanho da bolinha (criando hubs que não existem).
+  const paresJaVistos = new Set<string>();
+
   for (const nota of notasNoGrafo) {
     const conteudo = conteudos.get(nota.caminho) ?? "";
     for (const nomeLinkado of extrairNomesLinkados(conteudo)) {
       const alvo = resolverLink(nomeLinkado, notas);
       // Ignora links quebrados (apontam para uma nota que não existe) e auto-links.
-      if (alvo && alvo.caminho !== nota.caminho) {
-        arestas.push({ de: nota.caminho, para: alvo.caminho });
-      }
+      if (!alvo || alvo.caminho === nota.caminho) continue;
+
+      // Par ordenado alfabeticamente, então `A -> B` e `B -> A` geram a mesma
+      // chave. O `\n` separa os dois caminhos sem ambiguidade: nenhum caminho
+      // de arquivo contém uma quebra de linha.
+      const chave = [nota.caminho, alvo.caminho].sort().join("\n");
+      if (paresJaVistos.has(chave)) continue;
+      paresJaVistos.add(chave);
+
+      arestas.push({ de: nota.caminho, para: alvo.caminho });
     }
   }
 
   const nos: NoDoGrafo[] = notas.map((n) => ({
     caminho: n.caminho,
     titulo: n.caminho.split("/").pop()!.replace(/\.md$/i, ""),
+    grupo: obterGrupoDoCaminho(n.caminho),
   }));
 
   const avisoDeCorte =

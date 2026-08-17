@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Personal Brain",
+  title: "Bimo",
   description: "Converse com as suas notas do Obsidian.",
 };
 
