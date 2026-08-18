@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "gerar-senha": "node scripts/gerar-senha.mjs",
+    "gerar-segredo": "node scripts/gerar-segredo.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",

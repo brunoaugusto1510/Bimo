@@ -24,8 +24,16 @@ npm run start     # run the production build
 npm run lint      # eslint (eslint.config.mjs, flat config, next/core-web-vitals + next/typescript)
 ```
 
-There is no test suite yet (no test runner installed, no `*.test.*`/`*.spec.*`
-files) — do not assume Jest/Vitest is available.
+Tests run on **Vitest** (`vitest.config.mts`, jsdom environment, `@/*` alias via
+`vite-tsconfig-paths`): `npm test`, `npm run test:watch`, `npm run test:coverage`.
+Test files sit next to the code they cover (`src/lib/sessao.test.ts`,
+`src/app/api/login/route.test.ts`, …).
+
+Two helper scripts generate the auth secrets: `npm run gerar-senha` (prints
+`SENHA_HASH` for a password read from stdin) and `npm run gerar-segredo` (prints a
+`SEGREDO_SESSAO`). `scripts/gerar-senha.mjs` duplicates the scrypt parameters from
+`src/lib/senha.ts`; the "aceita um hash gerado com os mesmos parâmetros do script"
+test in `senha.test.ts` is what catches the two drifting apart.
 
 ### Local setup
 
@@ -34,7 +42,11 @@ the README mentioning one — check with the user before assuming its shape):
 
 - `VAULT_REPO` — GitHub repo holding the vault, `owner/repo`
 - `GITHUB_TOKEN` — PAT with read access to that repo
-- `BASIC_USER` / `BASIC_PASS` — basic-auth credentials that gate the whole app
+- `SENHA_HASH` — `scrypt:<salt>:<hash>` of the login password (`npm run gerar-senha`).
+  The separator is `:` and not the conventional `$` because `@next/env` runs
+  `.env.local` through dotenv-expand, which eats `$...` as a variable reference
+- `SEGREDO_SESSAO` — HMAC key that signs the session cookie, 32+ chars
+  (`npm run gerar-segredo`)
 - `VAULT_BRANCH` — optional, defaults to `main`
 - `VAULT_SUBPATH` — optional, subfolder inside the repo where notes live
 
@@ -43,10 +55,11 @@ Missing/invalid *vault* env vars don't crash the app — `src/lib/github.ts`'s
 renders as `ConfiguracaoNecessaria` instead of the main UI. Preserve this
 fail-soft pattern when touching config loading.
 
-`BASIC_USER`/`BASIC_PASS` are the deliberate exception: they fail **closed**.
-`src/lib/autenticacao.ts` treats missing-or-empty credentials as "refuse
-everything" and returns 503, because the failure mode of a fail-soft auth gate is
-serving the whole vault to the internet. Don't "fix" that into a fail-soft.
+`SENHA_HASH`/`SEGREDO_SESSAO` are the deliberate exception: they fail
+**closed**. `src/lib/senha.ts` and `src/lib/sessao.ts` treat missing, empty or
+malformed values as "refuse everything" and answer 503, because the failure mode
+of a fail-soft auth gate is serving the whole vault to the internet. Don't "fix"
+that into a fail-soft.
 
 ## Architecture
 
@@ -54,16 +67,35 @@ Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind CSS 4.
 
 ### Auth
 
-`src/proxy.ts` gates **every** request with basic auth before any route runs.
-Next 16 deprecated `middleware.ts` and renamed it to `proxy.ts` (function named
-`proxy`, always Node runtime — setting `runtime` throws). Its `matcher`
-deliberately does **not** exclude `api`: `/api/notas/...` serves raw note
-content, so excluding it would leave the vault readable. Only `_next/static`,
-`_next/image` and `favicon.ico` are exempt.
+`src/proxy.ts` gates **every** request before any route runs. Next 16 deprecated
+`middleware.ts` and renamed it to `proxy.ts` (function named `proxy`, always Node
+runtime — setting `runtime` throws). Its `matcher` deliberately does **not**
+exclude `api`: `/api/notas/...` serves raw note content, so excluding it would
+leave the vault readable. Only `_next/static`, `_next/image` and `favicon.ico`
+are exempt, plus the `PUBLICOS` set inside the proxy (`/login`, `/api/login`,
+`/api/logout`) which must work *before* a session exists.
 
-Both API routes *also* call `verificarCredenciais` themselves. That duplication
-is intentional — the Next docs warn that a `matcher` change can silently uncover
-a route, so the proxy is the fence, not the only lock.
+The layering, each file knowing only the one below it:
+
+- `senha.ts` — checks the typed password against `SENHA_HASH` (scrypt).
+- `sessao.ts` — mints and verifies the signed cookie `bimo_sessao`, shaped
+  `<expiresAtMs>.<HMAC>`. Stateless on purpose: no session table, so it survives
+  serverless instances that share no memory. Cost: a single session can't be
+  revoked — rotate `SEGREDO_SESSAO` to invalidate every session at once.
+- `autenticacao.ts` — the HTTP bridge: reads the cookie off the raw header
+  (works in both proxy and route handlers, unlike `cookies()` from
+  `next/headers`) and turns a refusal into the right response.
+- `limite-de-tentativas.ts` — 5 failures per IP per 15 min on `/api/login`.
+  In-memory, so per-instance and best-effort: a brake, not a guarantee.
+
+Both API routes *also* call `exigirSessao` themselves. That duplication is
+intentional — the Next docs warn that a `matcher` change can silently uncover a
+route, so the proxy is the fence, not the only lock.
+
+There is no OAuth and that was a deliberate call: with a single user who already
+owns the vault repo, GitHub OAuth would add `next-auth` plus an OAuth App whose
+single callback URL breaks Vercel preview deployments, and its one real gain
+(no shared secret) barely applies.
 
 ### Server/client split
 

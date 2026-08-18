@@ -40,6 +40,16 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
     setNotaAberta(null);
   }
 
+  /**
+   * Sair de verdade: a rota apaga o cookie e recarregamos a página inteira.
+   * `window.location` em vez do router do Next porque a home é server
+   * component — uma navegação client-side manteria a árvore atual na tela.
+   */
+  async function sair() {
+    await fetch("/api/logout", { method: "POST" });
+    window.location.replace("/login");
+  }
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-3 border-b border-borda bg-painel px-4 py-3">
@@ -56,8 +66,19 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
           Bimo
         </h1>
 
-        {/* Espaçador para o título ficar centralizado no celular, já que o ☰ ocupa a esquerda. */}
-        <span aria-hidden className="w-9 md:hidden" />
+        {/* Fica à direita do título, equilibrando o ☰ da esquerda para o título
+            seguir centralizado no celular — por isso o rótulo curto no mobile. */}
+        <button
+          type="button"
+          onClick={sair}
+          aria-label="Sair"
+          className="rounded-lg border border-borda px-2.5 py-1 text-sm"
+        >
+          <span aria-hidden className="md:hidden">
+            ⏻
+          </span>
+          <span className="hidden md:inline">Sair</span>
+        </button>
       </header>
 
       {(aviso || grafo.aviso) && (

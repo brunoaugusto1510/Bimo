@@ -5,20 +5,22 @@ vi.mock("@/lib/agente", () => ({
 }));
 
 import { responder } from "@/lib/agente";
+import { NOME_DO_COOKIE, criarTokenDeSessao } from "@/lib/sessao";
 import { POST } from "./route";
 
-const USUARIO = "bruno";
-const SENHA = "senha-secreta";
+const SEGREDO = "um-segredo-de-testes-com-mais-de-32-caracteres";
 
-/** A rota exige basic auth, então todo pedido de teste já vai autenticado. */
-const CREDENCIAIS = `Basic ${btoa(`${USUARIO}:${SENHA}`)}`;
+/** A rota exige sessão, então todo pedido de teste já vai com cookie válido. */
+function cookieValido(): string {
+  return `${NOME_DO_COOKIE}=${criarTokenDeSessao()}`;
+}
 
 function requisicao(corpo: unknown, autenticado = true): Request {
   return new Request("http://localhost/api/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(autenticado ? { authorization: CREDENCIAIS } : {}),
+      ...(autenticado ? { cookie: cookieValido() } : {}),
     },
     body: JSON.stringify(corpo),
   });
@@ -26,13 +28,11 @@ function requisicao(corpo: unknown, autenticado = true): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.BASIC_USER = USUARIO;
-  process.env.BASIC_PASS = SENHA;
+  process.env.SEGREDO_SESSAO = SEGREDO;
 });
 
 afterEach(() => {
-  delete process.env.BASIC_USER;
-  delete process.env.BASIC_PASS;
+  delete process.env.SEGREDO_SESSAO;
 });
 
 describe("POST /api/chat", () => {
@@ -51,7 +51,7 @@ describe("POST /api/chat", () => {
   it("devolve 400 quando o corpo não é JSON válido", async () => {
     const req = new Request("http://localhost/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json", authorization: CREDENCIAIS },
+      headers: { "Content-Type": "application/json", cookie: cookieValido() },
       body: "isso não é json",
     });
 
@@ -103,25 +103,29 @@ describe("POST /api/chat", () => {
 
   /*
    * A rota já é protegida pelo `proxy.ts`, mas ela também confere por conta
-   * própria — então esses casos garantem que a segunda tranca funciona mesmo
-   * se o `matcher` do proxy mudar.
+   * própria — então estes casos garantem que a segunda tranca funciona mesmo se
+   * o `matcher` do proxy mudar.
    */
-  it("devolve 401 e não chama o agente quando não vêm credenciais", async () => {
+  it("devolve 401 e não chama o agente quando não há cookie de sessão", async () => {
     const res = await POST(
       requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] }, false),
     );
 
     expect(res.status).toBe(401);
-    expect(res.headers.get("www-authenticate")).toContain("Basic");
     expect(responder).not.toHaveBeenCalled();
   });
 
-  it("devolve 401 e não chama o agente quando a senha está errada", async () => {
-    process.env.BASIC_PASS = "outra-senha";
+  it("devolve 401 e não chama o agente quando o cookie está adulterado", async () => {
+    const req = new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: `${NOME_DO_COOKIE}=9999999999999.assinatura-inventada`,
+      },
+      body: JSON.stringify({ mensagens: [{ papel: "usuario", conteudo: "oi" }] }),
+    });
 
-    const res = await POST(
-      requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] }),
-    );
+    const res = await POST(req);
 
     expect(res.status).toBe(401);
     expect(responder).not.toHaveBeenCalled();
@@ -130,7 +134,7 @@ describe("POST /api/chat", () => {
   it("recusa antes de validar o corpo, para não vazar o formato esperado", async () => {
     const res = await POST(requisicao({ mensagens: [] }, false));
 
-    // Corpo inválido *e* sem credenciais: a auth vem primeiro, então 401 (não 400).
+    // Corpo inválido *e* sem sessão: a auth vem primeiro, então 401 (não 400).
     expect(res.status).toBe(401);
   });
 });

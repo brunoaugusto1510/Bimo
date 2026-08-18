@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { respostaDeDesafio, verificarCredenciais } from "@/lib/autenticacao";
+import { exigirSessao } from "@/lib/autenticacao";
 import { lerConteudoDaNota } from "@/lib/vault-real";
 
 /**
@@ -16,8 +16,8 @@ export async function GET(
 ) {
   // Mesma checagem do `proxy.ts`, repetida de propósito: esta rota entrega o
   // conteúdo cru de qualquer nota, então é a última que deve ficar sem tranca.
-  const autenticacao = verificarCredenciais(request);
-  if (autenticacao.tipo !== "ok") return respostaDeDesafio(autenticacao);
+  const semSessao = exigirSessao(request);
+  if (semSessao) return semSessao;
 
   const { caminho } = await params;
   const caminhoDaNota = caminho.join("/");
