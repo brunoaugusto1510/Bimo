@@ -1,20 +1,22 @@
 /**
- * As "ferramentas" que o Gemini pode chamar para consultar o vault.
+ * As "ferramentas" que o Gemini pode chamar para consultar e alterar o vault.
  *
  * Isso é o coração do function calling: cada ferramenta tem uma *declaração*
  * (o que o modelo lê para decidir se e como usá-la) e uma *execução* (o código
  * que roda de verdade quando ele decide chamar). O modelo nunca toca no
  * GitHub — ele só pede, e este arquivo decide o que acontece.
  *
- * Nesta etapa só existem ferramentas de leitura. As de escrita (criar/editar
- * nota, o que gera um commit) chegam numa etapa futura — veja
- * `etapas-futuras/ferramentas.ts` para a versão completa.
+ * As de escrita (`criar_nota`/`editar_nota`) geram commits reais no repositório
+ * do vault — por isso ficam por último no `switch` abaixo e são as únicas que
+ * precisam invalidar o cache do grafo (`invalidarCacheDoGrafo`) além do de
+ * `vault-real.ts` (que ele já invalida por conta própria).
  *
  * As descrições abaixo são prompt: quanto mais claras, menos o modelo erra.
  */
 
 import type { FunctionDeclaration } from "@google/genai";
-import { buscarNotas, lerNota, listarNotas, tituloDoCaminho } from "./vault-real";
+import { invalidarCacheDoGrafo } from "./grafo";
+import { buscarNotas, criarNota, editarNota, lerNota, listarNotas, tituloDoCaminho } from "./vault-real";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
@@ -73,6 +75,57 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
       required: ["caminho"],
     },
   },
+  {
+    name: "criar_nota",
+    description:
+      "Cria uma nota NOVA no vault (gera um commit no repositório do GitHub). " +
+      "Falha se já existir uma nota nesse caminho — nesse caso use editar_nota. " +
+      "Escreva o conteúdo em Markdown, no estilo do Obsidian: um título '# ' no topo e " +
+      "links internos no formato [[Nome da Nota]] quando fizer sentido conectar com outras notas.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        caminho: {
+          type: "string",
+          description:
+            "Caminho completo com pasta, ex: 'Estudos/Redes/DNS.md'. Prefira pastas que já existem no vault.",
+        },
+        conteudo: {
+          type: "string",
+          description: "Conteúdo completo da nota, em Markdown.",
+        },
+      },
+      required: ["caminho", "conteudo"],
+    },
+  },
+  {
+    name: "editar_nota",
+    description:
+      "Altera uma nota que já existe (gera um commit no repositório do GitHub). " +
+      "Use modo 'acrescentar' para adicionar conteúdo ao final, preservando o que já estava lá — " +
+      "é o modo mais seguro. Use 'substituir' apenas quando o usuário pedir para reescrever a nota, " +
+      "e nesse caso leia a nota antes para não perder informação sem querer.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        caminho: {
+          type: "string",
+          description: "Caminho da nota existente, ex: 'Estudos/Redes/TCP.md'.",
+        },
+        conteudo: {
+          type: "string",
+          description:
+            "Em 'acrescentar', só o texto novo. Em 'substituir', o conteúdo final inteiro da nota.",
+        },
+        modo: {
+          type: "string",
+          enum: ["acrescentar", "substituir"],
+          description: "Como aplicar o conteúdo.",
+        },
+      },
+      required: ["caminho", "conteudo", "modo"],
+    },
+  },
 ];
 
 /** O que a execução de uma ferramenta devolve. */
@@ -105,6 +158,10 @@ export async function executarFerramenta(
         return await execListar(args);
       case "ler_nota":
         return await execLer(args);
+      case "criar_nota":
+        return await execCriar(args);
+      case "editar_nota":
+        return await execEditar(args);
       default:
         return {
           resposta: { erro: `Ferramenta desconhecida: ${nome}` },
@@ -185,6 +242,44 @@ async function execLer(args: Args): Promise<SaidaFerramenta> {
       conteudo: resultado.conteudo,
     },
     resumo: `Leu "${resultado.nota.caminho}"`,
+  };
+}
+
+async function execCriar(args: Args): Promise<SaidaFerramenta> {
+  const caminho = texto(args.caminho, "caminho");
+  const conteudo = texto(args.conteudo, "conteudo");
+
+  const resultado = await criarNota(caminho, conteudo);
+  // A escrita já invalidou o cache de vault-real.ts por conta própria; falta
+  // só o do grafo, que fica num módulo separado (ver comentário no topo).
+  invalidarCacheDoGrafo();
+
+  return {
+    resposta: {
+      sucesso: true,
+      caminho: resultado.caminho,
+      commit: resultado.commitUrl,
+    },
+    resumo: `Criou a nota "${resultado.caminho}"`,
+  };
+}
+
+async function execEditar(args: Args): Promise<SaidaFerramenta> {
+  const caminho = texto(args.caminho, "caminho");
+  const conteudo = texto(args.conteudo, "conteudo");
+  const modo = args.modo === "substituir" ? "substituir" : "acrescentar";
+
+  const resultado = await editarNota(caminho, conteudo, modo);
+  invalidarCacheDoGrafo();
+
+  return {
+    resposta: {
+      sucesso: true,
+      caminho: resultado.caminho,
+      modo,
+      commit: resultado.commitUrl,
+    },
+    resumo: `${modo === "substituir" ? "Reescreveu" : "Complementou"} a nota "${resultado.caminho}"`,
   };
 }
 

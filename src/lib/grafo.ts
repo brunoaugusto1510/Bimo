@@ -39,6 +39,19 @@ export type Grafo = {
 type Cache = { carregadoEm: number; grafo: Grafo };
 let cache: Cache | null = null;
 
+/**
+ * Descarta o cache do grafo. Chamado por `ferramentas.ts` depois de toda
+ * escrita no vault (criar/editar nota) — sem isso o grafo de fundo continuaria
+ * mostrando a versão antiga por até `CACHE_TTL_MS`.
+ *
+ * Fica aqui (e não em `vault-real.ts`) para não criar um import circular:
+ * este módulo já depende de `vault-real.ts`, então é `ferramentas.ts` — que
+ * fica acima dos dois — quem invalida os dois caches depois de escrever.
+ */
+export function invalidarCacheDoGrafo(): void {
+  cache = null;
+}
+
 /** Minúsculas e sem acentos — "Álgebra" e "algebra" precisam casar. */
 function normalizar(texto: string): string {
   return texto

@@ -81,6 +81,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
           id: crypto.randomUUID(),
           papel: "agente",
           conteudo: dados.resposta as string,
+          ferramentas: dados.ferramentas as TipoMensagem["ferramentas"],
         },
       ]);
       onRespostaAgente?.();

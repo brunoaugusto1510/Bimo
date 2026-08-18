@@ -17,6 +17,8 @@ vi.mock("./github", () => ({
   })),
   listTree: vi.fn(),
   readBlob: vi.fn(),
+  getFileSha: vi.fn(),
+  putFile: vi.fn(),
 }));
 
 type Fixture = { path: string; sha: string; size: number; conteudo: string };
@@ -68,6 +70,18 @@ async function configurarGitHubFalso(opts: { truncated?: boolean } = {}) {
     const fixture = FIXTURES.find((f) => f.sha === sha);
     if (!fixture) throw new Error(`sha desconhecido nos testes: ${sha}`);
     return fixture.conteudo;
+  });
+
+  // Sem subpath nos testes, então caminho do vault === caminho do repositório:
+  // o padrão simula "já existe" para as fixtures e "não existe" para o resto.
+  vi.mocked(github.getFileSha).mockImplementation(async (_cfg, path: string) => {
+    const fixture = FIXTURES.find((f) => f.path === path);
+    return fixture?.sha ?? null;
+  });
+
+  vi.mocked(github.putFile).mockResolvedValue({
+    commitUrl: "https://github.com/usuario/vault/commit/fake",
+    sha: "sha-novo",
   });
 
   return github;
@@ -240,5 +254,114 @@ describe("obterArvoreDoVault", () => {
 
     const notaRaiz = itens.find((i) => i.tipo === "nota" && i.nome === "Bem-vindo");
     expect(notaRaiz).toBeDefined();
+  });
+});
+
+describe("criarNota", () => {
+  it("cria a nota quando o caminho ainda não existe", async () => {
+    const github = await configurarGitHubFalso();
+    const { criarNota } = await importarVaultReal();
+
+    const resultado = await criarNota("Estudos/Redes/DNS.md", "# DNS\nConteúdo.");
+
+    expect(resultado).toEqual({
+      caminho: "Estudos/Redes/DNS.md",
+      criada: true,
+      commitUrl: "https://github.com/usuario/vault/commit/fake",
+    });
+    expect(github.putFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        path: "Estudos/Redes/DNS.md",
+        content: "# DNS\nConteúdo.",
+        message: "Cria nota: Estudos/Redes/DNS.md",
+      }),
+    );
+    // Criação não manda sha — sha só faz sentido para sobrescrever algo que já existe.
+    expect(vi.mocked(github.putFile).mock.calls[0][1]).not.toHaveProperty("sha");
+  });
+
+  it("adiciona a extensão .md automaticamente quando falta", async () => {
+    await configurarGitHubFalso();
+    const { criarNota } = await importarVaultReal();
+
+    const resultado = await criarNota("Estudos/SemExtensao", "conteúdo");
+    expect(resultado.caminho).toBe("Estudos/SemExtensao.md");
+  });
+
+  it("falha se a nota já existir, sem chamar putFile", async () => {
+    const github = await configurarGitHubFalso();
+    const { criarNota } = await importarVaultReal();
+
+    await expect(criarNota("Estudos/Redes/TCP.md", "conteúdo novo")).rejects.toThrow(/já existe/);
+    expect(github.putFile).not.toHaveBeenCalled();
+  });
+
+  it("invalida o cache: a listagem seguinte busca a árvore de novo no GitHub", async () => {
+    const github = await configurarGitHubFalso();
+    const { criarNota, obterNotasPlanas } = await importarVaultReal();
+
+    await obterNotasPlanas();
+    expect(github.listTree).toHaveBeenCalledTimes(1);
+
+    await criarNota("Estudos/Redes/DNS.md", "# DNS");
+    await obterNotasPlanas();
+
+    expect(github.listTree).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("editarNota", () => {
+  it("modo 'acrescentar' concatena o conteúdo novo ao final do que já existia", async () => {
+    const github = await configurarGitHubFalso();
+    const { editarNota } = await importarVaultReal();
+
+    await editarNota("TCP", "Parágrafo novo.", "acrescentar");
+
+    const [, params] = vi.mocked(github.putFile).mock.calls[0];
+    expect(params.content).toBe(
+      "O protocolo TCP faz um handshake de three-way antes de enviar dados.\n\nParágrafo novo.\n",
+    );
+    expect(params.sha).toBe("sha-tcp");
+  });
+
+  it("modo 'substituir' usa o conteúdo novo diretamente, sem misturar com o antigo", async () => {
+    const github = await configurarGitHubFalso();
+    const { editarNota } = await importarVaultReal();
+
+    await editarNota("TCP", "Conteúdo totalmente reescrito.", "substituir");
+
+    const [, params] = vi.mocked(github.putFile).mock.calls[0];
+    expect(params.content).toBe("Conteúdo totalmente reescrito.");
+  });
+
+  it("falha quando não encontra nenhuma nota parecida com a entrada", async () => {
+    await configurarGitHubFalso();
+    const { editarNota } = await importarVaultReal();
+
+    await expect(
+      editarNota("Nota Que Não Existe", "x", "acrescentar"),
+    ).rejects.toThrow(/Não encontrei a nota/);
+  });
+
+  it("falha quando o sha não é encontrado no GitHub (nota sumiu do repositório)", async () => {
+    const github = await configurarGitHubFalso();
+    vi.mocked(github.getFileSha).mockResolvedValue(null);
+    const { editarNota } = await importarVaultReal();
+
+    await expect(editarNota("TCP", "x", "acrescentar")).rejects.toThrow(/sumiu do repositório/);
+  });
+
+  it("invalida o cache: a listagem seguinte busca a árvore de novo no GitHub", async () => {
+    const github = await configurarGitHubFalso();
+    const { editarNota, obterNotasPlanas } = await importarVaultReal();
+
+    await obterNotasPlanas();
+    expect(github.listTree).toHaveBeenCalledTimes(1);
+
+    await editarNota("TCP", "novo texto", "acrescentar");
+    await obterNotasPlanas();
+
+    expect(github.listTree).toHaveBeenCalledTimes(2);
   });
 });

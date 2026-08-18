@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { executarFerramenta } from "./ferramentas";
+import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
 
 /**
  * Mocka a camada de dados (`vault-real.ts`) inteira: o que importa aqui é o
@@ -10,10 +10,18 @@ vi.mock("./vault-real", () => ({
   buscarNotas: vi.fn(),
   lerNota: vi.fn(),
   listarNotas: vi.fn(),
+  criarNota: vi.fn(),
+  editarNota: vi.fn(),
   tituloDoCaminho: (caminho: string) => caminho.split("/").pop()!.replace(/\.md$/i, ""),
 }));
 
-import { buscarNotas, lerNota, listarNotas } from "./vault-real";
+/** `grafo.ts` também é mockado, para testar (sem acoplar) que a escrita invalida o cache do grafo. */
+vi.mock("./grafo", () => ({
+  invalidarCacheDoGrafo: vi.fn(),
+}));
+
+import { buscarNotas, criarNota, editarNota, lerNota, listarNotas } from "./vault-real";
+import { invalidarCacheDoGrafo } from "./grafo";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -88,6 +96,112 @@ describe("executarFerramenta — ler_nota", () => {
     const saida = await executarFerramenta("ler_nota", { caminho: "Nao/Existe.md" });
     expect(saida.erro).toBe(true);
     expect(saida.resumo).toMatch(/não encontrada/);
+  });
+});
+
+describe("executarFerramenta — criar_nota", () => {
+  it("cria a nota e invalida o cache do grafo depois do commit", async () => {
+    vi.mocked(criarNota).mockResolvedValue({
+      caminho: "Estudos/DNS.md",
+      criada: true,
+      commitUrl: "https://github.com/usuario/vault/commit/abc",
+    });
+
+    const saida = await executarFerramenta("criar_nota", {
+      caminho: "Estudos/DNS.md",
+      conteudo: "# DNS",
+    });
+
+    expect(criarNota).toHaveBeenCalledWith("Estudos/DNS.md", "# DNS");
+    expect(saida.erro).toBeUndefined();
+    expect(saida.resposta).toEqual({
+      sucesso: true,
+      caminho: "Estudos/DNS.md",
+      commit: "https://github.com/usuario/vault/commit/abc",
+    });
+    expect(saida.resumo).toMatch(/Criou/);
+    expect(invalidarCacheDoGrafo).toHaveBeenCalledTimes(1);
+  });
+
+  it("devolve erro (sem lançar exceção) quando a nota já existe, e NÃO invalida o cache", async () => {
+    vi.mocked(criarNota).mockRejectedValue(new Error('A nota "Estudos/TCP.md" já existe.'));
+
+    const saida = await executarFerramenta("criar_nota", {
+      caminho: "Estudos/TCP.md",
+      conteudo: "x",
+    });
+
+    expect(saida.erro).toBe(true);
+    expect(saida.resumo).toMatch(/já existe/);
+    expect(invalidarCacheDoGrafo).not.toHaveBeenCalled();
+  });
+
+  it("falha com erro claro quando 'conteudo' está faltando", async () => {
+    const saida = await executarFerramenta("criar_nota", { caminho: "Estudos/DNS.md" });
+    expect(saida.erro).toBe(true);
+    expect(saida.resumo).toMatch(/conteudo/);
+    expect(criarNota).not.toHaveBeenCalled();
+  });
+});
+
+describe("executarFerramenta — editar_nota", () => {
+  it("edita no modo pedido e invalida o cache do grafo depois do commit", async () => {
+    vi.mocked(editarNota).mockResolvedValue({
+      caminho: "Estudos/TCP.md",
+      criada: false,
+      commitUrl: "https://github.com/usuario/vault/commit/def",
+    });
+
+    const saida = await executarFerramenta("editar_nota", {
+      caminho: "TCP",
+      conteudo: "Parágrafo novo.",
+      modo: "acrescentar",
+    });
+
+    expect(editarNota).toHaveBeenCalledWith("TCP", "Parágrafo novo.", "acrescentar");
+    expect(saida.resposta.modo).toBe("acrescentar");
+    expect(saida.resumo).toMatch(/Complementou/);
+    expect(invalidarCacheDoGrafo).toHaveBeenCalledTimes(1);
+  });
+
+  it("usa 'acrescentar' como padrão quando 'modo' vem inválido ou ausente", async () => {
+    vi.mocked(editarNota).mockResolvedValue({
+      caminho: "Estudos/TCP.md",
+      criada: false,
+      commitUrl: "url",
+    });
+
+    await executarFerramenta("editar_nota", { caminho: "TCP", conteudo: "x" });
+    expect(editarNota).toHaveBeenCalledWith("TCP", "x", "acrescentar");
+
+    await executarFerramenta("editar_nota", { caminho: "TCP", conteudo: "x", modo: "apagar_tudo" });
+    expect(editarNota).toHaveBeenLastCalledWith("TCP", "x", "acrescentar");
+  });
+
+  it("devolve erro (sem lançar exceção) quando a nota não é encontrada, e NÃO invalida o cache", async () => {
+    vi.mocked(editarNota).mockRejectedValue(new Error("Não encontrei a nota."));
+
+    const saida = await executarFerramenta("editar_nota", {
+      caminho: "Nao Existe",
+      conteudo: "x",
+      modo: "acrescentar",
+    });
+
+    expect(saida.erro).toBe(true);
+    expect(invalidarCacheDoGrafo).not.toHaveBeenCalled();
+  });
+});
+
+describe("declaracoesDeFerramentas", () => {
+  it("declara as cinco ferramentas (leitura e escrita)", () => {
+    const nomes = declaracoesDeFerramentas.map((d) => d.name);
+    expect(nomes).toEqual([
+      "buscar_notas",
+      "listar_notas",
+      "ler_nota",
+      "criar_nota",
+      "editar_nota",
+    ]);
   });
 });
 

@@ -172,11 +172,19 @@ retrofitting breakpoints.
 
 ## Current state / roadmap
 
-Per the README, the project is at "Etapa 3": real vault browsing + graph, but
-`Chat.tsx` still returns a hardcoded fake reply on a `setTimeout` — there is no
-real model call yet. Next steps: wire `@google/genai` (Gemini) with function
-calling using `etapas-futuras/` as the draft (search → read → answer, citing note
-paths), then allow the agent to create/edit notes as real commits to the vault repo.
+The `etapas-futuras/` roadmap (Gemini function calling, then write access) is
+implemented. `Chat.tsx` calls `/api/chat`, which runs `src/lib/agente.ts`'s
+function-calling loop against `src/lib/ferramentas.ts`'s tools: `buscar_notas`,
+`listar_notas`, `ler_nota` (read) and `criar_nota`, `editar_nota` (write — each
+a real commit via `src/lib/github.ts`'s `putFile`). `Mensagem.tsx` renders a
+pill per tool used in a turn, linking to the commit when one was made. The
+whole app sits behind a password-protected session (`src/proxy.ts` +
+`src/lib/sessao.ts`/`autenticacao.ts`) — this was added independently of the
+etapas-futuras roadmap, not part of the original plan.
+
+`etapas-futuras/` itself is now stale as a design reference (the real
+implementation diverged in a few places — e.g. it used `"assistant"` where
+`types.ts`'s `Papel` uses `"agente"`) — treat `src/lib/` as the source of truth.
 
 Note: `BarraLateral.tsx`'s sidebar subtitle still says "dados de exemplo" (example
 data) even though the tree is real vault data now — leftover copy from an earlier

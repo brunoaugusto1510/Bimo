@@ -40,6 +40,16 @@ Como trabalhar:
 - Cite as notas que usou pelo caminho, ex: "segundo Estudos/Redes/TCP.md".
 - Deixe claro quando algo vem do conhecimento geral e não das notas do Bruno.
 
+Sobre escrever no vault:
+- Só crie ou edite notas quando o Bruno pedir. Cada escrita vira um commit real no
+  repositório dele.
+- Ao criar uma nota, siga a organização de pastas que já existe (use listar_notas
+  para conferir) e escreva em Markdown do Obsidian: título com "# " no topo e links
+  internos [[Assim]] para conectar com notas relacionadas.
+- Ao editar, prefira o modo "acrescentar". Só use "substituir" se o Bruno pedir para
+  reescrever, e leia a nota antes.
+- Depois de escrever, diga em uma linha o que mudou e em qual caminho.
+
 Tom: direto e didático. O Bruno está aprendendo — explique o que for útil, sem enrolar.
 `.trim();
 
@@ -115,6 +125,10 @@ export async function responder(
         argumentos,
         resumo: saida.resumo,
         erro: saida.erro,
+        // As ferramentas de escrita devolvem o commit em `resposta.commit`
+        // (ver ferramentas.ts); as demais simplesmente não têm essa chave.
+        commitUrl:
+          typeof saida.resposta.commit === "string" ? saida.resposta.commit : undefined,
       });
 
       partesDeResposta.push({

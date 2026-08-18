@@ -3,11 +3,7 @@
  *
  * Nada aqui sabe o que é uma "nota" ou o que é o Obsidian, nem o que é um
  * grafo de links — isso fica em `vault-real.ts` e `grafo.ts`. Aqui só existem
- * repositórios, branches, árvores de arquivo e blobs.
- *
- * Por enquanto só lê. Escrever (criar/editar nota, o que gera um commit) fica
- * para quando o Gemini precisar disso de verdade — veja `etapas-futuras/github.ts`
- * para essa versão mais completa.
+ * repositórios, branches, árvores de arquivo, blobs e commits.
  */
 
 const GITHUB_API = "https://api.github.com";
@@ -65,19 +61,28 @@ export class GitHubError extends Error {
   }
 }
 
+type RequestOptions = {
+  method?: "GET" | "PUT";
+  body?: unknown;
+  /** Header Accept — "raw" faz o GitHub devolver o arquivo em texto puro. */
+  accept?: string;
+};
+
 async function request(
   cfg: GitHubConfig,
   path: string,
-  /** "raw" faz o GitHub devolver o arquivo em texto puro, em vez de JSON. */
-  accept: string = "application/vnd.github+json",
+  options: RequestOptions = {},
 ): Promise<Response> {
   const res = await fetch(`${GITHUB_API}${path}`, {
+    method: options.method ?? "GET",
     headers: {
       Authorization: `Bearer ${cfg.token}`,
-      Accept: accept,
+      Accept: options.accept ?? "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "bimo-vault-chat",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
+    body: options.body ? JSON.stringify(options.body) : undefined,
     // Sempre buscar do GitHub: o cache é nosso (vault-real.ts / grafo.ts), não do fetch.
     cache: "no-store",
   });
@@ -130,10 +135,64 @@ export async function listTree(
 
 /** Baixa o conteúdo de um arquivo pelo hash do blob (texto puro). */
 export async function readBlob(cfg: GitHubConfig, sha: string): Promise<string> {
-  const res = await request(
-    cfg,
-    `/repos/${cfg.repo}/git/blobs/${sha}`,
-    "application/vnd.github.raw",
-  );
+  const res = await request(cfg, `/repos/${cfg.repo}/git/blobs/${sha}`, {
+    accept: "application/vnd.github.raw",
+  });
   return res.text();
+}
+
+/**
+ * O sha que o GitHub exige ao sobrescrever um arquivo existente.
+ * Devolve `null` se o arquivo ainda não existe (aí é criação, não edição).
+ */
+export async function getFileSha(cfg: GitHubConfig, path: string): Promise<string | null> {
+  try {
+    const res = await request(
+      cfg,
+      `/repos/${cfg.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(cfg.branch)}`,
+    );
+    const data = (await res.json()) as { sha?: string };
+    return data.sha ?? null;
+  } catch (error) {
+    if (error instanceof GitHubError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
+ * Cria ou sobrescreve um arquivo — isso gera um commit de verdade no repo.
+ *
+ * `sha` deve ser o hash atual do arquivo ao editar. Se estiver desatualizado
+ * o GitHub devolve 409, o que evita sobrescrever uma alteração feita no
+ * Obsidian entre a leitura e a escrita.
+ */
+export async function putFile(
+  cfg: GitHubConfig,
+  params: { path: string; content: string; message: string; sha?: string },
+): Promise<{ commitUrl: string; sha: string }> {
+  const res = await request(cfg, `/repos/${cfg.repo}/contents/${encodePath(params.path)}`, {
+    method: "PUT",
+    body: {
+      message: params.message,
+      // A API de conteúdo do GitHub só aceita o arquivo em base64.
+      content: Buffer.from(params.content, "utf8").toString("base64"),
+      branch: cfg.branch,
+      ...(params.sha ? { sha: params.sha } : {}),
+    },
+  });
+
+  const data = (await res.json()) as {
+    content?: { sha?: string };
+    commit?: { html_url?: string };
+  };
+
+  return {
+    commitUrl: data.commit?.html_url ?? "",
+    sha: data.content?.sha ?? "",
+  };
+}
+
+/** Codifica cada segmento do caminho, mas mantém as barras separando pastas. */
+function encodePath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
 }

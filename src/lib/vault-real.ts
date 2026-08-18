@@ -8,11 +8,20 @@
  *
  * Guarda o resultado em cache por alguns minutos: cada visita à página não
  * precisa refazer a chamada ao GitHub, e o preço é que uma nota criada direto
- * no Obsidian pode levar até `CACHE_TTL_MS` para aparecer aqui. Toda escrita
- * (quando ela existir, na Etapa 5) vai precisar invalidar esse cache.
+ * no Obsidian pode levar até `CACHE_TTL_MS` para aparecer aqui. Por isso toda
+ * escrita daqui (`criarNota`/`editarNota`) invalida o cache na hora — mas só
+ * o deste módulo: quem invalida o do grafo (`grafo.ts`) é `ferramentas.ts`,
+ * para não criar um import circular entre os dois.
  */
 
-import { getGitHubConfig, listTree, readBlob, type GitHubConfig } from "./github";
+import {
+  getFileSha,
+  getGitHubConfig,
+  listTree,
+  putFile,
+  readBlob,
+  type GitHubConfig,
+} from "./github";
 import type { ItemVault } from "./types";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -48,6 +57,16 @@ function ehNota(path: string, cfg: GitHubConfig): boolean {
 /** Remove o prefixo da subpasta: o resto do app só conhece caminhos relativos ao vault. */
 function paraCaminhoVault(path: string, cfg: GitHubConfig): string {
   return cfg.subpath ? path.slice(cfg.subpath.length + 1) : path;
+}
+
+/** Caminho do vault -> caminho real dentro do repositório (inverso de paraCaminhoVault). */
+function paraCaminhoRepo(caminho: string, cfg: GitHubConfig): string {
+  return cfg.subpath ? `${cfg.subpath}/${caminho}` : caminho;
+}
+
+/** Descarta o cache. Chamado depois de toda escrita — ver `criarNota`/`editarNota`. */
+export function invalidarCache(): void {
+  cache = null;
 }
 
 /**
@@ -395,4 +414,85 @@ export async function buscarNotas(
 
 function avisoTruncamento(): string {
   return "O repositório é grande demais e a listagem de arquivos veio incompleta.";
+}
+
+export type ResultadoEscrita = {
+  caminho: string;
+  criada: boolean;
+  commitUrl: string;
+};
+
+/**
+ * Cria uma nota nova. Falha se já existir — sobrescrever por acidente
+ * uma nota de estudo seria pior do que exigir um passo a mais.
+ */
+export async function criarNota(caminho: string, conteudo: string): Promise<ResultadoEscrita> {
+  const cfg = getGitHubConfig();
+  const caminhoFinal = normalizarCaminhoDeEscrita(caminho);
+  const caminhoRepo = paraCaminhoRepo(caminhoFinal, cfg);
+
+  const shaExistente = await getFileSha(cfg, caminhoRepo);
+  if (shaExistente) {
+    throw new Error(`A nota "${caminhoFinal}" já existe. Use editar_nota para alterá-la.`);
+  }
+
+  const { commitUrl } = await putFile(cfg, {
+    path: caminhoRepo,
+    content: conteudo,
+    message: `Cria nota: ${caminhoFinal}`,
+  });
+
+  invalidarCache();
+  return { caminho: caminhoFinal, criada: true, commitUrl };
+}
+
+/** Edita uma nota existente, substituindo o conteúdo ou acrescentando ao final. */
+export async function editarNota(
+  entrada: string,
+  conteudo: string,
+  modo: "substituir" | "acrescentar",
+): Promise<ResultadoEscrita> {
+  const cfg = getGitHubConfig();
+  const nota = await resolverNota(entrada);
+  if (!nota) {
+    throw new Error(
+      `Não encontrei a nota "${entrada}". Use buscar_notas ou listar_notas para achar o caminho certo.`,
+    );
+  }
+
+  const caminhoRepo = paraCaminhoRepo(nota.caminho, cfg);
+
+  // Relê o sha da API em vez de usar o do cache: o cache pode estar velho,
+  // e um sha velho faria o GitHub rejeitar o commit.
+  const sha = await getFileSha(cfg, caminhoRepo);
+  if (!sha) {
+    throw new Error(`A nota "${nota.caminho}" sumiu do repositório.`);
+  }
+
+  let conteudoFinal = conteudo;
+  if (modo === "acrescentar") {
+    const atual = await readBlob(cfg, sha);
+    conteudoFinal = `${atual.replace(/\s*$/, "")}\n\n${conteudo}\n`;
+  }
+
+  const { commitUrl } = await putFile(cfg, {
+    path: caminhoRepo,
+    content: conteudoFinal,
+    message: `Atualiza nota: ${nota.caminho}`,
+    sha,
+  });
+
+  invalidarCache();
+  return { caminho: nota.caminho, criada: false, commitUrl };
+}
+
+function normalizarCaminhoDeEscrita(caminho: string): string {
+  const limpo = caminho
+    .replace(/^\/+/, "")
+    // ".." sairia da pasta do vault e escreveria em qualquer lugar do repo.
+    .replace(/\.\.+/g, "")
+    .trim();
+
+  if (!limpo) throw new Error("O caminho da nota está vazio.");
+  return limpo.toLowerCase().endsWith(".md") ? limpo : `${limpo}.md`;
 }

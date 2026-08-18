@@ -12,6 +12,8 @@ export type Mensagem = {
   id: string;
   papel: Papel;
   conteudo: string;
+  /** Só existe em mensagens do agente que usaram alguma ferramenta. */
+  ferramentas?: UsoDeFerramenta[];
 };
 
 /**
@@ -32,4 +34,6 @@ export type UsoDeFerramenta = {
   /** Frase curta para exibir na UI, ex: 'Buscou "TCP" — 3 nota(s)' */
   resumo: string;
   erro?: boolean;
+  /** Presente só nas ferramentas de escrita bem-sucedidas (criar_nota/editar_nota). */
+  commitUrl?: string;
 };

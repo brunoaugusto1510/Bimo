@@ -1,6 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Mensagem as TipoMensagem } from "@/lib/types";
+import type { Mensagem as TipoMensagem, UsoDeFerramenta } from "@/lib/types";
 
 /**
  * Uma bolha de mensagem.
@@ -39,7 +39,50 @@ export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
             </div>
           )}
         </div>
+
+        {!doUsuario && mensagem.ferramentas && mensagem.ferramentas.length > 0 && (
+          <UsosDeFerramentas usos={mensagem.ferramentas} />
+        )}
       </div>
     </div>
+  );
+}
+
+/** Uma "pastilha" por ferramenta usada no turno — o que o agente consultou ou escreveu. */
+function UsosDeFerramentas({ usos }: { usos: UsoDeFerramenta[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 px-1">
+      {usos.map((uso, indice) => (
+        <FerramentaUsada key={indice} uso={uso} />
+      ))}
+    </div>
+  );
+}
+
+function FerramentaUsada({ uso }: { uso: UsoDeFerramenta }) {
+  // Mesmas cores do banner de erro do Chat, só que numa pastilha pequena —
+  // erro de ferramenta é sempre não-fatal (o agente costuma se recuperar),
+  // mas ainda vale destacar visualmente que algo não saiu como esperado.
+  const classes = uso.erro
+    ? "border-erro/30 bg-erro-suave text-erro"
+    : "border-borda bg-fundo text-suave";
+
+  // Escritas (criar_nota/editar_nota bem-sucedidas) viram link pro commit —
+  // é a única ação aqui que gera uma mudança real e permanente no vault.
+  if (uso.commitUrl) {
+    return (
+      <a
+        href={uso.commitUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`rounded-full border px-2 py-0.5 text-xs hover:underline ${classes}`}
+      >
+        {uso.resumo} ↗
+      </a>
+    );
+  }
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-xs ${classes}`}>{uso.resumo}</span>
   );
 }
