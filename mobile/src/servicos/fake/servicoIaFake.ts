@@ -24,12 +24,14 @@ export const servicoIaFake: ServicoIA = {
     await atraso(900);
 
     switch (tipo) {
-      case "links":
+      case "links": {
+        const [primeira, segunda] = notas.filter((candidata) => candidata.id !== nota.id);
         return {
           tipo,
           rotulo: "Sugerir links",
-          texto: `Esta nota conversa com '${notas[1].titulo}' e '${notas[2].titulo}'. Posso inserir os dois wikilinks no fim do corpo.\n\n[[${notas[1].titulo}]]\n[[${notas[2].titulo}]]`,
+          texto: `Esta nota conversa com '${primeira.titulo}' e '${segunda.titulo}'. Posso inserir os dois wikilinks no fim do corpo.\n\n[[${primeira.titulo}]]\n[[${segunda.titulo}]]`,
         };
+      }
       case "resumo":
         return {
           tipo,
@@ -53,7 +55,7 @@ export const servicoIaFake: ServicoIA = {
         return {
           tipo,
           rotulo: "Perguntar sobre a nota",
-          texto: `Sobre '${nota.titulo}': o que eu ainda não desenvolvi é a relação com as notas da pasta ${nota.pasta}.`,
+          texto: `Sobre '${nota.titulo}': o que você ainda não desenvolveu é a relação com as notas da pasta ${nota.pasta}.`,
         };
     }
   },

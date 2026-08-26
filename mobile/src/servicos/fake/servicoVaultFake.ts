@@ -6,6 +6,15 @@ import { atraso } from "./atraso";
 
 let notasEmMemoria: Nota[] = notasIniciais.map((nota) => ({ ...nota }));
 
+/**
+ * Devolve o vault em memória ao estado das fixtures. Existe para os testes:
+ * `salvarNota` reatribui o módulo `notasEmMemoria`, e sem reset entre testes
+ * uma mutação de um `it` vaza para o próximo.
+ */
+export function redefinirVaultFake(): void {
+  notasEmMemoria = notasIniciais.map((nota) => ({ ...nota }));
+}
+
 export const servicoVaultFake: ServicoVault = {
   async listarNotas() {
     await atraso(120);

@@ -1,5 +1,9 @@
-import { servicoVaultFake } from "./servicoVaultFake";
+import { servicoVaultFake, redefinirVaultFake } from "./servicoVaultFake";
 import { servicoIaFake } from "./servicoIaFake";
+
+beforeEach(() => {
+  redefinirVaultFake();
+});
 
 describe("servicoVaultFake", () => {
   it("lista as notas do fixture", async () => {
@@ -70,5 +74,16 @@ describe("servicoIaFake", () => {
     const [nota] = await servicoVaultFake.listarNotas();
     const sugestao = await servicoIaFake.acaoNaNota("tags", nota);
     expect(sugestao.tags?.every((tag) => tag.startsWith("#") && tag === tag.toLowerCase())).toBe(true);
+  });
+
+  it("a sugestão de links nunca cita a própria nota", async () => {
+    const notas = await servicoVaultFake.listarNotas();
+    // amostra: a primeira nota e as duas que o bug antigo fixava por índice
+    const amostra = [notas[0], notas[1], notas[2]];
+    for (const nota of amostra) {
+      const sugestao = await servicoIaFake.acaoNaNota("links", nota);
+      expect(sugestao.texto.includes(`'${nota.titulo}'`)).toBe(false);
+      expect(sugestao.texto.includes(`[[${nota.titulo}]]`)).toBe(false);
+    }
   });
 });
