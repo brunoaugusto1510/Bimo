@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { useFontes } from "@/compartilhado/tema/useFontes";
+import { ProvedorDeServicos } from "@/servicos";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,7 +25,9 @@ export default function LayoutRaiz() {
 
   return (
     <ProvedorDeTema>
-      <Stack screenOptions={{ headerShown: false }} />
+      <ProvedorDeServicos>
+        <Stack screenOptions={{ headerShown: false }} />
+      </ProvedorDeServicos>
     </ProvedorDeTema>
   );
 }
