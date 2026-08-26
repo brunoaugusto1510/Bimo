@@ -1,0 +1,3 @@
+:root{--unit:4px;--space-xs:4px;--space-sm:8px;--space-md:12px;--space-base:16px;--space-lg:20px;--space-xl:24px;--gutter:16px;
+--top-bar-height:56px;--bottom-nav-height:64px;--tab-switcher-height:44px;--chat-max-width:672px;--sidebar-width:288px;--note-panel-width:400px;--dock-max-height:160px;
+--touch-target:44px;--safe-bottom:env(safe-area-inset-bottom,0px)}
