@@ -1,9 +1,9 @@
 import { render, screen } from "@testing-library/react-native";
-import Index from "./index";
+import Inicio from "./index";
 
 describe("rota inicial", () => {
   it("renderiza a marca do app", async () => {
-    await render(<Index />);
+    await render(<Inicio />);
     expect(screen.getByText("Bimo")).toBeOnTheScreen();
   });
 });
