@@ -9,10 +9,8 @@ type Props = { aberta: boolean; aoFechar: () => void; sobrancelha?: string; chil
 export function Sheet({ aberta, aoFechar, sobrancelha, children }: Props) {
   const { cores, espacamento, raios, sombras } = useTema();
 
-  if (!aberta) return null;
-
   return (
-    <Modal transparent visible animationType="slide" onRequestClose={aoFechar}>
+    <Modal transparent visible={aberta} animationType="slide" onRequestClose={aoFechar}>
       <Pressable
         testID="backdrop-da-sheet"
         accessibilityRole="button"
