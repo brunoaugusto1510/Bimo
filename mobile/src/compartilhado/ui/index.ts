@@ -7,4 +7,5 @@ export { Pill } from "./Pill";
 export { CampoDeBusca } from "./CampoDeBusca";
 export { Interruptor } from "./Interruptor";
 export { Sobrancelha } from "./Sobrancelha";
+export { Sheet } from "./Sheet";
 export { Icone, type NomeDeIcone } from "./Icone";
