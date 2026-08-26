@@ -13,7 +13,8 @@ independente do Next.js da raiz.
 Existe um pacote de handoff de design completo em
 `mobile/desing-app-mobile/Aplicativo de notas com IA e grafos/design_handoff_bimo_mobile/`:
 protótipo HTML autocontido, tokens CSS canônicos, o campo de grafo em JSX de
-referência e dois MP4 de intro (fundo claro e fundo escuro).
+referência e dois MP4 de intro (fundo claro e fundo escuro). Para depois de aprovado
+concretizar o app ao sistema.
 
 **Escopo desta fase:** telas, navegação, tema, campo de grafo e dados de
 exemplo. Nada de backend.
