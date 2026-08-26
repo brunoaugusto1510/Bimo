@@ -20,7 +20,7 @@ export function Sheet({ aberta, aoFechar, sobrancelha, children }: Props) {
         onPress={aoFechar}
         style={{ flex: 1, backgroundColor: cores.backdrop, justifyContent: "flex-end" }}
       >
-        <Pressable onPress={() => {}}>
+        <Pressable testID="guarda-da-sheet" onPress={() => {}}>
           <Vidro
             nivel="folha"
             style={[

@@ -24,7 +24,7 @@ describe("Sheet", () => {
       </Sheet>,
     );
     expect(screen.getByText("Perfil")).toBeOnTheScreen();
-  }, 10000);
+  });
 
   it("fecha ao tocar no backdrop", async () => {
     const aoFechar = jest.fn();
@@ -44,5 +44,16 @@ describe("Sheet", () => {
       </Sheet>,
     );
     expect(screen.getByText("BIMO NESTA NOTA")).toBeOnTheScreen();
+  });
+
+  it("não fecha ao tocar no conteúdo do painel", async () => {
+    const aoFechar = jest.fn();
+    await renderizar(
+      <Sheet aberta aoFechar={aoFechar}>
+        <Text>Perfil</Text>
+      </Sheet>,
+    );
+    await fireEvent.press(screen.getByTestId("guarda-da-sheet"));
+    expect(aoFechar).not.toHaveBeenCalled();
   });
 });
