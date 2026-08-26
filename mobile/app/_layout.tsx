@@ -7,13 +7,20 @@ import { useFontes } from "@/compartilhado/tema/useFontes";
 SplashScreen.preventAutoHideAsync();
 
 export default function LayoutRaiz() {
-  const fontesCarregadas = useFontes();
+  const { carregadas, erro } = useFontes();
+  const pronto = carregadas || erro !== null;
 
   useEffect(() => {
-    if (fontesCarregadas) SplashScreen.hideAsync();
-  }, [fontesCarregadas]);
+    if (pronto) SplashScreen.hideAsync();
+  }, [pronto]);
 
-  if (!fontesCarregadas) return null;
+  useEffect(() => {
+    if (erro) {
+      console.warn("Falha ao carregar as fontes; seguindo com as fontes do sistema.", erro);
+    }
+  }, [erro]);
+
+  if (!pronto) return null;
 
   return (
     <ProvedorDeTema>
