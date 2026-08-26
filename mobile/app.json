@@ -25,7 +25,8 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
