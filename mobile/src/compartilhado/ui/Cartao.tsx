@@ -4,8 +4,15 @@ import { useTema } from "@/compartilhado/tema";
 import { Vidro } from "./Vidro";
 
 export function Cartao({
-  children, aoTocar, selecionado = false, style, testID,
-}: { children: ReactNode; aoTocar?: () => void; selecionado?: boolean; style?: StyleProp<ViewStyle>; testID?: string }) {
+  children, aoTocar, selecionado = false, style, testID, rotuloAcessivel,
+}: {
+  children: ReactNode;
+  aoTocar?: () => void;
+  selecionado?: boolean;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  rotuloAcessivel?: string;
+}) {
   const { cores, espacamento, raios } = useTema();
 
   const conteudo = (
@@ -22,7 +29,7 @@ export function Cartao({
 
   if (!aoTocar) return conteudo;
   return (
-    <Pressable testID={testID} accessibilityRole="button" onPress={aoTocar}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={rotuloAcessivel} onPress={aoTocar}>
       {conteudo}
     </Pressable>
   );

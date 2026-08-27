@@ -1,7 +1,8 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
+import { Text } from "react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { coresClaro } from "@/compartilhado/tema/tokens/cores";
-import { Avatar, Botao, Chip, Interruptor, Pill, CampoDeBusca } from "./index";
+import { Avatar, Botao, Cartao, Chip, Interruptor, Pill, CampoDeBusca } from "./index";
 
 async function renderizar(elemento: React.ReactElement) {
   return render(<ProvedorDeTema>{elemento}</ProvedorDeTema>);
@@ -46,6 +47,19 @@ describe("Pill", () => {
   it("pinta o fundo de primária quando ativo", async () => {
     await renderizar(<Pill rotulo="90" ativo aoTocar={jest.fn()} testID="pill" />);
     expect(screen.getByTestId("pill")).toHaveStyle({ backgroundColor: coresClaro.primaria });
+  });
+});
+
+describe("Cartao", () => {
+  it("usa rotuloAcessivel como nome acessível em vez da síntese pelos Text descendentes", async () => {
+    const aoTocar = jest.fn();
+    await renderizar(
+      <Cartao aoTocar={aoTocar} rotuloAcessivel="Abrir a nota Notas atômicas">
+        <Text>Notas atômicas</Text>
+        <Text>Uma nota carrega uma ideia só.</Text>
+      </Cartao>,
+    );
+    expect(screen.getByRole("button", { name: "Abrir a nota Notas atômicas" })).toBeOnTheScreen();
   });
 });
 
