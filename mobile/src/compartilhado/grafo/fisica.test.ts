@@ -43,6 +43,12 @@ describe("criarCampo", () => {
       expect(Math.hypot(no.x - centroX, no.y - centroY)).toBeLessThanOrEqual(raio);
     }
   });
+
+  it("usa exatamente 0,12 px/frame de velocidade máxima de deriva", () => {
+    const [no] = criarCampo({ ...OPCOES, quantidade: 1, aleatorio: () => 1 });
+    expect(Math.abs(no.vx)).toBeCloseTo(0.12);
+    expect(Math.abs(no.vy)).toBeCloseTo(0.12);
+  });
 });
 
 describe("avancarCampo", () => {
@@ -56,7 +62,7 @@ describe("avancarCampo", () => {
   it("inverte a velocidade quando o nó passa de 1,1x o raio", () => {
     const raio = raioDoCampo(OPCOES.largura, OPCOES.altura);
     const fugitivo = {
-      x: OPCOES.largura / 2 + raio * 1.2, y: OPCOES.altura / 2,
+      x: OPCOES.largura / 2 + raio * 1.15, y: OPCOES.altura / 2,
       vx: 0.12, vy: 0, raio: 1.1, tom: "base" as const, fase: 0, escala: 1, framesDeVida: null,
     };
     const [depois] = avancarCampo([fugitivo], OPCOES);
@@ -64,8 +70,9 @@ describe("avancarCampo", () => {
   });
 
   it("não inverte quem está dentro do limite", () => {
+    const raio = raioDoCampo(OPCOES.largura, OPCOES.altura);
     const dentro = {
-      x: OPCOES.largura / 2, y: OPCOES.altura / 2,
+      x: OPCOES.largura / 2 + raio * 1.05, y: OPCOES.altura / 2,
       vx: 0.12, vy: 0, raio: 1.1, tom: "base" as const, fase: 0, escala: 1, framesDeVida: null,
     };
     const [depois] = avancarCampo([dentro], OPCOES);
@@ -83,8 +90,8 @@ describe("calcularLigacoes", () => {
   it("liga só pares a menos de 22% do raio", () => {
     const raio = 100;
     const perto = { x: 0, y: 0, vx: 0, vy: 0, raio: 1.1, tom: "base" as const, fase: 0, escala: 1, framesDeVida: null };
-    const vizinho = { ...perto, x: 10 };
-    const longe = { ...perto, x: 90 };
+    const vizinho = { ...perto, x: 21 };
+    const longe = { ...perto, x: 23 };
     const ligacoes = calcularLigacoes([perto, vizinho, longe], raio);
     expect(ligacoes).toContainEqual([0, 1]);
     expect(ligacoes).not.toContainEqual([0, 2]);
@@ -111,6 +118,22 @@ describe("partículas", () => {
   it("cria a quantidade pedida entre nós existentes", () => {
     const nos = criarCampo({ ...OPCOES, quantidade: 20, aleatorio: Math.random });
     expect(criarParticulas(nos, 8, Math.random)).toHaveLength(8);
+  });
+
+  it("sorteia a velocidade no piso da faixa do handoff (0,012)", () => {
+    const nos = criarCampo({ ...OPCOES, quantidade: 20, aleatorio: Math.random });
+    const [particula] = criarParticulas(nos, 1, () => 0);
+    expect(particula.velocidade).toBeCloseTo(0.012);
+  });
+
+  it("sorteia a velocidade no teto da faixa do handoff (0,024)", () => {
+    const nos = criarCampo({ ...OPCOES, quantidade: 20, aleatorio: Math.random });
+    // criarParticulas chama aleatorio() três vezes por partícula: origem, destino, velocidade.
+    // As duas primeiras precisam ficar dentro dos índices válidos; só a terceira testa o teto.
+    let chamada = 0;
+    const aleatorioQuaseUm = () => (chamada++ === 2 ? 1 : 0);
+    const [particula] = criarParticulas(nos, 1, aleatorioQuaseUm);
+    expect(particula.velocidade).toBeCloseTo(0.024);
   });
 
   it("avança o progresso pela velocidade e descarta as que chegaram", () => {
@@ -145,6 +168,12 @@ describe("nascerNo", () => {
     let nos = nascerNo([], { ...OPCOES, aleatorio: () => 0 });
     for (let frame = 0; frame < 50; frame += 1) nos = avancarCampo(nos, OPCOES);
     expect(nos[0].escala).toBeCloseTo(1, 1);
+  });
+
+  it("nasce com velocidade máxima de 0,12 px/frame", () => {
+    const [no] = nascerNo([], { ...OPCOES, aleatorio: () => 1 });
+    expect(Math.abs(no.vx)).toBeCloseTo(0.12);
+    expect(Math.abs(no.vy)).toBeCloseTo(0.12);
   });
 });
 
