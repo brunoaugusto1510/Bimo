@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Stack } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { useFontes } from "@/compartilhado/tema/useFontes";
@@ -24,10 +25,12 @@ export default function LayoutRaiz() {
   if (!pronto) return null;
 
   return (
-    <ProvedorDeTema>
-      <ProvedorDeServicos>
-        <Stack screenOptions={{ headerShown: false }} />
-      </ProvedorDeServicos>
-    </ProvedorDeTema>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ProvedorDeTema>
+        <ProvedorDeServicos>
+          <Stack screenOptions={{ headerShown: false }} />
+        </ProvedorDeServicos>
+      </ProvedorDeTema>
+    </GestureHandlerRootView>
   );
 }
