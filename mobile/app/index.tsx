@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import { Redirect } from "expo-router";
 
 export default function Inicio() {
-  return (
-    <View>
-      <Text>Bimo</Text>
-    </View>
-  );
+  return <Redirect href="/intro" />;
 }
