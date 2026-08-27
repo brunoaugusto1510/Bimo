@@ -13,7 +13,8 @@ const ZOOM_MAXIMO = 2.4;
 // O rótulo é uma <Text> do RN, não texto do SVG: react-native-svg só entrega
 // toque de forma confiável no elemento raiz (o mesmo motivo dos alvos de
 // toque abaixo), e uma <Text> nativa fica sobreposta ao <Svg> como um rótulo
-// centralizado sob o nó.
+// centralizado sob o nó. Bônus: leitor de tela lê <Text> do RN; não lê
+// RNSVGText.
 const LARGURA_DO_ROTULO = 96;
 const ESPACO_DO_ROTULO = 6;
 
@@ -54,10 +55,24 @@ export function GrafoInterativo({ nos, arestas, noSelecionado, aoSelecionarNo }:
 
   return (
     <View testID="grafo-interativo" style={StyleSheet.absoluteFill}>
-      <Pressable testID="fundo-do-grafo" onPress={() => aoSelecionarNo(null)} style={StyleSheet.absoluteFill} />
       <GestureDetector gesture={gestos}>
-        <Animated.View style={[StyleSheet.absoluteFill, estiloDaCamada]}>
-          <Svg width={largura} height={altura}>
+        {/*
+          `pointerEvents="box-none"` nesta camada e no `<Svg>` é o que faz o
+          `fundo-do-grafo` (montado logo abaixo, dentro da mesma subárvore
+          transformada) ser alcançável num aparelho real. Sem isso, esta
+          `Animated.View` de tela cheia — e o `<Svg>` de tela cheia dentro
+          dela — seriam a view mais à frente sob qualquer toque que não
+          caísse num nó, e ficariam com o toque mesmo sem fazer nada com
+          ele: nenhum irmão atrás (nem descendente que só apareça depois no
+          JSX) receberia a chance. "box-none" torna as duas transparentes ao
+          toque, deixando o toque cair nos descendentes reais — o fundo (se
+          nada de mais à frente o cobrir) ou um alvo de nó (que cobre uma
+          área pequena por cima do fundo).
+        */}
+        <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, estiloDaCamada]}>
+          <Pressable testID="fundo-do-grafo" onPress={() => aoSelecionarNo(null)} style={StyleSheet.absoluteFill} />
+
+          <Svg pointerEvents="box-none" width={largura} height={altura}>
             {arestas.map((aresta) => {
               const de = posicoes.get(aresta.de);
               const para = posicoes.get(aresta.para);
