@@ -17,7 +17,11 @@ export function CartaoDeSugestao({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(200)}
+      // FadeInDown puro entra com translateY: 25 por padrão (Fade.ts) — mais
+      // de seis vezes o deslocamento de 4px que o design pede.
+      // withInitialValues sobrescreve só o transform inicial, mantendo a
+      // duração e o fade.
+      entering={FadeInDown.duration(200).withInitialValues({ transform: [{ translateY: 4 }] })}
       style={{
         marginTop: espacamento.gutter,
         padding: espacamento.md,

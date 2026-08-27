@@ -11,12 +11,26 @@ type EstadoEditor = {
   menuIA: boolean;
   sugestao: Sugestao | null;
   carregadosNoUltimoNo: number;
-  // Id da nota que este estado representa no momento — não faz parte da
-  // interface pública descrita no brief, é bookkeeping interno de carregar()
-  // para distinguir "terminando de carregar a nota já aberta" de "abrindo
-  // uma nota diferente". Ver o comentário em carregar() abaixo.
+  // Bookkeeping interno — não faz parte da interface pública do brief.
+  // `idCarregado` é uma checagem extra e barata (defesa em profundidade);
+  // `tokenDeCarregamento` é o mecanismo de verdade contra corrida.
+  // `tituloTocado`/`textoTocado`/`tagsTocadas` rastreiam, campo a campo, se
+  // o usuário já mexeu ali desde que a nota foi aberta. Ver os comentários
+  // em `abrirNota`/`aplicarConteudo` abaixo.
   idCarregado: string | null;
-  carregar: (nota: Nota | null) => void;
+  tokenDeCarregamento: number;
+  tituloTocado: boolean;
+  textoTocado: boolean;
+  tagsTocadas: boolean;
+
+  // Chamado de forma síncrona, assim que o Editor decide abrir uma nota
+  // (mount ou troca de `id`) — antes de qualquer fetch. Zera tudo para essa
+  // nota e devolve um token que identifica esta abertura de forma única.
+  abrirNota: (id: string) => number;
+  // Chamado quando o fetch do vault resolve, com o token devolvido por
+  // `abrirNota`. Só aplica, campo a campo, o que o usuário ainda não tiver
+  // tocado desde a abertura — e só se ainda for a abertura mais recente.
+  aplicarConteudo: (nota: Nota, token: number) => void;
   definirTitulo: (titulo: string) => void;
   digitarTexto: (texto: string, aoCrescer: () => void) => void;
   abrirMenu: () => void;
@@ -25,8 +39,8 @@ type EstadoEditor = {
   inserirSugestao: (aoCrescer: () => void) => void;
   descartarSugestao: () => void;
   // Hygiene de teste: devolve o estado ao ponto de partida (inclusive
-  // `idCarregado`), para que um `it` não vaze estado interno para o
-  // próximo — carregar() sozinho não garante isso, veja o comentário lá.
+  // `idCarregado`/`tokenDeCarregamento`/os `*Tocado(s)`), para que um `it`
+  // não vaze estado interno para o próximo.
   resetar: () => void;
 };
 
@@ -38,47 +52,90 @@ const ESTADO_INICIAL = {
   sugestao: null as Sugestao | null,
   carregadosNoUltimoNo: 0,
   idCarregado: null as string | null,
+  tokenDeCarregamento: 0,
+  tituloTocado: false,
+  textoTocado: false,
+  tagsTocadas: false,
 };
 
 export const useEstadoEditor = create<EstadoEditor>((set, get) => ({
   ...ESTADO_INICIAL,
 
-  // CUIDADO — corrida de produção já encontrada aqui uma vez: `carregar()`
-  // é chamado quando `vault.obterNota` resolve, de forma assíncrona. Se o
-  // usuário roda uma ação da IA (rodarAcao) enquanto esse fetch ainda está
-  // no ar, `sugestao` já teria um valor quando o fetch finalmente chega —
-  // e um `carregar()` que sempre zera `sugestao`/`menuIA` apaga essa
-  // sugestão que acabou de chegar, sem o usuário ter feito nada de errado.
+  // CORRIDA DE PRODUÇÃO — encontrada uma vez, conserto estreito demais na
+  // primeira tentativa (só protegia `sugestao`/`menuIA`), agora corrigido
+  // por completo com `abrirNota` + `aplicarConteudo`:
   //
-  // A correção: `carregar()` só zera `sugestao`/`menuIA` quando está de
-  // fato trocando de nota (o `id` recebido é diferente do `idCarregado`
-  // atual). Uma segunda chamada para a MESMA nota — o caso da Editor.tsx,
-  // que chama `carregar()` de forma síncrona com um "casco" vazio ao abrir
-  // a rota (fixando `idCarregado` antes do fetch sequer começar) e de novo
-  // quando o fetch resolve — é tratada como "terminando de carregar a nota
-  // que já está aberta": atualiza título/corpo/tags, mas não mexe em
-  // `sugestao`/`menuIA`, porque quem quer que os tenha mudado nesse
-  // intervalo tem prioridade sobre um load que só está pondo o conteúdo em
-  // dia.
-  carregar: (nota) => {
-    const idNovo = nota?.id ?? null;
-    const mesmaNotaJaAberta = idNovo !== null && idNovo === get().idCarregado;
+  // (1) `sugestao`/`menuIA` nunca são tocados por `aplicarConteudo` — só por
+  //     `abrirNota` (na abertura, síncrona) e pelas próprias ações do
+  //     usuário (`rodarAcao`, `inserirSugestao`, `descartarSugestao`,
+  //     `abrirMenu`/`fecharMenu`). Isso por si só já torna impossível o load
+  //     assíncrono apagar uma sugestão que acabou de chegar — não depende de
+  //     comparar id, token ou flag nenhuma para esses dois campos.
+  //
+  // (2) `titulo`/`texto`/`tags` — que os TextInput deixam interativos desde
+  //     o primeiro paint, igual ao botão Bimo que motivou o conserto — são
+  //     protegidos campo a campo: `tituloTocado`/`textoTocado`/`tagsTocadas`
+  //     viram `true` assim que o usuário mexe em cada um, e
+  //     `aplicarConteudo` pula exatamente os campos tocados, aplicando
+  //     normalmente os que não foram. Perder a digitação do usuário em UM
+  //     campo não deveria custar os outros dois ficarem em branco para
+  //     sempre — por isso por campo, não um "tudo ou nada" no registro
+  //     inteiro.
+  //
+  // (3) Uma resposta obsoleta — o fetch de uma nota A que só termina depois
+  //     de o usuário já ter fechado A e aberto uma nota B — não pode
+  //     sobrescrever o que já é de B. `tokenDeCarregamento` é incrementado
+  //     em CADA `abrirNota()`, esteja essa chamada na mesma instância do
+  //     Editor (o `id` mudou sem desmontar) ou numa instância diferente (A
+  //     foi desmontado, B é um componente novo com fechos/refs próprios —
+  //     por isso o token mora na store global e não numa ref local do
+  //     componente: uma ref local não sobreviveria à desmontagem de A e não
+  //     protegeria B). `aplicarConteudo` só aplica se o token recebido ainda
+  //     for o mais recente da store NO MOMENTO em que a promise resolve.
+  //     Comparar apenas o id contra `idCarregado` não bastava: duas buscas
+  //     em voo para o MESMO id (reabrir a mesma nota rápido, por exemplo)
+  //     teriam o id sempre batendo, e a mais antiga podia sobrescrever a
+  //     mais nova. `idCarregado` continua como checagem extra barata, mas
+  //     quem decide é o token.
+  abrirNota: (id) => {
+    const token = get().tokenDeCarregamento + 1;
     set({
-      titulo: nota?.titulo ?? "",
-      texto: nota?.corpo ?? "",
-      tags: nota?.tags ?? [],
-      idCarregado: idNovo,
-      carregadosNoUltimoNo: nota?.corpo.length ?? 0,
-      ...(mesmaNotaJaAberta ? {} : { menuIA: false, sugestao: null }),
+      titulo: "",
+      texto: "",
+      tags: [],
+      menuIA: false,
+      sugestao: null,
+      carregadosNoUltimoNo: 0,
+      idCarregado: id,
+      tokenDeCarregamento: token,
+      tituloTocado: false,
+      textoTocado: false,
+      tagsTocadas: false,
+    });
+    return token;
+  },
+
+  aplicarConteudo: (nota, token) => {
+    const estado = get();
+    if (token !== estado.tokenDeCarregamento) return;
+    if (nota.id !== estado.idCarregado) return;
+    set({
+      ...(estado.tituloTocado ? {} : { titulo: nota.titulo }),
+      ...(estado.textoTocado ? {} : { texto: nota.corpo, carregadosNoUltimoNo: nota.corpo.length }),
+      ...(estado.tagsTocadas ? {} : { tags: nota.tags }),
     });
   },
 
-  definirTitulo: (titulo) => set({ titulo }),
+  definirTitulo: (titulo) => set({ titulo, tituloTocado: true }),
 
   digitarTexto: (texto, aoCrescer) => {
     const { carregadosNoUltimoNo } = get();
     const cresceu = texto.length - carregadosNoUltimoNo >= CARACTERES_POR_NO;
-    set({ texto, carregadosNoUltimoNo: cresceu ? texto.length : carregadosNoUltimoNo });
+    set({
+      texto,
+      carregadosNoUltimoNo: cresceu ? texto.length : carregadosNoUltimoNo,
+      textoTocado: true,
+    });
     if (cresceu) aoCrescer();
   },
 
@@ -97,9 +154,9 @@ export const useEstadoEditor = create<EstadoEditor>((set, get) => ({
     if (!sugestao) return;
 
     if (sugestao.tags) {
-      set({ tags: [...new Set([...tags, ...sugestao.tags])], sugestao: null });
+      set({ tags: [...new Set([...tags, ...sugestao.tags])], sugestao: null, tagsTocadas: true });
     } else {
-      set({ texto: `${texto}\n\n${sugestao.texto}`, sugestao: null });
+      set({ texto: `${texto}\n\n${sugestao.texto}`, sugestao: null, textoTocado: true });
     }
 
     aoCrescer();

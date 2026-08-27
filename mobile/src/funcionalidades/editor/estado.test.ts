@@ -12,13 +12,14 @@ const ia: ServicoIA = {
 
 describe("useEstadoEditor", () => {
   beforeEach(() => {
-    // Hygiene de teste: sem isso, `carregar()` guardando `idCarregado` entre
-    // chamadas (a correção da corrida abaixo) faria um `it` que deixou
-    // `sugestao`/`menuIA` sujos vazar para o próximo — carregar(notas[0])
-    // de novo veria "mesmo id" e pularia a limpeza. `resetar()` zera tudo,
-    // inclusive `idCarregado`, antes de cada teste carregar a nota de novo.
+    // Hygiene de teste: sem isso, a store — singleton de módulo — vazaria
+    // `sugestao`/`menuIA`/`tokenDeCarregamento` de um `it` para o próximo.
+    // `resetar()` zera tudo antes de reproduzir o fluxo real da Editor.tsx:
+    // abrirNota() (síncrono) seguido de aplicarConteudo() (quando o fetch
+    // "resolve").
     useEstadoEditor.getState().resetar();
-    useEstadoEditor.getState().carregar(notas[0]);
+    const token = useEstadoEditor.getState().abrirNota(notas[0].id);
+    useEstadoEditor.getState().aplicarConteudo(notas[0], token);
   });
 
   it("carrega título, corpo e tags da nota", () => {
@@ -72,43 +73,107 @@ describe("useEstadoEditor", () => {
   });
 
   describe("corrida entre o carregamento da nota e uma ação rápida da IA", () => {
-    // Reproduz o que a Editor.tsx faz de verdade: chama carregar() de forma
-    // síncrona com um "casco" (só o id) assim que a rota abre — antes de
-    // `vault.obterNota` sequer ter sido chamado — e chama carregar() de
-    // novo quando o fetch, mais lento, finalmente resolve. Entre as duas
-    // chamadas, o usuário roda uma ação da IA. A sugestão que isso produz
-    // não pode ser apagada quando a segunda chamada chega com o conteúdo
-    // real da nota.
+    // Reproduz o que a Editor.tsx faz de verdade: abrirNota() de forma
+    // síncrona (guarda o token) assim que a rota abre — antes de
+    // `vault.obterNota` sequer ter sido chamado — e aplicarConteudo() de
+    // novo quando o fetch, mais lento, finalmente resolve com esse mesmo
+    // token. Entre as duas chamadas, o usuário roda uma ação da IA. A
+    // sugestão que isso produz não pode ser apagada quando o conteúdo real
+    // da nota chega.
     it("preserva a sugestão quando o carregamento da nota termina depois de uma ação do usuário", async () => {
       useEstadoEditor.getState().resetar();
+      const token = useEstadoEditor.getState().abrirNota(notas[0].id);
 
-      // 1) a rota abre: carregar() síncrono com só o id, antes do fetch.
-      useEstadoEditor.getState().carregar({ ...notas[0], titulo: "", corpo: "", tags: [] });
-
-      // 2) o usuário roda uma ação da IA antes do fetch responder.
       await useEstadoEditor.getState().rodarAcao(ia, "links", notas[0], jest.fn());
       expect(useEstadoEditor.getState().sugestao?.tipo).toBe("links");
 
-      // 3) só agora o fetch (mais lento) chega com o conteúdo real.
-      useEstadoEditor.getState().carregar(notas[0]);
+      useEstadoEditor.getState().aplicarConteudo(notas[0], token);
 
-      // a sugestão que chegou durante a espera sobrevive, e o conteúdo real
-      // da nota é aplicado normalmente.
       expect(useEstadoEditor.getState().sugestao?.tipo).toBe("links");
       expect(useEstadoEditor.getState().titulo).toBe(notas[0].titulo);
       expect(useEstadoEditor.getState().texto).toBe(notas[0].corpo);
     });
 
-    it("mesmo assim zera a sugestão ao trocar para uma nota diferente", async () => {
+    // Fix round 1 só protegia sugestão/menu — título, corpo e tags
+    // continuavam sendo sobrescritos incondicionalmente por aplicarConteudo,
+    // mesmo que o usuário já tivesse começado a digitar. Os TextInput estão
+    // interativos desde o primeiro paint, igual ao botão Bimo. A proteção é
+    // campo a campo: só `texto` foi tocado aqui, então `titulo` (que o
+    // usuário não mexeu) chega normalmente do conteúdo real da nota.
+    it("preserva o texto digitado quando o carregamento da nota termina depois", () => {
       useEstadoEditor.getState().resetar();
-      useEstadoEditor.getState().carregar(notas[0]);
+      const token = useEstadoEditor.getState().abrirNota(notas[0].id);
+
+      useEstadoEditor.getState().digitarTexto("Rascunho do usuário, ainda não salvo", jest.fn());
+
+      useEstadoEditor.getState().aplicarConteudo(notas[0], token);
+
+      expect(useEstadoEditor.getState().texto).toBe("Rascunho do usuário, ainda não salvo");
+      expect(useEstadoEditor.getState().titulo).toBe(notas[0].titulo);
+    });
+
+    it("abrirNota descarta a sugestão da nota anterior ao trocar para uma nota diferente", async () => {
+      useEstadoEditor.getState().resetar();
+      useEstadoEditor.getState().abrirNota(notas[0].id);
       await useEstadoEditor.getState().rodarAcao(ia, "links", notas[0], jest.fn());
       expect(useEstadoEditor.getState().sugestao).not.toBeNull();
 
-      useEstadoEditor.getState().carregar(notas[1]);
+      useEstadoEditor.getState().abrirNota(notas[1].id);
 
       expect(useEstadoEditor.getState().sugestao).toBeNull();
-      expect(useEstadoEditor.getState().titulo).toBe(notas[1].titulo);
+    });
+
+    // Fix round 1 comparava o id recebido contra `idCarregado` NO MOMENTO em
+    // que a promise resolvia — mas isso não distingue "esta é a busca atual"
+    // de "esta é uma busca obsoleta que foi superada": abrir a nota A,
+    // voltar antes do fetch responder e abrir a nota B faz `idCarregado`
+    // virar "B" antes do fetch de A chegar. Quando ele finalmente chega,
+    // comparar só o id (A !== B) já bloqueava a troca de sugestão/menu, mas
+    // a v1 aplicava título/corpo/tags de A mesmo assim, corrompendo a tela
+    // que já mostra B. `tokenDeCarregamento` — incrementado a cada
+    // abrirNota(), comparado no momento em que a promise resolve — resolve
+    // isso sem depender de comparar strings de id.
+    it("descarta uma resposta obsoleta de A quando a nota B já foi aberta antes dela chegar", () => {
+      useEstadoEditor.getState().resetar();
+      const tokenA = useEstadoEditor.getState().abrirNota(notas[0].id);
+
+      // o usuário fecha A e abre B antes do fetch de A responder
+      useEstadoEditor.getState().abrirNota(notas[1].id);
+
+      // o fetch de A, mais lento, só chega agora — com o token antigo
+      useEstadoEditor.getState().aplicarConteudo(notas[0], tokenA);
+
+      // o conteúdo de A não pode vazar para a tela que já mostra B
+      expect(useEstadoEditor.getState().idCarregado).toBe(notas[1].id);
+      expect(useEstadoEditor.getState().titulo).toBe("");
+      expect(useEstadoEditor.getState().titulo).not.toBe(notas[0].titulo);
+    });
+
+    // O teste acima (A -> B, ids diferentes) já seria pego só de corrigir a
+    // checagem de id de round 1 (id diferente vira "descarta", não "troca e
+    // aplica") — não prova, sozinho, que era preciso um token. O caso que
+    // SÓ o token resolve é reabrir a MESMA nota rápido o bastante para duas
+    // buscas do mesmo id ficarem em voo ao mesmo tempo: comparar id não
+    // distingue qual das duas é a mais nova, porque as duas têm o mesmo id.
+    it("descarta uma resposta obsoleta quando a MESMA nota foi reaberta antes dela responder", () => {
+      useEstadoEditor.getState().resetar();
+      const tokenAntigo = useEstadoEditor.getState().abrirNota(notas[0].id);
+      // o usuário fecha e reabre a mesma nota antes da primeira busca
+      // responder — uma segunda busca para o MESMO id fica em voo também.
+      const tokenNovo = useEstadoEditor.getState().abrirNota(notas[0].id);
+
+      // a busca mais nova responde primeiro, como seria de esperar.
+      useEstadoEditor.getState().aplicarConteudo(notas[0], tokenNovo);
+      expect(useEstadoEditor.getState().titulo).toBe(notas[0].titulo);
+
+      // a busca ANTIGA — mesmo id, token superado — só responde agora. O
+      // usuário não tocou em nada, então só o token (não o campo-a-campo do
+      // teste anterior, e não o id, que é idêntico nas duas buscas) pode
+      // saber que esta resposta já foi superada.
+      const versaoObsoleta = { ...notas[0], titulo: "Versão obsoleta do título" };
+      useEstadoEditor.getState().aplicarConteudo(versaoObsoleta, tokenAntigo);
+
+      expect(useEstadoEditor.getState().titulo).toBe(notas[0].titulo);
     });
   });
 });

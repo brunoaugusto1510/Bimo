@@ -25,29 +25,41 @@ export function Editor() {
   const pulsar = useEstadoGrafo((estado) => estado.pulsar);
   const crescerNo = useEstadoGrafo((estado) => estado.crescerNo);
   const editor = useEstadoEditor();
-  // `notaCarregada` só é preenchida quando o fetch resolve (dentro do
-  // `.then()`, nunca de forma síncrona no corpo do efeito). Enquanto isso —
-  // ou para o `id` "nova", que não busca nada — `nota` cai no casco derivado
-  // do `id` atual, calculado na renderização em vez de guardado em estado:
-  // isso mantém `nota` correta assim que `id` muda, sem precisar de um
+  // `notaCarregada` só é preenchida quando o fetch resolve E ainda for a
+  // busca mais recente (ver o efeito abaixo). Enquanto isso — ou para o
+  // `id` "nova", que não busca nada — `nota` cai no casco derivado do `id`
+  // atual, calculado na renderização em vez de guardado em estado: isso
+  // mantém `nota` correta assim que `id` muda, sem precisar de um
   // `setState` síncrono dentro do efeito.
   const [notaCarregada, setNotaCarregada] = useState<Nota | null>(null);
   const [nosNovos, setNosNovos] = useState(0);
   const nota = notaCarregada?.id === id ? notaCarregada : cascoDaNota(id);
+  // A nota "nova" não busca nada — está pronta desde o primeiro render. Uma
+  // nota existente só está pronta quando o fetch já preencheu `notaCarregada`
+  // com o `id` atual. Usado para desabilitar o gatilho da IA (ver abaixo).
+  const notaPronta = id === "nova" || notaCarregada?.id === id;
 
   useEffect(() => {
-    // Marca a nota como aberta já aqui, de forma síncrona, antes do fetch
-    // sequer começar. Se o usuário rodar uma ação da IA enquanto
-    // `vault.obterNota` ainda está no ar, o `carregar()` abaixo — quando o
-    // fetch chegar — vai reconhecer que é a mesma nota já aberta (mesmo
-    // `id`) e não vai apagar a sugestão que acabou de chegar. Ver o
-    // comentário em `estado.ts`.
-    editor.carregar(cascoDaNota(id));
+    // `abrirNota` zera o estado do editor para esta nota, de forma síncrona,
+    // e devolve um token que identifica esta abertura de forma única. Se o
+    // usuário rodar uma ação da IA ou digitar algo enquanto `vault.obterNota`
+    // ainda está no ar, a store recusa aplicar o conteúdo que chegar depois
+    // por cima disso (ver o comentário em `estado.ts`).
+    const token = editor.abrirNota(id);
     if (id === "nova") return;
 
     vault.obterNota(id).then((encontrada) => {
+      // Descarta uma resposta obsoleta: uma abertura mais recente já
+      // aconteceu — nesta mesma instância (o `id` mudou de novo) ou numa
+      // instância diferente do Editor (esta nota foi fechada e outra foi
+      // aberta) — antes deste fetch, mais lento, ter terminado. Comparar
+      // com `useEstadoEditor.getState()` (não com o `editor` do closure,
+      // que é só um snapshot da renderização em que o efeito foi criado)
+      // garante que a checagem usa o token mais atual da store no instante
+      // em que a promise resolve.
+      if (useEstadoEditor.getState().tokenDeCarregamento !== token) return;
       setNotaCarregada(encontrada);
-      editor.carregar(encontrada);
+      editor.aplicarConteudo(encontrada, token);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, vault]);
@@ -64,6 +76,7 @@ export function Editor() {
         aoVoltar={() => router.back()}
         aoFechar={() => router.back()}
         aoAbrirIA={editor.abrirMenu}
+        iaDesabilitada={!notaPronta}
       />
 
       <ScrollView contentContainerStyle={{ padding: espacamento.lg }}>
@@ -93,6 +106,8 @@ export function Editor() {
         <TextInput
           value={editor.texto}
           onChangeText={(texto) => editor.digitarTexto(texto, acenderNo)}
+          placeholder="Comece a escrever..."
+          placeholderTextColor={cores.textoPlaceholder}
           multiline
           textAlignVertical="top"
           style={[tipografia.corpoRelaxado, { color: cores.sobreSuperficie, minHeight: 240 }]}

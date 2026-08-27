@@ -7,9 +7,18 @@ import { Editor } from "./Editor";
 import { useEstadoEditor } from "./estado";
 
 const mockBack = jest.fn();
+// `mockIdAtual` é mutável de propósito: o teste de nota obsoleta (mais
+// abaixo) precisa que `useLocalSearchParams` devolva um `id` diferente
+// depois de um `rerender`, simulando o usuário fechar uma nota e abrir
+// outra sem que o Editor.tsx mude. O prefixo `mock` é obrigatório — é a
+// única forma de `jest.mock()` (hoisted pelo Babel) referenciar uma
+// variável fora do seu próprio escopo (`babel-plugin-jest-hoist` só libera
+// identificadores começando com `mock`), o mesmo motivo de `mockBack` já
+// existir com esse nome.
+let mockIdAtual = notas[0].id;
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, push: jest.fn(), replace: jest.fn() }),
-  useLocalSearchParams: () => ({ id: (require("@/dados/fixtures/notas").notas as typeof notas)[0].id }),
+  useLocalSearchParams: () => ({ id: mockIdAtual }),
 }));
 
 // O `ServicoIA` padrão (servicoIaFake) tem um atraso real de 900ms em
@@ -27,10 +36,10 @@ const servicos: Servicos = {
 };
 
 // Espera o título carregado antes de cada teste começar a interagir — não é
-// mais para escapar de uma corrida (essa foi corrigida em estado.ts/
-// Editor.tsx: ver o describe "corrida..." mais abaixo, que interage ANTES
-// do carregamento terminar de propósito e passa mesmo assim), só para que
-// os testes que fazem asserção síncrona logo em seguida (`getByDisplayValue`
+// para escapar de uma corrida (essas são corrigidas em estado.ts/Editor.tsx:
+// ver os describes "corrida..." mais abaixo, que interagem ANTES do
+// carregamento terminar de propósito e passam mesmo assim), só para que os
+// testes que fazem asserção síncrona logo em seguida (`getByDisplayValue`
 // em vez de `findBy...`) tenham a tela já estável.
 async function renderizar() {
   const resultado = await render(
@@ -47,6 +56,7 @@ async function renderizar() {
 describe("Editor", () => {
   beforeEach(() => {
     mockBack.mockClear();
+    mockIdAtual = notas[0].id;
     useEstadoEditor.getState().resetar();
   });
 
@@ -91,15 +101,8 @@ describe("Editor", () => {
     expect(await screen.findByText("O grafo acompanha o que você escreve")).toBeOnTheScreen();
   });
 
-  describe("corrida entre o carregamento da nota e uma ação rápida da IA", () => {
-    // Reproduz de verdade o achado do agente anterior: o carregamento da
-    // nota (vault.obterNota) ainda não respondeu quando o usuário já roda
-    // uma ação da IA. Diferente de renderizar(), este teste NÃO espera o
-    // título carregar antes de interagir — é exatamente essa interação
-    // rápida, contra um carregamento controlado manualmente, que expõe a
-    // corrida se ela voltar. Ver o comentário em estado.ts (carregar()) e
-    // Editor.tsx (o "casco" síncrono) para a correção.
-    it("preserva o cartão de sugestão quando a nota termina de carregar depois", async () => {
+  describe("corrida entre o carregamento da nota e uma ação rápida do usuário", () => {
+    it("desabilita o gatilho da IA até a nota real carregar, e reabilita depois", async () => {
       let resolverCarregamento: (nota: (typeof notas)[number]) => void = () => {};
       const carregamentoControlado = new Promise<(typeof notas)[number]>((resolve) => {
         resolverCarregamento = resolve;
@@ -117,20 +120,125 @@ describe("Editor", () => {
         </ProvedorDeTema>,
       );
 
-      // A nota real ainda não chegou (a promessa acima só resolve quando
-      // chamarmos resolverCarregamento), mas o botão "Bimo" já está na tela
-      // desde o primeiro render — o usuário consegue tocar nele antes disso.
-      await fireEvent.press(await screen.findByRole("button", { name: "Bimo" }));
-      await fireEvent.press(await screen.findByRole("button", { name: "Continuar escrevendo" }));
-      expect(await screen.findByText(/Sugestão do Bimo/)).toBeOnTheScreen();
+      // Rodar uma ação da IA contra o casco vazio (sem o conteúdo real da
+      // nota) produziria uma sugestão sem sentido — "resumir" uma nota sem
+      // corpo. Por isso o gatilho fica desabilitado enquanto o fetch está
+      // no ar, não só a sugestão protegida depois que ela chega.
+      const botaoBimo = await screen.findByRole("button", { name: "Bimo" });
+      expect(botaoBimo).toBeDisabled();
+
+      resolverCarregamento(notas[0]);
+      await screen.findByDisplayValue(notas[0].titulo);
+
+      expect(botaoBimo).not.toBeDisabled();
+    });
+
+    // Reproduz de verdade o achado do agente anterior, na parte que o fix
+    // round 1 não cobria: o corpo da nota (não só a sugestão) é interativo
+    // desde o primeiro paint. Diferente de renderizar(), este teste NÃO
+    // espera o título carregar antes de interagir.
+    it("preserva o texto digitado quando a nota termina de carregar depois", async () => {
+      let resolverCarregamento: (nota: (typeof notas)[number]) => void = () => {};
+      const carregamentoControlado = new Promise<(typeof notas)[number]>((resolve) => {
+        resolverCarregamento = resolve;
+      });
+      const servicosComCarregamentoLento: Servicos = {
+        ...servicos,
+        vault: { ...servicoVaultFake, obterNota: () => carregamentoControlado },
+      };
+
+      await render(
+        <ProvedorDeTema>
+          <ProvedorDeServicos servicos={servicosComCarregamentoLento}>
+            <Editor />
+          </ProvedorDeServicos>
+        </ProvedorDeTema>,
+      );
+
+      const campoDeCorpo = await screen.findByPlaceholderText("Comece a escrever...");
+      await fireEvent.changeText(campoDeCorpo, "Rascunho que o usuário já está digitando");
 
       // Só agora o carregamento (mais lento) da nota real termina.
       resolverCarregamento(notas[0]);
       await screen.findByDisplayValue(notas[0].titulo);
 
-      // A sugestão que chegou durante a espera não pode ter sido apagada
-      // quando os dados reais da nota chegaram.
-      expect(screen.getByText(/Sugestão do Bimo/)).toBeOnTheScreen();
+      expect(screen.getByDisplayValue("Rascunho que o usuário já está digitando")).toBeOnTheScreen();
+    });
+
+    it("preserva o cartão de sugestão quando a nota termina de carregar quase junto com uma ação disparada logo que o gatilho libera", async () => {
+      let resolverCarregamento: (nota: (typeof notas)[number]) => void = () => {};
+      const carregamentoControlado = new Promise<(typeof notas)[number]>((resolve) => {
+        resolverCarregamento = resolve;
+      });
+      const servicosComCarregamentoLento: Servicos = {
+        ...servicos,
+        vault: { ...servicoVaultFake, obterNota: () => carregamentoControlado },
+      };
+
+      // A ação da IA só é disparável depois que a nota carrega (ver o teste
+      // do gatilho desabilitado acima). Este teste resolve o carregamento e
+      // dispara a ação em seguida — o `aplicarConteudo`/`setNotaCarregada`
+      // do efeito e o `rodarAcao` do clique correm quase ao mesmo tempo —
+      // para provar que a store protege sugestao/menuIA mesmo nessa borda.
+      await render(
+        <ProvedorDeTema>
+          <ProvedorDeServicos servicos={servicosComCarregamentoLento}>
+            <Editor />
+          </ProvedorDeServicos>
+        </ProvedorDeTema>,
+      );
+
+      resolverCarregamento(notas[0]);
+      await fireEvent.press(await screen.findByRole("button", { name: "Bimo" }));
+      await fireEvent.press(await screen.findByRole("button", { name: "Continuar escrevendo" }));
+      expect(await screen.findByText(/Sugestão do Bimo/)).toBeOnTheScreen();
+    });
+  });
+
+  describe("resposta obsoleta de uma nota fechada antes de trocar para outra", () => {
+    // Reproduz o cenário exato do review: abrir o editor de A, o fetch de A
+    // fica em voo, o usuário fecha e abre a nota B antes dele responder — e
+    // só depois disso o fetch de A, mais lento, termina. O conteúdo de A
+    // não pode vazar para a tela que já mostra B.
+    it("não deixa o conteúdo de A vazar para a tela quando B já foi aberta", async () => {
+      let resolverA: (nota: (typeof notas)[number]) => void = () => {};
+      const fetchA = new Promise<(typeof notas)[number]>((resolve) => {
+        resolverA = resolve;
+      });
+      const servicosControlados: Servicos = {
+        ...servicos,
+        vault: {
+          ...servicoVaultFake,
+          obterNota: (id) => (id === notas[0].id ? fetchA : Promise.resolve(notas[1])),
+        },
+      };
+
+      mockIdAtual = notas[0].id;
+      const { rerender } = await render(
+        <ProvedorDeTema>
+          <ProvedorDeServicos servicos={servicosControlados}>
+            <Editor />
+          </ProvedorDeServicos>
+        </ProvedorDeTema>,
+      );
+
+      // o usuário fecha a nota A (o fetch dela continua em voo) e abre B.
+      mockIdAtual = notas[1].id;
+      await rerender(
+        <ProvedorDeTema>
+          <ProvedorDeServicos servicos={servicosControlados}>
+            <Editor />
+          </ProvedorDeServicos>
+        </ProvedorDeTema>,
+      );
+      await screen.findByDisplayValue(notas[1].titulo);
+
+      // só agora o fetch de A, mais lento, termina.
+      resolverA(notas[0]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(screen.getByDisplayValue(notas[1].titulo)).toBeOnTheScreen();
+      expect(screen.queryByDisplayValue(notas[0].titulo)).toBeNull();
     });
   });
 });
