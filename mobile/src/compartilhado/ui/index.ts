@@ -9,3 +9,5 @@ export { Interruptor } from "./Interruptor";
 export { Sobrancelha } from "./Sobrancelha";
 export { Sheet } from "./Sheet";
 export { Icone, type NomeDeIcone } from "./Icone";
+export { Cabecalho } from "./Cabecalho";
+export { TabSwitcher, type Destino } from "./TabSwitcher";
