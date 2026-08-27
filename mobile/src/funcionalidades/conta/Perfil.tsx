@@ -98,7 +98,7 @@ export function Perfil() {
         <Botao variante="primario" rotulo="Salvar Alterações" aoTocar={() => definirPerfil(rascunho)} larguraTotal />
 
         <View style={{ marginTop: espacamento.lg, paddingTop: espacamento.md, borderTopWidth: 1, borderTopColor: cores.fioDeCabelo }}>
-          <Botao variante="ghost" rotulo="Sair da Conta" icone="logout" aoTocar={() => router.back()} />
+          <Botao variante="ghost" rotulo="Sair da Conta" icone="logout" aoTocar={() => router.replace("/intro")} />
         </View>
       </ScrollView>
     </View>

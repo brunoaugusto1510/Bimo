@@ -21,7 +21,9 @@ export function Chat() {
   const pulsar = useEstadoGrafo((estado) => estado.pulsar);
   const pulso = useEstadoGrafo((estado) => estado.pulso);
   const crescerContador = useEstadoGrafo((estado) => estado.crescer);
-  const { interruptores, densidade } = useEstadoConta();
+  const grafoLigado = useEstadoConta((estado) => estado.interruptores.grafo);
+  const particulasLigadas = useEstadoConta((estado) => estado.interruptores.particulas);
+  const densidade = useEstadoConta((estado) => estado.densidade);
   const [notas, setNotas] = useState<Nota[]>([]);
   const lista = useRef<FlatList<Mensagem>>(null);
 
@@ -38,8 +40,8 @@ export function Chat() {
       <CampoDeGrafo
         modo="ambiente"
         densidade={densidade}
-        ligado={interruptores.grafo}
-        particulasLigadas={interruptores.particulas}
+        ligado={grafoLigado}
+        particulasLigadas={particulasLigadas}
         pulso={pulso}
         crescer={crescerContador}
       />

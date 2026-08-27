@@ -18,7 +18,9 @@ export function TelaNota() {
   const { busca, noSelecionado, passoDaFolha, definirBusca, selecionarNo, limparSelecao, avancarPasso } = useEstadoVault();
   const pulso = useEstadoGrafo((estado) => estado.pulso);
   const crescer = useEstadoGrafo((estado) => estado.crescer);
-  const { interruptores, densidade } = useEstadoConta();
+  const grafoLigado = useEstadoConta((estado) => estado.interruptores.grafo);
+  const particulasLigadas = useEstadoConta((estado) => estado.interruptores.particulas);
+  const densidade = useEstadoConta((estado) => estado.densidade);
   const preencherRascunho = useEstadoChat((estado) => estado.preencherRascunho);
 
   const [notas, setNotas] = useState<Nota[]>([]);
@@ -46,8 +48,8 @@ export function TelaNota() {
       <CampoDeGrafo
         modo="interativo"
         densidade={densidade}
-        ligado={interruptores.grafo}
-        particulasLigadas={interruptores.particulas}
+        ligado={grafoLigado}
+        particulasLigadas={particulasLigadas}
         pulso={pulso}
         crescer={crescer}
         nos={nosDoGrafo}
