@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Slot, usePathname, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTema } from "@/compartilhado/tema";
 import { Cabecalho } from "@/compartilhado/ui/Cabecalho";
@@ -33,7 +33,18 @@ export default function LayoutDoApp() {
         iniciais={iniciaisDe(perfil.nome)}
       />
       <View style={{ flex: 1 }}>
-        <Slot />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="bimo" />
+          <Stack.Screen name="nota" />
+          <Stack.Screen name="editor/[id]" options={{ presentation: "fullScreenModal" }} />
+          {/* `perfil` e `configuracoes` só ganham arquivo na Task 15 — expo-router
+              tolera declarar a apresentação de uma rota ainda inexistente:
+              `useSortedScreens` (expo-router/build/useScreens.js) só emite um
+              console.warn e descarta a entrada, sem lançar. Deixar registrado
+              aqui evita ter que lembrar de voltar neste arquivo na Task 15. */}
+          <Stack.Screen name="perfil" options={{ presentation: "formSheet" }} />
+          <Stack.Screen name="configuracoes" options={{ presentation: "formSheet" }} />
+        </Stack>
       </View>
     </SafeAreaView>
   );
