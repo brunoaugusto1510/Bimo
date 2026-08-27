@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTema } from "@/compartilhado/tema";
@@ -35,11 +35,45 @@ export function FolhaDeNotas(props: Props) {
   const base = props.alturaDisponivel > 0 ? props.alturaDisponivel : ALTURA_DE_RESERVA;
   const altura = useSharedValue(base * FRACOES[props.passo]);
 
+  // Distingue "o layout real chegou (ou mudou)" de "o usuário trocou o
+  // passo": só o segundo caso deve animar. Sem isso, a primeira vez que
+  // onLayout substitui ALTURA_DE_RESERVA (560, valor de conveniência de
+  // teste) pela altura real do aparelho dispara um withTiming de 560 até
+  // o valor verdadeiro — uma animação de entrada que o design não pede,
+  // criada só pela necessidade de a folha ter altura em teste.
+  const primeiraExecucao = useRef(true);
+  const baseAnterior = useRef(base);
+  const passoAnterior = useRef(props.passo);
+
   useEffect(() => {
-    altura.value = withTiming(base * FRACOES[props.passo], {
-      duration: movimento.duracaoLenta,
-      easing: movimento.curvaPadrao,
-    });
+    const alvo = base * FRACOES[props.passo];
+
+    if (primeiraExecucao.current) {
+      // Nada mudou ainda — useSharedValue já inicializou com este mesmo
+      // valor na primeira renderização, então não há o que aplicar aqui.
+      primeiraExecucao.current = false;
+      baseAnterior.current = base;
+      passoAnterior.current = props.passo;
+      return;
+    }
+
+    const baseMudou = baseAnterior.current !== base;
+    const passoMudou = passoAnterior.current !== props.passo;
+
+    if (baseMudou && !passoMudou) {
+      // alturaDisponivel mudou (o layout real chegou, ou mudou de novo
+      // depois) sem o usuário ter tocado na alça: aplica direto, sem
+      // animação.
+      altura.value = alvo;
+    } else {
+      altura.value = withTiming(alvo, {
+        duration: movimento.duracaoLenta,
+        easing: movimento.curvaPadrao,
+      });
+    }
+
+    baseAnterior.current = base;
+    passoAnterior.current = props.passo;
   }, [props.passo, base, altura, movimento]);
 
   const estilo = useAnimatedStyle(() => ({ height: altura.value }));
