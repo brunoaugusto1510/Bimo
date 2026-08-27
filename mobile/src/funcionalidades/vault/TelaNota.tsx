@@ -5,6 +5,7 @@ import { useServicos } from "@/servicos";
 import { CampoDeGrafo } from "@/compartilhado/grafo";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
 import { useEstadoChat } from "@/funcionalidades/chat/estado";
+import { useEstadoConta } from "@/funcionalidades/conta/estado";
 import type { Aresta, Nota } from "@/dados/tipos";
 import { filtrarNotas, montarGrafo, vizinhosDe } from "./grafoDoVault";
 import { useEstadoVault } from "./estado";
@@ -17,11 +18,7 @@ export function TelaNota() {
   const { busca, noSelecionado, passoDaFolha, definirBusca, selecionarNo, limparSelecao, avancarPasso } = useEstadoVault();
   const pulso = useEstadoGrafo((estado) => estado.pulso);
   const crescer = useEstadoGrafo((estado) => estado.crescer);
-  // Stub: useEstadoConta chega na Task 15. Até lá, os interruptores e a
-  // densidade ficam fixos aqui — trocar pelo hook de verdade quando ele
-  // existir (ver `mobile/src/funcionalidades/conta/estado.ts`).
-  const interruptores = { grafo: true, particulas: true };
-  const densidade = 60;
+  const { interruptores, densidade } = useEstadoConta();
   const preencherRascunho = useEstadoChat((estado) => estado.preencherRascunho);
 
   const [notas, setNotas] = useState<Nota[]>([]);

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Stack, usePathname, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTema } from "@/compartilhado/tema";
 import { Cabecalho } from "@/compartilhado/ui/Cabecalho";
 import type { Destino } from "@/compartilhado/ui/TabSwitcher";
-import { perfil } from "@/dados/fixtures/perfil";
+import { MenuDeConta } from "@/funcionalidades/conta/componentes/MenuDeConta";
+import { useEstadoConta } from "@/funcionalidades/conta/estado";
 
 function iniciaisDe(nome: string): string {
   return nome
@@ -21,6 +22,7 @@ export default function LayoutDoApp() {
   const router = useRouter();
   const caminho = usePathname();
   const [contaAberta, setContaAberta] = useState(false);
+  const nomeDoPerfil = useEstadoConta((estado) => estado.perfil.nome);
 
   const destinoAtivo: Destino = caminho.startsWith("/nota") ? "nota" : "bimo";
 
@@ -30,22 +32,31 @@ export default function LayoutDoApp() {
         destinoAtivo={destinoAtivo}
         aoTrocarDestino={(destino) => router.replace(destino === "bimo" ? "/bimo" : "/nota")}
         aoAbrirConta={() => setContaAberta(true)}
-        iniciais={iniciaisDe(perfil.nome)}
+        iniciais={iniciaisDe(nomeDoPerfil)}
       />
       <View style={{ flex: 1 }}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="bimo" />
           <Stack.Screen name="nota" />
           <Stack.Screen name="editor/[id]" options={{ presentation: "fullScreenModal" }} />
-          {/* `perfil` e `configuracoes` só ganham arquivo na Task 15 — expo-router
-              tolera declarar a apresentação de uma rota ainda inexistente:
-              `useSortedScreens` (expo-router/build/useScreens.js) só emite um
-              console.warn e descarta a entrada, sem lançar. Deixar registrado
-              aqui evita ter que lembrar de voltar neste arquivo na Task 15. */}
           <Stack.Screen name="perfil" options={{ presentation: "formSheet" }} />
           <Stack.Screen name="configuracoes" options={{ presentation: "formSheet" }} />
         </Stack>
       </View>
+
+      <MenuDeConta
+        aberto={contaAberta}
+        aoFechar={() => setContaAberta(false)}
+        aoEscolher={(destino) => {
+          setContaAberta(false);
+          // `.expo/types/router.d.ts` só é regenerado ao rodar `expo start`/build
+          // e ainda não conhece `/perfil` e `/configuracoes` (mesmo motivo do
+          // cast em `/editor/[id]` no Chat.tsx e no TelaNota.tsx, Task 14).
+          if (destino === "perfil") router.push("/perfil" as Href);
+          else if (destino === "configuracoes") router.push("/configuracoes" as Href);
+          else router.replace("/intro");
+        }}
+      />
     </SafeAreaView>
   );
 }

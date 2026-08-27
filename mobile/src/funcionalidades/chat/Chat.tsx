@@ -5,6 +5,7 @@ import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
 import { CampoDeGrafo } from "@/compartilhado/grafo";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
+import { useEstadoConta } from "@/funcionalidades/conta/estado";
 import type { Mensagem, Nota } from "@/dados/tipos";
 import { Bolha } from "./componentes/Bolha";
 import { CartaoDeResultado } from "./componentes/CartaoDeResultado";
@@ -20,11 +21,7 @@ export function Chat() {
   const pulsar = useEstadoGrafo((estado) => estado.pulsar);
   const pulso = useEstadoGrafo((estado) => estado.pulso);
   const crescerContador = useEstadoGrafo((estado) => estado.crescer);
-  // Stub: useEstadoConta chega na Task 15. Até lá, os interruptores e a
-  // densidade ficam fixos aqui — trocar pelo hook de verdade quando ele
-  // existir (ver `mobile/src/funcionalidades/conta/estado.ts`).
-  const interruptores = { grafo: true, particulas: true };
-  const densidade = 60;
+  const { interruptores, densidade } = useEstadoConta();
   const [notas, setNotas] = useState<Nota[]>([]);
   const lista = useRef<FlatList<Mensagem>>(null);
 
