@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
+import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
 import { Avatar, Botao, Cartao, Icone } from "@/compartilhado/ui";
 import { useEstadoConta } from "./estado";
 
@@ -54,9 +55,11 @@ export function Perfil() {
   const [estatisticas, setEstatisticas] = useState({ notas: 0, conexoes: 0, pastas: 0 });
 
   useEffect(() => {
-    Promise.all([vault.listarNotas(), vault.listarArestas()]).then(([notas, arestas]) => {
-      setEstatisticas({ notas: notas.length, conexoes: arestas.length, pastas: new Set(notas.map((nota) => nota.pasta)).size });
-    });
+    carregarOuLogar(
+      Promise.all([vault.listarNotas(), vault.listarArestas()]),
+      ([notas, arestas]) => setEstatisticas({ notas: notas.length, conexoes: arestas.length, pastas: new Set(notas.map((nota) => nota.pasta)).size }),
+      "Falha ao carregar estatísticas do vault",
+    );
   }, [vault]);
 
   const iniciais = rascunho.nome.split(" ").slice(0, 2).map((parte) => parte[0]).join("").toUpperCase();

@@ -195,6 +195,47 @@ describe("Editor", () => {
     });
   });
 
+  describe("falha no carregamento da nota", () => {
+    // Cobre o achado do review: `obterNota` rejeitando não pode ser engolido
+    // em silêncio. Sem UI de erro nesta fase (fora de escopo), o mínimo
+    // honesto é logar — e é só isso que dá para afirmar com segurança sobre
+    // o gatilho da IA aqui: como `notaCarregada` só é preenchido no caminho
+    // de sucesso, uma rejeição o deixa desabilitado *para sempre*, do mesmo
+    // jeito que já ficava desabilitado enquanto o fetch estava em voo. Este
+    // teste não afirma que o gatilho "volta a ficar habilitado" — isso
+    // seria falso — só que a tela não quebra e que a falha chega ao log.
+    it("não derruba a tela e loga a falha em vez de engolir a rejeição, mantendo o gatilho desabilitado", async () => {
+      const consoleErroEspiao = jest.spyOn(console, "error").mockImplementation(() => {});
+      const erroDeRede = new Error("rede fora do ar");
+      const servicosComFalha: Servicos = {
+        ...servicos,
+        vault: { ...servicoVaultFake, obterNota: () => Promise.reject(erroDeRede) },
+      };
+
+      await render(
+        <ProvedorDeTema>
+          <ProvedorDeServicos servicos={servicosComFalha}>
+            <Editor />
+          </ProvedorDeServicos>
+        </ProvedorDeTema>,
+      );
+
+      const botaoBimo = await screen.findByRole("button", { name: "Bimo" });
+      expect(botaoBimo).toBeDisabled();
+
+      await waitFor(() => expect(consoleErroEspiao).toHaveBeenCalled());
+      const [contexto, erroRecebido] = consoleErroEspiao.mock.calls[0];
+      expect(String(contexto)).toMatch(/nota/i);
+      expect(erroRecebido).toBe(erroDeRede);
+
+      // A tela segue de pé e o gatilho continua desabilitado — não há
+      // reabilitação possível sem um novo fetch, que está fora de escopo.
+      expect(botaoBimo).toBeDisabled();
+
+      consoleErroEspiao.mockRestore();
+    });
+  });
+
   describe("resposta obsoleta de uma nota fechada antes de trocar para outra", () => {
     // Reproduz o cenário exato do review: abrir o editor de A, o fetch de A
     // fica em voo, o usuário fecha e abre a nota B antes dele responder — e

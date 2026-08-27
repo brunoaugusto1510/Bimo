@@ -3,6 +3,7 @@ import { FlatList, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
+import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
 import { CampoDeGrafo } from "@/compartilhado/grafo";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
 import { useEstadoConta } from "@/funcionalidades/conta/estado";
@@ -28,7 +29,7 @@ export function Chat() {
   const lista = useRef<FlatList<Mensagem>>(null);
 
   useEffect(() => {
-    vault.listarNotas().then(setNotas);
+    carregarOuLogar(vault.listarNotas(), setNotas, "Falha ao listar notas do vault");
   }, [vault]);
 
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useServicos } from "@/servicos";
+import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
 import { CampoDeGrafo } from "@/compartilhado/grafo";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
 import { useEstadoChat } from "@/funcionalidades/chat/estado";
@@ -28,12 +29,8 @@ export function TelaNota() {
   const [alturaDisponivel, setAlturaDisponivel] = useState(0);
 
   useEffect(() => {
-    // Sem `.catch` aqui a lista ficaria vazia para sempre numa falha de
-    // rede, sem log e sem retry — construir a UI de erro está fora do
-    // escopo desta tela, mas engolir a rejeição em silêncio não. No mínimo
-    // registramos a falha no console.
-    vault.listarNotas().then(setNotas).catch((erro) => console.error("Falha ao listar notas do vault", erro));
-    vault.listarArestas().then(setArestas).catch((erro) => console.error("Falha ao listar arestas do vault", erro));
+    carregarOuLogar(vault.listarNotas(), setNotas, "Falha ao listar notas do vault");
+    carregarOuLogar(vault.listarArestas(), setArestas, "Falha ao listar arestas do vault");
   }, [vault]);
 
   const nosDoGrafo = useMemo(() => montarGrafo(notas, arestas), [notas, arestas]);

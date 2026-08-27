@@ -3,6 +3,7 @@ import { ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
+import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
 import { Chip, Icone } from "@/compartilhado/ui";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
 import type { Nota } from "@/dados/tipos";
@@ -48,19 +49,23 @@ export function Editor() {
     const token = editor.abrirNota(id);
     if (id === "nova") return;
 
-    vault.obterNota(id).then((encontrada) => {
-      // Descarta uma resposta obsoleta: uma abertura mais recente já
-      // aconteceu — nesta mesma instância (o `id` mudou de novo) ou numa
-      // instância diferente do Editor (esta nota foi fechada e outra foi
-      // aberta) — antes deste fetch, mais lento, ter terminado. Comparar
-      // com `useEstadoEditor.getState()` (não com o `editor` do closure,
-      // que é só um snapshot da renderização em que o efeito foi criado)
-      // garante que a checagem usa o token mais atual da store no instante
-      // em que a promise resolve.
-      if (useEstadoEditor.getState().tokenDeCarregamento !== token) return;
-      setNotaCarregada(encontrada);
-      editor.aplicarConteudo(encontrada, token);
-    });
+    carregarOuLogar(
+      vault.obterNota(id),
+      (encontrada) => {
+        // Descarta uma resposta obsoleta: uma abertura mais recente já
+        // aconteceu — nesta mesma instância (o `id` mudou de novo) ou numa
+        // instância diferente do Editor (esta nota foi fechada e outra foi
+        // aberta) — antes deste fetch, mais lento, ter terminado. Comparar
+        // com `useEstadoEditor.getState()` (não com o `editor` do closure,
+        // que é só um snapshot da renderização em que o efeito foi criado)
+        // garante que a checagem usa o token mais atual da store no instante
+        // em que a promise resolve.
+        if (useEstadoEditor.getState().tokenDeCarregamento !== token) return;
+        setNotaCarregada(encontrada);
+        editor.aplicarConteudo(encontrada, token);
+      },
+      "Falha ao carregar nota do vault",
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, vault]);
 

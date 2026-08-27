@@ -51,6 +51,7 @@ export function BarraDoEditor({ pasta, aoVoltar, aoAbrirIA, aoFechar, iaDesabili
         accessibilityState={{ disabled: iaDesabilitada }}
         disabled={iaDesabilitada}
         onPress={aoAbrirIA}
+        hitSlop={4}
         style={{
           minHeight: 36,
           flexDirection: "row",
