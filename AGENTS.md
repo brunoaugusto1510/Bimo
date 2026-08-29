@@ -37,8 +37,7 @@ test in `senha.test.ts` is what catches the two drifting apart.
 
 ### Local setup
 
-Requires a `.env.local` with (there is no `.env.local.example` committed despite
-the README mentioning one — check with the user before assuming its shape):
+Requires a `.env` (copy `.env.example` and fill in the values) with:
 
 - `VAULT_REPO` — GitHub repo holding the vault, `owner/repo`
 - `GITHUB_TOKEN` — PAT with read access to that repo
