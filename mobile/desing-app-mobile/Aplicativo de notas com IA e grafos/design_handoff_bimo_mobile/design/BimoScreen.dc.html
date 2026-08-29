@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/colors.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/typography.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/shape.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/effects.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/styles.css">
+<script src="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/_ds_bundle.js"></script>
+<style>
+[data-bimo-app],[data-bimo-app] *,[data-bimo-app] *::before,[data-bimo-app] *::after{box-sizing:border-box}
+@keyframes bimo-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes bimo-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+<div data-bimo-app="" style="position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden;background:var(--background);color:var(--on-background);font-family:var(--font-ui);font-size:var(--body-base-size)">
+
+<sc-if value="{{ graphOn }}" hint-placeholder-val="{{ true }}">
+<x-import component-from-global-scope="GraphField" from="./graph-field.jsx" node-count="{{ density }}" pulse="{{ pulse }}" grow="{{ grow }}" hint-size="100%,100%"></x-import>
+</sc-if>
+
+<div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100%;padding-top:54px;padding-bottom:34px;box-sizing:border-box">
+
+<header style="display:flex;align-items:center;gap:8px;height:56px;flex-shrink:0;padding:0 12px;background:var(--glass-bar);backdrop-filter:blur(12px);border-bottom:1px solid var(--hairline)">
+<span class="material-symbols-outlined" style="font-size:22px;color:var(--primary);font-variation-settings:'FILL' 1">psychology</span>
+<div style="flex:1;min-width:0;display:flex;justify-content:center">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.TabSwitcher" tabs="{{ headerTabs }}" value="{{ headerTab }}" on-change="{{ onHeaderTab }}" full-width="{{ false }}" hint-size="160px,40px"></x-import>
+</div>
+<button type="button" onClick="{{ toggleAccount }}" aria-label="Você" style="border:none;background:transparent;padding:2px;cursor:pointer;border-radius:9999px;display:flex">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Avatar" name="{{ profileName }}" size="{{ 32 }}" hint-size="32px,32px"></x-import>
+</button>
+</header>
+
+<sc-if value="{{ isChat }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div style="flex:1;min-height:0;overflow-y:auto;padding:16px 16px 8px;display:flex;flex-direction:column;gap:16px">
+<sc-for list="{{ messages }}" as="m" hint-placeholder-count="3">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.ChatBubble" dc-props="{{ m.bubbleProps }}" hint-size="100%,72px">
+<p style="margin:0">{{ m.text }}</p>
+<sc-if value="{{ m.hasCards }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+<sc-for list="{{ m.cards }}" as="c" hint-placeholder-count="2">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.ResultCard" title="{{ c.title }}" snippet="{{ c.snippet }}" on-click="{{ c.open }}" hint-size="100%,64px"></x-import>
+</sc-for>
+</div>
+</sc-if>
+</x-import>
+</sc-for>
+<sc-if value="{{ typing }}" hint-placeholder-val="{{ false }}">
+<div style="align-self:flex-start">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.TypingIndicator" hint-size="70px,40px"></x-import>
+</div>
+</sc-if>
+</div>
+<div style="flex-shrink:0;padding:8px 16px 12px;background:var(--dock-protection)">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.GlassInputDock" value="{{ draft }}" on-change="{{ onDraft }}" on-send="{{ onSend }}" placeholder="Pergunte ao Bimo ou consulte seu vault..." dc-props="{{ fitProps }}" hint-size="100%,90px"></x-import>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isVault }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;position:relative">
+<x-import component-from-global-scope="GraphField" from="./graph-field.jsx" mode="interactive" node-count="{{ 40 }}" nodes="{{ graphNodes }}" selected-id="{{ selectedNode }}" on-select="{{ onSelectNode }}" hint-size="100%,100%"></x-import>
+<div style="position:absolute;top:12px;left:16px;right:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;pointer-events:none">
+<span style="font:400 11px/14px var(--font-ui);color:var(--outline);background:var(--glass-bar);backdrop-filter:blur(12px);border:1px solid var(--hairline);border-radius:9999px;padding:4px 9px">{{ scopeLabel }}</span>
+<span style="font:400 11px/14px var(--font-ui);color:var(--outline);background:var(--glass-bar);backdrop-filter:blur(12px);border:1px solid var(--hairline);border-radius:9999px;padding:4px 9px">{{ counter }}</span>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:{{ sheetH }};display:flex;flex-direction:column;border-radius:16px 16px 0 0;background:var(--glass-sheet);backdrop-filter:blur(16px);border:1px solid var(--hairline);border-bottom:none;box-shadow:var(--shadow-xl);transition:height 300ms cubic-bezier(0.2,0,0,1)">
+<button type="button" onClick="{{ cycleSheet }}" aria-label="Ajustar altura da lista" style="flex-shrink:0;display:flex;align-items:center;justify-content:center;min-height:24px;padding:8px 0 4px;border:none;background:transparent;cursor:pointer">
+<span style="width:36px;height:4px;border-radius:9999px;background:var(--outline);opacity:.45;display:block"></span>
+</button>
+<div style="flex-shrink:0;width:100%;min-width:0;padding:2px 16px 8px;display:grid">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.SearchField" value="{{ search }}" on-change="{{ onSearch }}" placeholder="Buscar no vault..." dc-props="{{ fitProps }}" hint-size="100%,36px"></x-import>
+</div>
+<div style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 16px 8px">
+<span style="flex:1;font:500 12px/16px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--outline)">{{ listTitle }}</span>
+<sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{ clearSelection }}" style="display:flex;align-items:center;gap:4px;min-height:28px;border:none;background:transparent;color:var(--primary);cursor:pointer;font:500 12px/16px var(--font-ui);padding:4px">
+<span class="material-symbols-outlined" style="font-size:14px">close</span>limpar
+</button>
+</sc-if>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ noteCards }}" as="c" hint-placeholder-count="4">
+<button type="button" onClick="{{ c.onClick }}" style="text-align:left;display:block;width:100%;padding:12px;border:1px solid {{ c.border }};border-radius:8px;background:var(--glass-card);backdrop-filter:blur(4px);cursor:pointer;font-family:var(--font-ui)">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+<span style="font:600 14px/20px var(--font-ui);letter-spacing:-0.005em;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</span>
+<span style="display:flex;align-items:center;gap:4px;flex-shrink:0;font:400 12px/16px var(--font-ui);color:var(--outline)"><span class="material-symbols-outlined" style="font-size:14px">hub</span>{{ c.links }}</span>
+</div>
+<p style="margin:0 0 8px;font:400 12px/16px var(--font-ui);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ c.snippet }}</p>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+<span style="font-family:var(--font-mono);font-size:11px;color:var(--on-surface-variant);background:var(--surface-chip);border-radius:4px;padding:2px 6px">{{ c.folder }}</span>
+<span style="font:400 12px/16px var(--font-ui);color:var(--outline)">{{ c.when }}</span>
+</div>
+</button>
+</sc-for>
+</div>
+<div style="flex-shrink:0;padding:0 12px 12px;display:flex;gap:8px">
+<button type="button" onClick="{{ openSelectedOrNew }}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 16px;border:none;border-radius:12px;background:var(--primary);color:var(--on-primary);box-shadow:var(--shadow-sm);font:600 14px/20px var(--font-ui);cursor:pointer">
+<span class="material-symbols-outlined" style="font-size:18px">{{ primaryIcon }}</span>{{ primaryLabel }}</button>
+<sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{ askAboutSelected }}" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 14px;border:1px solid var(--hairline);border-radius:12px;background:transparent;color:var(--on-surface);font:600 14px/20px var(--font-ui);cursor:pointer">
+<span class="material-symbols-outlined" style="font-size:18px">forum</span>Perguntar</button>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{ accountOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeAccount }}" style="position:absolute;inset:0;z-index:6;background:rgba(27,27,29,.18);display:flex;align-items:flex-end">
+<div style="width:100%;margin:0 12px 46px;padding:8px;border-radius:16px;background:var(--glass-sheet);backdrop-filter:blur(16px);border:1px solid var(--hairline);box-shadow:var(--shadow-xl);animation:bimo-rise 300ms cubic-bezier(0.2,0,0,1)">
+<div style="display:flex;align-items:center;gap:12px;padding:12px">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Avatar" name="{{ profileName }}" size="{{ 40 }}" hint-size="40px,40px"></x-import>
+<div style="min-width:0">
+<div style="font:600 14px/20px var(--font-ui);letter-spacing:-0.005em">{{ profileName }}</div>
+<div style="font:400 12px/16px var(--font-ui);color:var(--text-muted)">{{ profileEmail }}</div>
+</div>
+</div>
+<sc-for list="{{ accountItems }}" as="a" hint-placeholder-count="3">
+<button type="button" onClick="{{ a.onClick }}" style="width:100%;display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 12px;border:none;background:transparent;border-radius:8px;cursor:pointer;font:400 14px/22px var(--font-ui);color:var(--on-surface);text-align:left">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--outline)">{{ a.icon }}</span>{{ a.label }}
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ editorOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;padding-top:54px;padding-bottom:34px;box-sizing:border-box;background:var(--glass-sheet);backdrop-filter:blur(16px);box-shadow:var(--shadow-xl)">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:56px;flex-shrink:0;padding:0 12px;background:color-mix(in srgb, var(--surface) 95%, transparent);border-bottom:1px solid var(--hairline)">
+<button type="button" onClick="{{ closeEditor }}" aria-label="Voltar" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;background:transparent;color:var(--on-surface-variant);border-radius:8px;cursor:pointer">
+<span class="material-symbols-outlined" style="font-size:22px">arrow_back</span>
+</button>
+<span style="flex:1;min-width:0;font:600 14px/20px var(--font-ui);letter-spacing:-0.005em;color:var(--on-surface-variant);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ noteFolder }}</span>
+<div style="display:flex;align-items:center;gap:4px">
+<button type="button" onClick="{{ toggleAiMenu }}" aria-label="Ações do Bimo" style="display:flex;align-items:center;gap:6px;min-height:36px;padding:6px 10px;border:1px solid var(--hairline);border-radius:9999px;background:var(--surface-container-low);color:var(--primary);cursor:pointer;font:500 12px/16px var(--font-ui)">
+<span class="material-symbols-outlined" style="font-size:18px">psychology</span>Bimo
+</button>
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.IconButton" icon="close" size="{{ 18 }}" label="Fechar" on-click="{{ closeEditor }}" hint-size="34px,34px"></x-import>
+</div>
+</div>
+
+<div style="flex:1;min-height:0;overflow-y:auto;padding:20px">
+<input value="{{ noteTitle }}" onChange="{{ onNoteTitle }}" style="width:100%;box-sizing:border-box;border:none;outline:none;background:transparent;padding:0 0 8px;margin-bottom:12px;border-bottom:1px solid var(--hairline);font:600 24px/32px var(--font-ui);letter-spacing:-0.02em;color:var(--primary)">
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+<sc-for list="{{ noteTags }}" as="t" hint-placeholder-count="2">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.TagChip" hint-size="70px,20px">{{ t }}</x-import>
+</sc-for>
+</div>
+<textarea value="{{ noteText }}" onChange="{{ onNoteInput }}" style="width:100%;box-sizing:border-box;min-height:240px;border:none;outline:none;background:transparent;resize:none;font-family:var(--font-ui);font-size:14px;line-height:1.625;color:var(--on-surface)"></textarea>
+
+<sc-if value="{{ hasSuggestion }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:16px;padding:12px;border:1px dashed var(--primary);border-radius:8px;background:color-mix(in srgb, var(--primary-fixed) 55%, transparent);animation:bimo-fade 200ms cubic-bezier(0.2,0,0,1)">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">psychology</span>
+<span style="font:500 12px/16px var(--font-ui);letter-spacing:.01em;color:var(--on-primary-fixed-variant)">{{ suggestionLabel }}</span>
+</div>
+<p style="margin:0 0 12px;font:400 14px/1.625 var(--font-ui);color:var(--on-surface)">{{ suggestionText }}</p>
+<sc-if value="{{ suggestionIsTags }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px">
+<sc-for list="{{ suggestionTags }}" as="t" hint-placeholder-count="3">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.TagChip" tone="primary" hint-size="80px,20px">{{ t }}</x-import>
+</sc-for>
+</div>
+</sc-if>
+<div style="display:flex;gap:8px">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Button" on-click="{{ acceptSuggestion }}" icon="add" hint-size="auto,40px">Inserir</x-import>
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Button" variant="ghost" on-click="{{ discardSuggestion }}" hint-size="auto,40px">Descartar</x-import>
+</div>
+</div>
+</sc-if>
+
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--hairline);display:flex;align-items:center;gap:8px;color:var(--outline)">
+<span class="material-symbols-outlined" style="font-size:16px">hub</span>
+<span style="font:400 12px/16px var(--font-ui)">{{ graphStatus }}</span>
+</div>
+</div>
+
+<sc-if value="{{ aiMenuOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeAiMenu }}" style="position:absolute;inset:0;background:rgba(27,27,29,.18);display:flex;align-items:flex-end">
+<div style="width:100%;margin:0 12px 46px;padding:8px;border-radius:16px;background:var(--glass-sheet);backdrop-filter:blur(16px);border:1px solid var(--hairline);box-shadow:var(--shadow-xl);animation:bimo-rise 300ms cubic-bezier(0.2,0,0,1)">
+<div style="padding:8px 12px 4px;font:500 12px/16px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--outline)">Bimo nesta nota</div>
+<sc-for list="{{ aiActions }}" as="a" hint-placeholder-count="5">
+<button type="button" onClick="{{ a.onClick }}" style="width:100%;display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 12px;border:none;background:transparent;border-radius:8px;cursor:pointer;font:400 14px/22px var(--font-ui);color:var(--on-surface);text-align:left">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--primary)">{{ a.icon }}</span>{{ a.label }}
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ profileOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;padding-top:54px;padding-bottom:34px;box-sizing:border-box;background:var(--glass-sheet);backdrop-filter:blur(16px)">
+<div style="display:flex;align-items:center;gap:8px;min-height:56px;flex-shrink:0;padding:0 12px;background:color-mix(in srgb, var(--surface) 95%, transparent);border-bottom:1px solid var(--hairline)">
+<button type="button" onClick="{{ closeSheet }}" aria-label="Voltar" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;background:transparent;color:var(--on-surface-variant);border-radius:8px;cursor:pointer">
+<span class="material-symbols-outlined" style="font-size:22px">arrow_back</span>
+</button>
+<span style="font:600 16px/24px var(--font-ui);letter-spacing:-0.01em">Perfil</span>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;padding:20px">
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Avatar" name="{{ profileName }}" size="{{ 64 }}" hint-size="64px,64px"></x-import>
+<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Button" variant="outline" icon="person" hint-size="auto,40px">Trocar Foto</x-import>
+<span style="font:400 12px/16px var(--font-ui);color:var(--outline)">Sem foto: iniciais em Teal Current.</span>
+</div>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:24px">
+<sc-for list="{{ profileStats }}" as="s" hint-placeholder-count="3">
+<div style="flex:1;padding:12px;border:1px solid var(--hairline);border-radius:8px;background:var(--glass-card);backdrop-filter:blur(4px)">
+<div style="font:600 24px/32px var(--font-ui);letter-spacing:-0.02em;color:var(--on-surface)">{{ s.value }}</div>
+<div style="font:400 12px/16px var(--font-ui);color:var(--text-muted)">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+<label style="display:block;font:500 12px/16px var(--font-ui);color:var(--outline);margin-bottom:4px">Nome</label>
+<input value="{{ profileName }}" onChange="{{ onProfileName }}" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:10px 12px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-container-low);outline:none;font:400 14px/22px var(--font-ui);color:var(--on-surface)">
+<label style="display:block;font:500 12px/16px var(--font-ui);color:var(--outline);margin-bottom:4px">E-mail</label>
+<input value="{{ profileEmail }}" onChange="{{ onProfileEmail }}" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:10px 12px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-container-low);outline:none;font:400 14px/22px var(--font-ui);color:var(--on-surface)">
+<label style="display:block;font:500 12px/16px var(--font-ui);color:var(--outline);margin-bottom:4px">Como o Bimo deve te tratar</label>
+<textarea value="{{ profileBio }}" onChange="{{ onProfileBio }}" style="width:100%;box-sizing:border-box;min-height:88px;margin-bottom:24px;padding:10px 12px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-container-low);outline:none;resize:none;font-family:var(--font-ui);font-size:14px;line-height:1.625;color:var(--on-surface)"></textarea>
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Button" full-width="{{ true }}" on-click="{{ closeSheet }}" hint-size="100%,40px">Salvar Alterações</x-import>
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--hairline)">
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.Button" variant="ghost" icon="logout" hint-size="auto,40px">Sair da Conta</x-import>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;padding-top:54px;padding-bottom:34px;box-sizing:border-box;background:var(--glass-sheet);backdrop-filter:blur(16px)">
+<div style="display:flex;align-items:center;gap:8px;min-height:56px;flex-shrink:0;padding:0 12px;background:color-mix(in srgb, var(--surface) 95%, transparent);border-bottom:1px solid var(--hairline)">
+<button type="button" onClick="{{ closeSheet }}" aria-label="Voltar" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;background:transparent;color:var(--on-surface-variant);border-radius:8px;cursor:pointer">
+<span class="material-symbols-outlined" style="font-size:22px">arrow_back</span>
+</button>
+<span style="font:600 16px/24px var(--font-ui);letter-spacing:-0.01em">Configurações</span>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;padding:16px 20px">
+<div style="display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:24px;border:1px solid var(--hairline);border-radius:8px;background:var(--glass-card);backdrop-filter:blur(4px)">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--secondary)">cloud</span>
+<div style="flex:1;min-width:0">
+<div style="font:500 14px/22px var(--font-ui)">Sincronizado</div>
+<div style="font:400 12px/16px var(--font-ui);color:var(--text-muted)">642 notas · há 2 minutos</div>
+</div>
+<x-import component-from-global-scope="BimoDesignSystem_6bb128.IconButton" icon="sync" size="{{ 18 }}" label="Sincronizar agora" hint-size="34px,34px"></x-import>
+</div>
+<sc-for list="{{ settingGroups }}" as="g" hint-placeholder-count="2">
+<div style="margin-bottom:24px">
+<div style="font:500 12px/16px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--outline);margin-bottom:8px">{{ g.title }}</div>
+<sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 0;border-bottom:1px solid var(--hairline)">
+<div style="flex:1;min-width:0">
+<div style="font:400 14px/22px var(--font-ui);color:var(--on-surface)">{{ r.label }}</div>
+<div style="font:400 12px/16px var(--font-ui);color:var(--text-muted)">{{ r.hint }}</div>
+</div>
+<button type="button" onClick="{{ r.toggle }}" aria-label="{{ r.label }}" style="width:44px;height:26px;flex-shrink:0;padding:2px;border:1px solid var(--hairline);border-radius:9999px;background:{{ r.trackBg }};cursor:pointer;display:flex;align-items:center;justify-content:{{ r.knobPos }};transition:background-color 200ms cubic-bezier(0.2,0,0,1)">
+<span style="width:20px;height:20px;border-radius:9999px;background:{{ r.knobBg }};box-shadow:var(--shadow-sm);display:block"></span>
+</button>
+</div>
+</sc-for>
+</div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 0;border-bottom:1px solid var(--hairline)">
+<div style="flex:1;min-width:0">
+<div style="font:400 14px/22px var(--font-ui)">Densidade de nós</div>
+<div style="font:400 12px/16px var(--font-ui);color:var(--text-muted)">{{ density }} nós no campo de fundo</div>
+</div>
+<div style="display:flex;gap:4px">
+<sc-for list="{{ densityOptions }}" as="d" hint-placeholder-count="3">
+<button type="button" onClick="{{ d.onClick }}" style="min-height:32px;padding:6px 10px;border:1px solid var(--hairline);border-radius:9999px;background:{{ d.bg }};color:{{ d.fg }};cursor:pointer;font:500 12px/16px var(--font-ui)">{{ d.label }}</button>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px;min-height:44px;padding:16px 0;color:var(--outline)">
+<span class="material-symbols-outlined" style="font-size:20px">info</span>
+<span style="font:400 12px/16px var(--font-ui)">Bimo 1.4.0 · vault local com sincronização</span>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:874},&quot;initialScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;chat&quot;,&quot;vault&quot;],&quot;default&quot;:&quot;chat&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;initialNote&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;initialSheet&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;profile&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;initialNode&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;initialSheetStep&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1,&quot;min&quot;:0,&quot;max&quot;:2,&quot;tsType&quot;:&quot;number&quot;},&quot;initialSuggestion&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;links&quot;,&quot;summary&quot;,&quot;tags&quot;,&quot;continue&quot;,&quot;ask&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showGraph&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;nodeDensity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:90,&quot;min&quot;:40,&quot;max&quot;:140,&quot;step&quot;:10,&quot;tsType&quot;:&quot;number&quot;}}">
+const NOTE_BODY = `Marginália é resposta, não anotação. Quando escrevo no branco da página, estou discutindo com o autor — e é essa discussão que vale guardar, não o resumo.
+
+Três meses depois, o que sobra de um livro não são as frases sublinhadas. São as notas que eu reescrevi com as minhas palavras e que já se ligaram a outra coisa.`;
+
+const NOTES = {
+  n1: { id: "n1", title: "Ler é uma conversa", folder: "Leituras", tags: ["#leitura", "#hábitos"], snippet: "Marginália é resposta, não anotação. Cada leitura vira um nó no vault.", meta: "Leituras · 7 conexões · editada em março", links: 7, when: "março" },
+  n2: { id: "n2", title: "Notas atômicas", folder: "Ideias", tags: ["#método", "#notas"], snippet: "Uma ideia por nota, um título que seja uma afirmação. O resto é ligação.", meta: "Ideias · 5 conexões · editada em janeiro", links: 5, when: "janeiro" },
+  n3: { id: "n3", title: "Reforma do apartamento", folder: "Projetos", tags: ["#casa", "#orçamento"], snippet: "Ordem das etapas, orçamento por ambiente e o que ficou para depois.", meta: "Projetos · 2 conexões · editada há 4 dias", links: 2, when: "há 4 dias" },
+  n4: { id: "n4", title: "Orçamento 2026", folder: "Projetos", tags: ["#orçamento"], snippet: "Metas por trimestre e o teto de gasto da reforma.", meta: "Projetos · 1 conexão · editada há 2 semanas", links: 1, when: "há 2 semanas" },
+  n5: { id: "n5", title: "Semana de 22 a 28", folder: "Diário", tags: ["#semanal"], snippet: "O que rendeu, o que travou e a leitura que virou nota nova.", meta: "Diário · 3 conexões · editada ontem", links: 3, when: "ontem" },
+  n6: { id: "n6", title: "Podcast: cidades", folder: "Ideias", tags: ["#ideia", "#cidades"], snippet: "Um episódio por bairro; a pauta sai das conversas, não da pesquisa.", meta: "Ideias · 4 conexões · editada há 6 dias", links: 4, when: "há 6 dias" },
+  n7: { id: "n7", title: "Café: variáveis", folder: "Receitas", tags: ["#café"], snippet: "Moagem, temperatura e tempo — só uma variável muda por vez.", meta: "Receitas · 1 conexão · editada há 3 dias", links: 1, when: "há 3 dias" },
+};
+
+const NEIGHBOURS = { n1: ["n1", "n2", "n5", "n7"], n2: ["n2", "n1", "n6"], n3: ["n3", "n4"], n4: ["n4", "n3"], n5: ["n5", "n1", "n6"], n6: ["n6", "n2", "n5"], n7: ["n7", "n1"] };
+const CARD_ORDER = ["n1", "n2", "n5", "n6", "n3", "n7", "n4"];
+const SHEET_HEIGHTS = ["34%", "58%", "80%"];
+
+const GRAPH_NODES = [
+  { id: "n1", label: "Ler é uma conversa", x: 0.5, y: 0.42, weight: 1.7, links: ["n2", "n5", "n7"] },
+  { id: "n2", label: "Notas atômicas", x: 0.26, y: 0.28, weight: 1.35, links: ["n6"] },
+  { id: "n3", label: "Reforma", x: 0.74, y: 0.7, weight: 1.05, links: ["n4"] },
+  { id: "n4", label: "Orçamento 2026", x: 0.88, y: 0.52, weight: 0.9, links: [] },
+  { id: "n5", label: "Semana 22–28", x: 0.38, y: 0.68, weight: 0.95, links: [] },
+  { id: "n6", label: "Podcast: cidades", x: 0.14, y: 0.55, weight: 1.15, links: ["n5"] },
+  { id: "n7", label: "Café: variáveis", x: 0.64, y: 0.22, weight: 0.9, links: [] },
+];
+
+const AI = {
+  links: { label: "Sugestão do Bimo · Sugerir links", text: "Relacionado: 'Notas atômicas' — o método que você escreveu em janeiro descreve exatamente esse corte de uma leitura em nós." },
+  summary: { label: "Sugestão do Bimo · Resumir a nota", text: "Resumo: ler é uma conversa; o que sobra de um livro é a nota reescrita com as próprias palavras e já ligada a outra coisa." },
+  tags: { label: "Sugestão do Bimo · Extrair tags", text: "Três tags cobrem esta nota. As duas primeiras já existem no vault.", tags: ["#leitura", "#método", "#marginália"] },
+  continue: { label: "Sugestão do Bimo · Continuar escrevendo", text: "O teste é simples: se a nota não se ligou a nada depois de uma semana, ela era um sublinhado disfarçado." },
+  ask: { label: "Sugestão do Bimo · Perguntar sobre a nota", text: "Qual leitura te fez mudar de opinião este ano? A resposta provavelmente abre um nó que ainda não existe." },
+};
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const note = props.initialNote || null;
+    this.state = {
+      screen: props.initialScreen || "chat",
+      sheet: props.initialSheet || null,
+      editorNote: note,
+      noteTitle: note ? NOTES[note].title : "",
+      noteText: note === "n1" ? NOTE_BODY : note ? NOTES[note].snippet : "",
+      noteTags: note ? NOTES[note].tags : [],
+      selectedNode: props.initialNode || null,
+      draft: "",
+      typing: false,
+      pulse: 0,
+      grow: 0,
+      growth: 0,
+      search: "",
+      messages: [
+        { id: 1, from: "agent", meta: "Bimo AI · 09:41", text: "Bom dia. Reli suas notas de 'Ideias' desta semana. Três delas voltam ao mesmo ponto: o que você guarda depois de ler. Quer que eu junte isso em uma nota só?" },
+        { id: 2, from: "user", text: "Quais notas falam sobre leitura?" },
+        { id: 3, from: "agent", meta: "Bimo AI · 09:42", text: "Encontrei 3 nós relevantes no seu vault. O mais conectado é 'Ler é uma conversa', de março — ele liga 'Notas atômicas' a duas notas do Diário.", cards: ["n1", "n2"] },
+      ],
+      sheetStep: props.initialSheetStep ?? 1,
+      aiMenu: false,
+      suggestion: props.initialSuggestion || null,
+      account: false,
+      profile: { name: "Marina Alves", email: "marina@exemplo.com", bio: "Direta. Cite a pasta e a data quando trouxer uma nota." },
+      toggles: { graph: true, particles: true, autoTags: true, autoLinks: false, wifi: true },
+      density: 90,
+    };
+  }
+
+  set = (k, v) => this.setState({ [k]: v });
+
+  openNote = (id) => {
+    const n = NOTES[id];
+    this.setState({ editorNote: id, noteTitle: n.title, noteText: id === "n1" ? NOTE_BODY : n.snippet, noteTags: n.tags, suggestion: null, aiMenu: false, account: false, sheet: null });
+  };
+
+  send = (text) => {
+    const id = Date.now();
+    this.setState((s) => ({ messages: [...s.messages, { id, from: "user", text }], typing: true, draft: "", pulse: s.pulse + 1 }));
+    setTimeout(() => {
+      this.setState((s) => ({
+        typing: false,
+        messages: [...s.messages, { id: id + 1, from: "agent", meta: "Bimo AI · agora", text: "Percorri seu vault. Duas notas respondem a isso, e as duas passam por 'Notas atômicas'.", cards: ["n2", "n1"] }],
+        pulse: s.pulse + 1,
+      }));
+    }, 1600);
+  };
+
+  aiRun = (kind) => this.setState((s) => ({ suggestion: kind, aiMenu: false, pulse: s.pulse + 1 }));
+
+  accept = () => {
+    const k = this.state.suggestion;
+    if (!k) return;
+    const sug = AI[k];
+    if (k === "tags") {
+      this.setState((st) => ({ noteTags: Array.from(new Set([...st.noteTags, ...sug.tags])), suggestion: null, grow: st.grow + 1, growth: st.growth + 1 }));
+    } else {
+      this.setState((st) => ({ noteText: st.noteText + "\n\n" + sug.text, suggestion: null, grow: st.grow + 1, growth: st.growth + 1 }));
+    }
+  };
+
+  onNoteInput = (e) => {
+    const v = e.target.value;
+    const grew = v.length > this.state.noteText.length && v.length % 18 === 0;
+    this.setState((s) => ({ noteText: v, grow: grew ? s.grow + 1 : s.grow, growth: grew ? s.growth + 1 : s.growth }));
+  };
+
+  noteCards = () => {
+    const s = this.state;
+    const q = s.search.trim().toLowerCase();
+    let ids = s.selectedNode ? NEIGHBOURS[s.selectedNode] : CARD_ORDER;
+    if (q) ids = CARD_ORDER.filter((id) => NOTES[id].title.toLowerCase().includes(q) || NOTES[id].snippet.toLowerCase().includes(q));
+    return ids.map((id) => ({
+      ...NOTES[id],
+      border: id === s.selectedNode ? "var(--primary)" : "var(--hairline)",
+      onClick: () => this.setState({ selectedNode: id }),
+    }));
+  };
+
+  renderVals() {
+    const s = this.state;
+    const card = (id) => ({ title: NOTES[id].title, snippet: NOTES[id].snippet, open: () => this.openNote(id) });
+    const sug = s.suggestion ? AI[s.suggestion] : null;
+    const sel = s.selectedNode ? NOTES[s.selectedNode] : null;
+    const toggle = (key) => () => this.setState((st) => ({ toggles: { ...st.toggles, [key]: !st.toggles[key] } }));
+    const row = (key, label, hint) => ({
+      label,
+      hint,
+      toggle: toggle(key),
+      trackBg: s.toggles[key] ? "var(--primary)" : "var(--surface-container-high)",
+      knobBg: s.toggles[key] ? "var(--on-primary)" : "var(--outline)",
+      knobPos: s.toggles[key] ? "flex-end" : "flex-start",
+    });
+    const density = this.props.nodeDensity ?? s.density;
+
+    return {
+      screen: s.screen,
+      isChat: s.screen === "chat",
+      isVault: s.screen === "vault",
+      graphOn: s.toggles.graph && s.screen !== "vault" && (this.props.showGraph ?? true),
+      density,
+      pulse: s.toggles.particles ? s.pulse : 0,
+      grow: s.grow,
+      headerTabs: ["Bimo", "Nota"],
+      headerTab: s.screen === "vault" ? "Nota" : "Bimo",
+      onHeaderTab: (t) => this.setState({ screen: t === "Nota" ? "vault" : "chat", account: false }),
+
+      messages: s.messages.map((m) => ({ ...m, bubbleProps: { from: m.from, meta: m.meta }, hasCards: !!m.cards, cards: (m.cards || []).map(card) })),
+      typing: s.typing,
+      draft: s.draft,
+      onDraft: (v) => this.set("draft", v),
+      onSend: this.send,
+
+      fitProps: { style: { boxSizing: "border-box", width: "100%", minWidth: 0 } },
+      search: s.search,
+      onSearch: (v) => this.set("search", v),
+
+      graphNodes: GRAPH_NODES,
+      selectedNode: s.selectedNode,
+      hasSelection: !!sel,
+      selected: sel || { title: "", meta: "", tags: [] },
+      onSelectNode: (id) => this.setState((st) => ({ selectedNode: id, sheetStep: id ? Math.max(1, st.sheetStep) : st.sheetStep })),
+      clearSelection: () => this.setState({ selectedNode: null }),
+      sheetH: SHEET_HEIGHTS[s.sheetStep],
+      cycleSheet: () => this.setState((st) => ({ sheetStep: (st.sheetStep + 1) % SHEET_HEIGHTS.length })),
+      scopeLabel: sel ? "vizinhança de '" + sel.title + "'" : "vault inteiro",
+      counter: sel ? NEIGHBOURS[s.selectedNode].length - 1 + " conexões" : "642 nós",
+      listTitle: sel ? "Notas conectadas" : "Notas recentes",
+      noteCards: this.noteCards(),
+      primaryIcon: sel ? "description" : "add",
+      primaryLabel: sel ? "Abrir Nota" : "Nova Nota",
+      openSelectedOrNew: () => this.openNote(s.selectedNode || "n2"),
+      askAboutSelected: () => this.setState((st) => ({ screen: "chat", selectedNode: null, draft: "O que eu já escrevi sobre '" + (sel ? sel.title : "") + "'?", pulse: st.pulse + 1 })),
+
+      accountOpen: s.account,
+      toggleAccount: () => this.setState((st) => ({ account: !st.account })),
+      closeAccount: () => this.set("account", false),
+      accountItems: [
+        { icon: "person", label: "Perfil", onClick: () => this.setState({ sheet: "profile", account: false }) },
+        { icon: "settings", label: "Configurações", onClick: () => this.setState({ sheet: "settings", account: false }) },
+        { icon: "logout", label: "Sair da conta", onClick: () => this.set("account", false) },
+      ],
+      profileOpen: s.sheet === "profile",
+      settingsOpen: s.sheet === "settings",
+      closeSheet: () => this.set("sheet", null),
+      profileName: s.profile.name,
+      profileEmail: s.profile.email,
+      profileBio: s.profile.bio,
+      onProfileName: (e) => this.setState({ profile: { ...s.profile, name: e.target.value } }),
+      onProfileEmail: (e) => this.setState({ profile: { ...s.profile, email: e.target.value } }),
+      onProfileBio: (e) => this.setState({ profile: { ...s.profile, bio: e.target.value } }),
+      profileStats: [
+        { value: "642", label: "Notas" },
+        { value: "1.284", label: "Conexões" },
+        { value: "12", label: "Pastas" },
+      ],
+
+      settingGroups: [
+        { title: "Grafo de fundo", rows: [row("graph", "Campo do grafo", "Nós à deriva atrás do conteúdo"), row("particles", "Partículas de raciocínio", "Iris viaja pelas ligações quando o Bimo pensa")] },
+        { title: "Inteligência", rows: [row("autoTags", "Extrair tags ao salvar", "Sempre como sugestão, nunca automático"), row("autoLinks", "Sugerir links enquanto escrevo", "Mais interrupções, mais conexões")] },
+        { title: "Sincronização", rows: [row("wifi", "Sincronizar só no Wi-Fi", "Vault local continua disponível offline")] },
+      ],
+      densityOptions: [70, 90, 110].map((v) => ({
+        label: String(v),
+        onClick: () => this.set("density", v),
+        bg: density === v ? "var(--primary)" : "transparent",
+        fg: density === v ? "var(--on-primary)" : "var(--on-surface-variant)",
+      })),
+
+      editorOpen: !!s.editorNote,
+      closeEditor: () => this.setState({ editorNote: null, suggestion: null, aiMenu: false }),
+      noteFolder: s.editorNote ? NOTES[s.editorNote].folder : "",
+      noteTitle: s.noteTitle,
+      noteText: s.noteText,
+      noteTags: s.noteTags,
+      onNoteTitle: (e) => this.set("noteTitle", e.target.value),
+      onNoteInput: this.onNoteInput,
+      graphStatus: s.growth ? s.growth + (s.growth === 1 ? " nó novo acendeu no grafo" : " nós novos acenderam no grafo") : "O grafo acompanha o que você escreve",
+      aiMenuOpen: s.aiMenu,
+      toggleAiMenu: () => this.setState((st) => ({ aiMenu: !st.aiMenu })),
+      closeAiMenu: () => this.set("aiMenu", false),
+      aiActions: [
+        { icon: "hub", label: "Sugerir links", onClick: () => this.aiRun("links") },
+        { icon: "description", label: "Resumir a nota", onClick: () => this.aiRun("summary") },
+        { icon: "sell", label: "Extrair tags", onClick: () => this.aiRun("tags") },
+        { icon: "edit", label: "Continuar escrevendo", onClick: () => this.aiRun("continue") },
+        { icon: "forum", label: "Perguntar sobre a nota", onClick: () => this.aiRun("ask") },
+      ],
+      hasSuggestion: !!sug,
+      suggestionLabel: sug ? sug.label : "",
+      suggestionText: sug ? sug.text : "",
+      suggestionIsTags: s.suggestion === "tags",
+      suggestionTags: sug && sug.tags ? sug.tags : [],
+      acceptSuggestion: this.accept,
+      discardSuggestion: () => this.set("suggestion", null),
+    };
+  }
+}
+</script>
+</body>
+</html>

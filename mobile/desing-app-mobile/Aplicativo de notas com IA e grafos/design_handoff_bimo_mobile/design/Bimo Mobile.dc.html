@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/colors.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/typography.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/shape.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/tokens/effects.css">
+<link rel="stylesheet" href="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/styles.css">
+<script src="_ds/bimo-design-system-6bb128b9-aa25-4046-84f0-6e61e26fee0e/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#f0edef;font-family:var(--font-ui,system-ui)}
+a{color:var(--primary);text-decoration:none}
+a:hover{color:var(--on-primary-container)}
+.dv-turn{padding:40px 44px 32px;border-top:1px solid rgba(0,0,0,.08)}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1b1b1d;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 var(--font-ui);color:#1b1b1d}
+.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1b1b1d;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 var(--font-ui);color:rgba(0,0,0,.55);max-width:340px}
+.dv-opt:target .dv-oid{background:#5e4bc0;color:#fff}
+.dv-next{margin:22px 0 0;font:12px/1.5 var(--font-ui);color:rgba(0,0,0,.5)}
+.vcard{width:340px;height:600px;position:relative;overflow:hidden;border-radius:28px;border:1px solid rgba(0,0,0,.12);background:var(--background);box-shadow:0 12px 30px rgba(27,27,29,.10);display:flex;flex-direction:column}
+.screen-label{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 var(--font-ui);color:rgba(0,0,0,.55);max-width:402px}
+</style>
+</helmet>
+
+<section style="padding:44px 44px 8px;max-width:900px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px"><span class="dv-tid">PROTÓTIPO</span><span class="dv-tname">Bimo — app de notas com segundo cérebro</span></div>
+<p style="margin:0 0 10px;font:400 14px/1.7 var(--font-ui);color:#3e4a40;max-width:620px;text-wrap:pretty">Duas destinos no seletor central do header — <strong style="font-weight:600">Bimo</strong> (chat) e <strong style="font-weight:600">Nota</strong> — mais <strong style="font-weight:600">Perfil</strong> e <strong style="font-weight:600">Configurações</strong> pelo avatar. O grafo agora mora dentro de Nota: campo em tela cheia com a lista de notas numa folha por cima, então a barra inferior saiu (ela só repetiria o seletor do topo).</p>
+<p style="margin:0 0 4px;font:400 12px/1.7 var(--font-ui);color:#6e7a6f;max-width:620px">Em Nota: arraste o grafo, toque num nó para filtrar a lista pela vizinhança dele, e toque na alça da folha para trocar entre três alturas. Rótulos aparecem só nos nós grandes. No editor, o botão Bimo abre as cinco ações de IA — o resultado entra como sugestão, para aceitar ou descartar — e digitar acende nós novos no grafo.</p>
+</section>
+
+<section style="padding:24px 44px 48px">
+<div class="screen-label" style="margin-bottom:10px"><span class="dv-oid">Bimo</span>Chat — ponto de partida do app</div>
+<dc-import name="BimoScreen" initial-screen="chat" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</section>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">TELAS</a><span class="dv-tname">Cada tela no seu frame — todas navegáveis a partir daqui</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="s-nota">
+<div class="screen-label"><a class="dv-oid" href="#s-nota">Nota</a>Grafo em tela cheia com a folha de notas por cima. Toque num nó para filtrar.</div>
+<dc-import name="BimoScreen" initial-screen="vault" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</div>
+<div class="dv-opt" id="s-nota-filtro">
+<div class="screen-label"><a class="dv-oid" href="#s-nota-filtro">Nota · nó ativo</a>Nó selecionado: a lista mostra só a vizinhança, e a folha sobe.</div>
+<dc-import name="BimoScreen" initial-screen="vault" initial-node="n1" initial-sheet-step="{{ 1 }}" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</div>
+<div class="dv-opt" id="s-editor">
+<div class="screen-label"><a class="dv-oid" href="#s-editor">Editor</a>Nota aberta com uma sugestão do Bimo pendente: inserir ou descartar.</div>
+<dc-import name="BimoScreen" initial-screen="vault" initial-note="n1" initial-suggestion="links" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</div>
+<div class="dv-opt" id="s-grafico">
+<div class="screen-label"><a class="dv-oid" href="#s-grafico">Nota · grafo aberto</a>Folha recolhida: o grafo ganha a tela quase toda, sem trocar de destino.</div>
+<dc-import name="BimoScreen" initial-screen="vault" initial-sheet-step="{{ 0 }}" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</div>
+<div class="dv-opt" id="s-perfil">
+<div class="screen-label"><a class="dv-oid" href="#s-perfil">Perfil</a>Nome, e-mail, como o Bimo deve te tratar, e os números do vault.</div>
+<dc-import name="BimoScreen" initial-screen="chat" initial-sheet="profile" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</div>
+<div class="dv-opt" id="s-config">
+<div class="screen-label"><a class="dv-oid" href="#s-config">Configurações</a>Sincronização, grafo de fundo, inteligência e densidade de nós.</div>
+<dc-import name="BimoScreen" initial-screen="chat" initial-sheet="settings" show-graph="{{ showGraph }}" node-density="{{ nodeDensity }}" hint-size="402px,874px"></dc-import>
+</div>
+</div>
+<p class="dv-next">Cada frame é o app inteiro, só aberto numa tela diferente — dá para navegar de qualquer um deles.</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Variações — duas por tela</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Nota — cartões de prévia no lugar da árvore: cada nota mostra duas linhas e quantas conexões tem.</div>
+<div class="vcard">
+<div style="display:flex;align-items:center;gap:8px;height:52px;flex-shrink:0;padding:0 12px;background:var(--glass-bar);backdrop-filter:blur(12px);border-bottom:1px solid var(--hairline)">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--primary);font-variation-settings:'FILL' 1">psychology</span>
+<div style="flex:1;display:flex;justify-content:center"><span style="display:flex;gap:4px;padding:4px;background:var(--surface-container-low);border:1px solid var(--hairline);border-radius:9999px"><span style="padding:4px 14px;border-radius:9999px;font:500 13px/18px var(--font-ui);color:var(--on-surface-variant)">Bimo</span><span style="padding:4px 14px;border-radius:9999px;background:var(--primary);color:var(--on-primary);font:600 13px/18px var(--font-ui)">Nota</span></span></div>
+<span style="width:28px;height:28px;border-radius:9999px;background:var(--secondary-container);border:1px solid var(--hairline);color:var(--on-secondary-container);display:flex;align-items:center;justify-content:center;font:500 11px var(--font-ui)">MA</span>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ cardNotes }}" as="n" hint-placeholder-count="4">
+<div style="padding:12px;border:1px solid var(--hairline);border-radius:8px;background:var(--glass-card);backdrop-filter:blur(4px)">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+<span style="font:600 14px/20px var(--font-ui);letter-spacing:-0.005em;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.title }}</span>
+<span style="display:flex;align-items:center;gap:4px;font:400 12px/16px var(--font-ui);color:var(--outline);flex-shrink:0"><span class="material-symbols-outlined" style="font-size:14px">hub</span>{{ n.links }}</span>
+</div>
+<p style="margin:0 0 8px;font:400 12px/16px var(--font-ui);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ n.snippet }}</p>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+<span style="font-family:var(--font-mono);font-size:11px;color:var(--on-surface-variant);background:var(--surface-chip);border-radius:4px;padding:2px 6px">{{ n.tag }}</span>
+<span style="font:400 12px/16px var(--font-ui);color:var(--outline)">{{ n.when }}</span>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="flex-shrink:0;height:58px;border-top:1px solid var(--hairline);background:var(--glass-bar);backdrop-filter:blur(12px);display:flex">
+<sc-for list="{{ miniTabs }}" as="t" hint-placeholder-count="3">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ t.colorNota }}">
+<span class="material-symbols-outlined" style="font-size:20px">{{ t.icon }}</span>
+<span style="font:500 11px/14px var(--font-ui)">{{ t.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Nota — editor primeiro, com mini-mapa fixo no topo: as conexões da nota aparecem enquanto você escreve.</div>
+<div class="vcard">
+<div style="display:flex;align-items:center;justify-content:space-between;height:52px;flex-shrink:0;padding:0 12px;background:color-mix(in srgb, var(--surface) 95%, transparent);border-bottom:1px solid var(--hairline)">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--on-surface-variant)">arrow_back</span>
+<span style="font:500 13px/18px var(--font-ui);color:var(--on-surface-variant)">Leituras</span>
+<span style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--hairline);border-radius:9999px;background:var(--surface-container-low);color:var(--primary);font:500 12px/16px var(--font-ui)"><span class="material-symbols-outlined" style="font-size:16px">psychology</span>Bimo</span>
+</div>
+<div style="position:relative;height:132px;flex-shrink:0;border-bottom:1px solid var(--hairline);background:var(--surface-container-low);overflow:hidden">
+<x-import component-from-global-scope="GraphField" from="./graph-field.jsx" node-count="{{ 26 }}" opacity="{{ 1 }}" hint-size="100%,132px"></x-import>
+<span style="position:absolute;left:12px;top:10px;font:500 11px/14px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--outline)">Vizinhança desta nota</span>
+<span style="position:absolute;right:12px;bottom:10px;font:400 11px/14px var(--font-ui);color:var(--primary);background:var(--glass-bar);backdrop-filter:blur(12px);border-radius:9999px;padding:3px 8px">+2 nós novos</span>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;padding:16px">
+<div style="font:600 22px/30px var(--font-ui);letter-spacing:-0.02em;color:var(--primary);padding-bottom:8px;border-bottom:1px solid var(--hairline);margin-bottom:10px">Ler é uma conversa</div>
+<div style="display:flex;gap:6px;margin-bottom:12px">
+<span style="font-family:var(--font-mono);font-size:11px;color:var(--on-surface-variant);background:var(--surface-chip);border-radius:4px;padding:2px 6px">#leitura</span>
+<span style="font-family:var(--font-mono);font-size:11px;color:var(--on-surface-variant);background:var(--surface-chip);border-radius:4px;padding:2px 6px">#hábitos</span>
+</div>
+<p style="margin:0 0 12px;font:400 13px/1.625 var(--font-ui);color:var(--on-surface)">Marginália é resposta, não anotação. Quando escrevo no branco da página, estou discutindo com o autor — e é essa discussão que vale guardar.</p>
+<div style="padding:10px;border:1px dashed var(--primary);border-radius:8px;background:color-mix(in srgb, var(--primary-fixed) 55%, transparent)">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="material-symbols-outlined" style="font-size:14px;color:var(--primary)">psychology</span><span style="font:500 11px/14px var(--font-ui);color:var(--on-primary-fixed-variant)">Sugestão do Bimo · Sugerir links</span></div>
+<p style="margin:0 0 8px;font:400 12px/1.5 var(--font-ui);color:var(--on-surface)">Relacionado: 'Notas atômicas' — o método que você escreveu em janeiro.</p>
+<div style="display:flex;gap:6px"><span style="padding:5px 12px;border-radius:12px;background:var(--primary);color:var(--on-primary);font:600 12px/16px var(--font-ui)">Inserir</span><span style="padding:5px 12px;border-radius:12px;color:var(--on-surface-variant);font:600 12px/16px var(--font-ui)">Descartar</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Gráfico — filtros por pasta em chips no topo e lista de nós abaixo, para quem prefere ler a navegar.</div>
+<div class="vcard">
+<div style="display:flex;align-items:center;gap:8px;height:52px;flex-shrink:0;padding:0 12px;background:var(--glass-bar);backdrop-filter:blur(12px);border-bottom:1px solid var(--hairline)">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--primary);font-variation-settings:'FILL' 1">hub</span>
+<span style="flex:1;font:600 15px/22px var(--font-ui);letter-spacing:-0.01em">Gráfico</span>
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--outline)">search</span>
+</div>
+<div style="flex-shrink:0;display:flex;gap:6px;padding:10px 12px;overflow:hidden">
+<sc-for list="{{ folderChips }}" as="f" hint-placeholder-count="4">
+<span style="flex-shrink:0;padding:5px 10px;border:1px solid {{ f.border }};border-radius:9999px;background:{{ f.bg }};color:{{ f.fg }};font:500 12px/16px var(--font-ui);white-space:nowrap">{{ f.label }}</span>
+</sc-for>
+</div>
+<div style="position:relative;height:230px;flex-shrink:0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);background:var(--surface-container-low);overflow:hidden">
+<x-import component-from-global-scope="GraphField" from="./graph-field.jsx" node-count="{{ 30 }}" opacity="{{ 1 }}" nodes="{{ graphNodesMini }}" hint-size="100%,230px"></x-import>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;padding:8px 12px">
+<sc-for list="{{ nodeList }}" as="n" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 4px;border-bottom:1px solid var(--hairline)">
+<span style="width:10px;height:10px;border-radius:9999px;background:{{ n.dot }};flex-shrink:0"></span>
+<span style="flex:1;min-width:0;font:400 13px/20px var(--font-ui);color:var(--on-surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.label }}</span>
+<span style="font:400 12px/16px var(--font-ui);color:var(--outline)">{{ n.links }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Gráfico — foco total: campo sem cromo, um único nó em destaque e a nota abrindo direto por cima.</div>
+<div class="vcard">
+<div style="position:relative;flex:1;min-height:0;background:var(--background)">
+<x-import component-from-global-scope="GraphField" from="./graph-field.jsx" node-count="{{ 46 }}" opacity="{{ 1 }}" nodes="{{ graphNodesFocus }}" selected-id="n1" hint-size="100%,100%"></x-import>
+<div style="position:absolute;top:14px;left:14px;right:14px;display:flex;align-items:center;justify-content:space-between">
+<span style="padding:5px 10px;border-radius:9999px;background:var(--glass-bar);backdrop-filter:blur(12px);border:1px solid var(--hairline);font:400 11px/14px var(--font-ui);color:var(--outline)">642 nós · 1.284 conexões</span>
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--outline);background:var(--glass-bar);backdrop-filter:blur(12px);border:1px solid var(--hairline);border-radius:9999px;padding:6px">center_focus_strong</span>
+</div>
+<div style="position:absolute;left:14px;right:14px;bottom:14px;padding:14px;border-radius:16px;background:var(--glass-sheet);backdrop-filter:blur(16px);border:1px solid var(--hairline);box-shadow:var(--shadow-xl)">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span class="material-symbols-outlined" style="font-size:15px;color:var(--primary)">description</span><span style="font:600 15px/22px var(--font-ui);letter-spacing:-0.01em">Ler é uma conversa</span></div>
+<p style="margin:0 0 10px;font:400 12px/16px var(--font-ui);color:var(--text-muted)">Leituras · 7 conexões · editada em março</p>
+<div style="display:flex;gap:6px"><span style="padding:7px 14px;border-radius:12px;background:var(--primary);color:var(--on-primary);font:600 12px/16px var(--font-ui)">Abrir Nota</span><span style="padding:7px 14px;border:1px solid var(--hairline);border-radius:12px;color:var(--on-surface);font:600 12px/16px var(--font-ui)">Ver vizinhos</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Bimo — resultados em carrossel horizontal: a resposta fica curta e as notas passam de lado.</div>
+<div class="vcard">
+<div style="display:flex;align-items:center;gap:8px;height:52px;flex-shrink:0;padding:0 12px;background:var(--glass-bar);backdrop-filter:blur(12px);border-bottom:1px solid var(--hairline)">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--primary);font-variation-settings:'FILL' 1">psychology</span>
+<div style="flex:1;display:flex;justify-content:center"><span style="display:flex;gap:4px;padding:4px;background:var(--surface-container-low);border:1px solid var(--hairline);border-radius:9999px"><span style="padding:4px 14px;border-radius:9999px;background:var(--primary);color:var(--on-primary);font:600 13px/18px var(--font-ui)">Bimo</span><span style="padding:4px 14px;border-radius:9999px;font:500 13px/18px var(--font-ui);color:var(--on-surface-variant)">Nota</span></span></div>
+<span style="width:28px;height:28px;border-radius:9999px;background:var(--secondary-container);border:1px solid var(--hairline);color:var(--on-secondary-container);display:flex;align-items:center;justify-content:center;font:500 11px var(--font-ui)">MA</span>
+</div>
+<div style="position:relative;flex:1;min-height:0;overflow:hidden">
+<x-import component-from-global-scope="GraphField" from="./graph-field.jsx" node-count="{{ 60 }}" hint-size="100%,100%"></x-import>
+<div style="position:relative;z-index:1;padding:14px;display:flex;flex-direction:column;gap:12px">
+<div style="align-self:flex-end;max-width:80%;padding:12px;border-radius:12px 12px 6px 12px;background:var(--bubble-user);border:1px solid var(--bubble-user-border);color:var(--on-primary);font:400 13px/1.625 var(--font-ui)">O que eu já escrevi sobre leitura?</div>
+<div style="padding:12px;border-radius:12px 12px 12px 6px;background:var(--glass-bubble);backdrop-filter:blur(12px);border:1px solid var(--hairline);font:400 13px/1.625 var(--font-ui)">Três nós, todos ligados a 'Notas atômicas'.</div>
+<div style="display:flex;gap:10px;margin:0 -14px;padding:0 14px;overflow:hidden">
+<sc-for list="{{ carousel }}" as="c" hint-placeholder-count="3">
+<div style="flex:none;width:150px;padding:12px;border:1px solid var(--hairline);border-radius:8px;background:var(--glass-card);backdrop-filter:blur(4px)">
+<span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">description</span>
+<div style="margin:6px 0 4px;font:600 13px/18px var(--font-ui);letter-spacing:-0.005em;color:var(--primary)">{{ c.title }}</div>
+<p style="margin:0;font:400 11px/15px var(--font-ui);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">{{ c.snippet }}</p>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="flex-shrink:0;padding:8px 12px 12px;background:var(--dock-protection)">
+<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:16px;background:var(--glass-dock);backdrop-filter:blur(16px);border:1px solid var(--hairline);box-shadow:var(--shadow-xl)">
+<span style="flex:1;font:400 13px/20px var(--font-ui);color:var(--text-placeholder)">Pergunte ao Bimo...</span>
+<span style="width:30px;height:30px;border-radius:8px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined" style="font-size:17px">arrow_upward</span></span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1f">
+<div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Bimo — versão sólida, sem vidro nem grafo: superfícies opacas e raciocínio descrito em texto.</div>
+<div class="vcard" style="background:var(--surface-container-low)">
+<div style="display:flex;align-items:center;gap:8px;height:52px;flex-shrink:0;padding:0 12px;background:var(--surface-container-lowest);border-bottom:1px solid var(--hairline)">
+<span class="material-symbols-outlined" style="font-size:20px;color:var(--primary);font-variation-settings:'FILL' 1">psychology</span>
+<div style="flex:1;display:flex;justify-content:center"><span style="display:flex;gap:4px"><span style="padding:5px 14px;border-radius:9999px;background:var(--primary);color:var(--on-primary);font:600 13px/18px var(--font-ui)">Bimo</span><span style="padding:5px 14px;border-radius:9999px;font:500 13px/18px var(--font-ui);color:var(--on-surface-variant)">Nota</span></span></div>
+<span style="width:28px;height:28px;border-radius:9999px;background:var(--secondary-container);border:1px solid var(--hairline);color:var(--on-secondary-container);display:flex;align-items:center;justify-content:center;font:500 11px var(--font-ui)">MA</span>
+</div>
+<div style="flex:1;min-height:0;overflow:hidden;padding:14px;display:flex;flex-direction:column;gap:12px">
+<div style="align-self:flex-end;max-width:80%;padding:12px;border-radius:12px 12px 6px 12px;background:var(--primary);color:var(--on-primary);font:400 13px/1.625 var(--font-ui)">Junta as três notas de leitura numa só.</div>
+<div style="padding:12px;border-radius:12px 12px 12px 6px;background:var(--surface-container-lowest);border:1px solid var(--hairline);font:400 13px/1.625 var(--font-ui)">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-family:var(--font-mono);font-size:11px;color:var(--outline)">percorrendo 3 nós · 2 pastas</div>
+Reuni 'Ler é uma conversa', 'O que ficou de Sapiens' e a nota de 12 de março. A nova versão mantém suas palavras e cita as três origens.
+<div style="margin-top:10px;padding:10px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface-container)">
+<div style="display:flex;align-items:center;gap:6px;color:var(--primary);font:600 13px/18px var(--font-ui)"><span class="material-symbols-outlined" style="font-size:15px">description</span>Leitura — nota reunida</div>
+<p style="margin:6px 0 0;font:400 11px/15px var(--font-ui);color:var(--text-muted)">Rascunho em 'Leituras'. 7 parágrafos, 3 origens citadas.</p>
+</div>
+</div>
+<div style="display:flex;gap:8px"><span style="padding:7px 14px;border-radius:12px;background:var(--secondary);color:var(--on-secondary);font:600 12px/16px var(--font-ui)">Abrir rascunho</span><span style="padding:7px 14px;border:1px solid var(--hairline);border-radius:12px;color:var(--on-surface);font:600 12px/16px var(--font-ui)">Desfazer</span></div>
+</div>
+<div style="flex-shrink:0;padding:10px 12px 14px;background:var(--surface-container-lowest);border-top:1px solid var(--hairline)">
+<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:16px;background:var(--surface-container);border:1px solid var(--hairline)">
+<span style="flex:1;font:400 13px/20px var(--font-ui);color:var(--text-placeholder)">Pergunte ao Bimo...</span>
+<span style="width:30px;height:30px;border-radius:8px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined" style="font-size:17px">arrow_upward</span></span>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Diga o que seguir: "leva o mini-mapa do <a class="dv-oid" href="#1b">1b</a> para o protótipo" · "quero o <a class="dv-oid" href="#1c">1c</a> como tela Gráfico principal" · "mais direções para o chat".</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showGraph&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Grafo&quot;},&quot;nodeDensity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:90,&quot;min&quot;:40,&quot;max&quot;:140,&quot;step&quot;:10,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Grafo&quot;}}">
+const SNIP = {
+  n1: "Marginália é resposta, não anotação. Cada leitura vira um nó no vault.",
+  n2: "Uma ideia por nota, um título que seja uma afirmação. O resto é ligação.",
+  n5: "O que rendeu, o que travou e a leitura que virou nota nova.",
+  n6: "Um episódio por bairro; a pauta sai das conversas, não da pesquisa.",
+  n7: "Moagem, temperatura e tempo — só uma variável muda por vez.",
+};
+
+const GRAPH_NODES = [
+  { id: "n1", label: "Ler é uma conversa", x: 0.5, y: 0.42, weight: 1.7, links: ["n2", "n5", "n7"] },
+  { id: "n2", label: "Notas atômicas", x: 0.26, y: 0.28, weight: 1.35, links: ["n6"] },
+  { id: "n3", label: "Reforma", x: 0.74, y: 0.7, weight: 1.05, links: ["n4"] },
+  { id: "n4", label: "Orçamento 2026", x: 0.88, y: 0.52, weight: 0.9, links: [] },
+  { id: "n5", label: "Semana 22–28", x: 0.38, y: 0.68, weight: 0.95, links: [] },
+  { id: "n6", label: "Podcast: cidades", x: 0.14, y: 0.55, weight: 1.15, links: ["n5"] },
+  { id: "n7", label: "Café: variáveis", x: 0.64, y: 0.22, weight: 0.9, links: [] },
+];
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showGraph: this.props.showGraph ?? true,
+      nodeDensity: this.props.nodeDensity ?? 90,
+      graphNodesMini: GRAPH_NODES.slice(0, 5),
+      graphNodesFocus: GRAPH_NODES,
+      cardNotes: [
+        { title: "Ler é uma conversa", snippet: SNIP.n1, tag: "#leitura", links: 7, when: "março" },
+        { title: "Notas atômicas", snippet: SNIP.n2, tag: "#método", links: 5, when: "janeiro" },
+        { title: "Podcast: cidades", snippet: SNIP.n6, tag: "#ideia", links: 4, when: "há 6 dias" },
+        { title: "Café: variáveis", snippet: SNIP.n7, tag: "#café", links: 1, when: "há 3 dias" },
+      ],
+      miniTabs: [
+        { icon: "forum", label: "Bimo", colorNota: "var(--on-surface-variant)" },
+        { icon: "description", label: "Nota", colorNota: "var(--primary)" },
+        { icon: "hub", label: "Gráfico", colorNota: "var(--on-surface-variant)" },
+      ],
+      folderChips: [
+        { label: "Tudo", bg: "var(--primary)", fg: "var(--on-primary)", border: "var(--primary)" },
+        { label: "Leituras 142", bg: "transparent", fg: "var(--on-surface-variant)", border: "var(--hairline)" },
+        { label: "Ideias 236", bg: "transparent", fg: "var(--on-surface-variant)", border: "var(--hairline)" },
+        { label: "Diário 148", bg: "transparent", fg: "var(--on-surface-variant)", border: "var(--hairline)" },
+      ],
+      nodeList: [
+        { label: "Ler é uma conversa", links: 7, dot: "var(--primary)" },
+        { label: "Notas atômicas", links: 5, dot: "var(--primary)" },
+        { label: "Podcast: cidades", links: 4, dot: "var(--outline)" },
+        { label: "Semana 22–28", links: 3, dot: "var(--outline)" },
+      ],
+      carousel: [
+        { title: "Ler é uma conversa", snippet: SNIP.n1 },
+        { title: "Notas atômicas", snippet: SNIP.n2 },
+        { title: "Semana 22–28", snippet: SNIP.n5 },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
