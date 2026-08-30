@@ -9,9 +9,9 @@
 - [x] Definir banco (provedor + ORM)
 - [x] Configurar PostgreSQL (instância dev/prod, pooling)
 - [x] Criar modelo de dados (schema real das Decisões 1-7 do Architecture Audit)
-- [ ] Implementar fontes
-- [ ] Implementar entidades
-- [ ] Implementar notas
+- [x] Implementar fontes
+- [x] Implementar entidades
+- [x] Implementar notas
 - [ ] Implementar relações
 - [ ] Implementar revisões
 - [ ] Implementar metadata
@@ -61,6 +61,44 @@ Schema Drizzle em `src/lib/db/schema/`, traduzindo as Decisões 1-7 do Architect
 
 Migration gerada e aplicada ao Supabase (`npm run db:generate` / `npm run db:migrate`, scripts novos no `package.json`). Verificado direto no banco: 8 tabelas com `rowsecurity = true`, 8 policies ativas, os 4 enums com os valores esperados. `tsc` limpo nos arquivos novos. `npm test` não rodou — falha pré-existente e não relacionada (erro `ERR_INVALID_PACKAGE_CONFIG` num pacote transitivo do jsdom, ambiente Windows), não causada por esta mudança.
 
+## Decisão 4 — Pasta como organização, não como grafo
+
+Pergunta em aberto ao implementar: a estrutura de pastas do vault atual (`ItemVault`) não tinha equivalente no modelo do Architecture Audit. Resposta: pasta é puramente organizacional — não vira nó nem relação no grafo (diferente de Entidade/Relação, que são conceitos estruturais). Serve pra dois usos que já existem hoje: agrupar visualmente na barra lateral e colorir nós do grafo por grupo (`cores-grupo.ts`, hoje calculado a partir do primeiro segmento do caminho).
+
+- Campo `pasta: text` (caminho completo, ex. `"Projetos/Bimo/Ideias"`, sem nome de arquivo), adicionado só em `notas` — reproduz a árvore atual 1:1 pra exportação futura (princípio 8, portabilidade).
+- **Só Nota, não Entidade**: Entidade é majoritariamente criada pelo agente ao processar fontes — não faz sentido o usuário "arquivar" uma entidade numa pasta; pasta é um conceito de organização humana.
+- Migration incremental aplicada (`0001_superb_george_stacy.sql`, `ALTER TABLE notas ADD COLUMN pasta`).
+
+## Decisão 5 — Implementar Fontes
+
+[src/lib/supabase-storage.ts](../src/lib/supabase-storage.ts) (cliente fino do Storage) + [src/lib/fontes.ts](../src/lib/fontes.ts) (domínio: `criarFonte`/`obterFonte`/`listarFontes`, sem `atualizarFonte` — imutabilidade deliberada). `criarFonte` sobe o blob antes de inserir a linha; se o insert falhar, remove o blob (compensação — Storage não participa de transação do Postgres).
+
+Descobertas ao verificar de ponta a ponta:
+
+- `.env` tinha `SUPABASE_URL` com `/rest/v1/` colado (endpoint REST, não a URL base) — corrigido.
+- `auth.users` estava vazio, e toda tabela nossa tem FK pra lá (Decisão 7) — nada seria inserível. Criado um usuário bootstrap via API admin do Supabase, salvo como `USER_ID_PADRAO` no `.env`/`.env.example`, documentado como **provisório até a Fase 8** (autenticação definitiva vai substituir isso por usuário real por sessão).
+- Bucket `fontes` criado no Storage (privado).
+- Testado com dado real (não só mock): criar, buscar, listar, limpar — funcionando.
+
+## Decisão 6 — Implementar Entidades
+
+[src/lib/entidades.ts](../src/lib/entidades.ts): `criarEntidade`, `atualizarEntidade`, `obterEntidade`, `listarEntidades`. Sem `removerEntidade` — a seção 14 do doc de visão não lista ferramenta de exclusão de entidade; o modelo favorece merge/substituição (`substitui`) sobre apagar conhecimento.
+
+- `criarEntidade`/`atualizarEntidade` usam `db.transaction`: gravam `nos` + `entidades` (+ `versoes_entidade`) atomicamente — diferente de Fonte, tudo aqui é Postgres, então dá pra usar transação de verdade em vez de compensação manual.
+- Cada edição grava o estado novo inteiro em `versoes_entidade` (Decisão 4), com a autoria de quem editou — sem sobrescrever o `criadoPor` original da entidade.
+- Enforcement de risco/autonomia (Decisão 5 do Architecture Audit — ex.: bloquear edição de entidade `aprovada` sem aprovação) **não está aqui**: é responsabilidade da futura camada de ferramentas do agente (Fase 5), não da camada de dados.
+- Testado com dado real: criar, atualizar (rascunho → aprovada), buscar, listar, limpar via cascade em `nos` — funcionando.
+
+Toda a suíte de `src/lib` (129 testes) segue passando.
+
+## Decisão 7 — Implementar Notas
+
+[src/lib/notas.ts](../src/lib/notas.ts): `criarNota`/`atualizarNota`/`obterNota`/`listarNotas`, mesmo padrão de `entidades.ts` (transação `nos`+`notas`+`versoes_nota`), sem `confianca`/`status` e com `pasta`.
+
+Correção feita antes de escrever este módulo: `versoes_nota` não tinha coluna `pasta` (esquecida quando a Decisão 4 da Fase 2 adicionou `pasta` só em `notas`) — snapshot de versão ficaria incompleto. Adicionada via migration incremental (`0002_noisy_zaladane.sql`).
+
+Testado com dado real: criar, atualizar conteúdo, buscar, listar, limpar via cascade — funcionando. Suíte inteira de `src/lib`: **135 testes passando**.
+
 ## Próximo ponto do checklist
 
-**Implementar fontes** — camada de acesso a dados (funções `criarFonte`/etc. sobre `src/lib/db/cliente.ts`) + upload pro Supabase Storage.
+**Implementar relações** — a tabela `relacoes` já existe desde a Decisão 3; falta a camada de domínio (`criarRelacao`/`removerRelacao`/consultas de grafo), incluindo o constraint de mesmo `userId` entre origem e destino (Decisão 7 do Architecture Audit) que ainda não foi implementado em código.

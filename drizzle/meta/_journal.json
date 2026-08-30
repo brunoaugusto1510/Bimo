@@ -8,6 +8,20 @@
       "when": 1788014986401,
       "tag": "0000_whole_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788061472612,
+      "tag": "0001_superb_george_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788064145740,
+      "tag": "0002_noisy_zaladane",
+      "breakpoints": true
     }
   ]
 }

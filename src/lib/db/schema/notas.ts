@@ -22,6 +22,12 @@ export const notas = pgTable(
       .references(() => usuariosAuth.id, { onDelete: "cascade" }),
     titulo: text("titulo").notNull(),
     conteudo: text("conteudo").notNull(),
+    /**
+     * Caminho completo da pasta (ex.: "Projetos/Bimo/Ideias"), sem o nome do
+     * arquivo. É só organização/exportação e cor no grafo — nunca vira nó nem
+     * relação (diferente de Entidade, que não tem este campo).
+     */
+    pasta: text("pasta"),
     tags: text("tags").array(),
     criadoPor: criadoPorEnum("criado_por").notNull(),
     /** Nome da ferramenta que criou/editou, quando `criadoPor = 'agente'`. */

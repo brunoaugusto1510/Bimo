@@ -63,6 +63,7 @@ export const versoesNota = pgTable(
       .references(() => usuariosAuth.id, { onDelete: "cascade" }),
     titulo: text("titulo").notNull(),
     conteudo: text("conteudo").notNull(),
+    pasta: text("pasta"),
     tags: text("tags").array(),
     criadoPor: criadoPorEnum("criado_por").notNull(),
     criadoPorFerramenta: text("criado_por_ferramenta"),
