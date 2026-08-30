@@ -36,12 +36,12 @@ const whereMockSelect = vi.fn();
 const fromMockSelect = vi.fn(() => ({ where: whereMockSelect }));
 const selectMock = vi.fn(() => ({ from: fromMockSelect }));
 
-vi.mock("./db/cliente", () => ({
+vi.mock("../db/cliente", () => ({
   db: { transaction: transactionMock, select: selectMock },
 }));
 
 const { atualizarEntidade, criarEntidade, listarEntidades, obterEntidade } = await import(
-  "./entidades"
+  "../entidades"
 );
 
 const ENTIDADE_FAKE = {

@@ -15,7 +15,7 @@ const whereMock = vi.fn();
 const fromMockSelect = vi.fn(() => ({ where: whereMock }));
 const selectMock = vi.fn(() => ({ from: fromMockSelect }));
 
-vi.mock("./db/cliente", () => ({
+vi.mock("../db/cliente", () => ({
   db: { insert: insertMock, select: selectMock },
 }));
 
@@ -23,13 +23,13 @@ const enviarArquivoMock = vi.fn();
 const removerArquivoMock = vi.fn();
 const getConfigStorageMock = vi.fn(() => ({ url: "https://x", chaveServico: "chave-fake" }));
 
-vi.mock("./supabase-storage", () => ({
+vi.mock("../supabase-storage", () => ({
   enviarArquivo: enviarArquivoMock,
   removerArquivo: removerArquivoMock,
   getConfigStorage: getConfigStorageMock,
 }));
 
-const { criarFonte, listarFontes, obterFonte } = await import("./fontes");
+const { criarFonte, listarFontes, obterFonte } = await import("../fontes");
 
 /** Devolve algo que funciona tanto com `await` direto quanto com `.orderBy()` encadeado. */
 function resultadoDeQuery<T>(valor: T) {

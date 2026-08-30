@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { gerarHashDeSenha, verificarSenha } from "./senha";
+import { gerarHashDeSenha, verificarSenha } from "../senha";
 
 const SENHA = "minha-senha-de-teste";
 

@@ -4,7 +4,7 @@ import {
   limparTentativas,
   registrarFalha,
   verificarLimite,
-} from "./limite-de-tentativas";
+} from "../limite-de-tentativas";
 
 const IP = "203.0.113.7";
 const AGORA = 1_700_000_000_000;

@@ -14,13 +14,13 @@ vi.mock("@google/genai", () => ({
 }));
 
 /** As ferramentas de verdade já têm teste próprio (`ferramentas.test.ts`); aqui só o despacho do laço importa. */
-vi.mock("./ferramentas", () => ({
+vi.mock("../ferramentas", () => ({
   declaracoesDeFerramentas: [],
   executarFerramenta: vi.fn(),
 }));
 
-import { executarFerramenta } from "./ferramentas";
-import { responder } from "./agente";
+import { executarFerramenta } from "../ferramentas";
+import { responder } from "../agente";
 
 function turnoDeTexto(texto: string) {
   return {

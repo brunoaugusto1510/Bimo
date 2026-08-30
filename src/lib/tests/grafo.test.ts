@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { obterGrupoDoCaminho } from "./grafo";
+import { obterGrupoDoCaminho } from "../grafo";
 
 /**
  * Teste smoke da Fase 0: só prova que a config do Vitest (jsdom + alias

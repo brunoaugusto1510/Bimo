@@ -666,15 +666,17 @@ Nenhuma migração estrutural foi realizada nesta etapa — apenas o desenho con
 
 ## Fase 2 - Knowledge Core
 
-- [ ] Definir banco
-- [ ] Configurar PostgreSQL
-- [ ] Criar modelo de dados
-- [ ] Implementar notas
-- [ ] Implementar fontes
-- [ ] Implementar entidades
-- [ ] Implementar relações
-- [ ] Implementar revisões
-- [ ] Implementar metadata
+**Status: concluída** — decisões registradas em [Bimo - Knowledge Core (Fase 2).md](./Bimo%20-%20Knowledge%20Core%20%28Fase%202%29.md)
+
+- [x] Definir banco
+- [x] Configurar PostgreSQL
+- [x] Criar modelo de dados
+- [x] Implementar notas
+- [x] Implementar fontes
+- [x] Implementar entidades
+- [x] Implementar relações
+- [x] Implementar revisões
+- [x] Implementar metadata
 
 ---
 

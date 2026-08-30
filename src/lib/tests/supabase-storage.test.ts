@@ -15,7 +15,7 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 const { baixarArquivo, enviarArquivo, getConfigStorage, removerArquivo } = await import(
-  "./supabase-storage"
+  "../supabase-storage"
 );
 
 const CFG = { url: "https://exemplo.supabase.co", chaveServico: "chave-fake" };

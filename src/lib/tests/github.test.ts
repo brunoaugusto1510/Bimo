@@ -7,7 +7,7 @@ import {
   putFile,
   readBlob,
   type GitHubConfig,
-} from "./github";
+} from "../github";
 
 /**
  * Diferente de `vault-real.test.ts` (que mocka `./github` inteiro), aqui é o

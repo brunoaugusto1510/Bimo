@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TreeEntry } from "./github";
+import type { TreeEntry } from "../github";
 
 /**
  * `vault-real.ts` guarda estado num cache de módulo (`let cache`), então cada
@@ -8,7 +8,7 @@ import type { TreeEntry } from "./github";
  * reimportação dinâmica em `beforeEach` resolve isso; o mock de `./github`
  * sobrevive ao reset porque `vi.mock` é hoisted e fica registrado à parte.
  */
-vi.mock("./github", () => ({
+vi.mock("../github", () => ({
   getGitHubConfig: vi.fn(() => ({
     repo: "usuario/vault",
     branch: "main",
@@ -53,7 +53,7 @@ const FIXTURES: Fixture[] = [
 
 /** Configura os mocks de `./github` para devolver as fixtures acima. */
 async function configurarGitHubFalso(opts: { truncated?: boolean } = {}) {
-  const github = await import("./github");
+  const github = await import("../github");
 
   const entries: TreeEntry[] = FIXTURES.map((f) => ({
     path: f.path,
@@ -89,7 +89,7 @@ async function configurarGitHubFalso(opts: { truncated?: boolean } = {}) {
 
 /** Reimporta `vault-real.ts` do zero, para começar cada teste com cache limpo. */
 async function importarVaultReal() {
-  return import("./vault-real");
+  return import("../vault-real");
 }
 
 beforeEach(() => {

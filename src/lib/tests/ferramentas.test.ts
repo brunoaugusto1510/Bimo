@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
+import { declaracoesDeFerramentas, executarFerramenta } from "../ferramentas";
 
 /**
  * Mocka a camada de dados (`vault-real.ts`) inteira: o que importa aqui é o
  * despacho de `executarFerramenta` e a normalização de argumentos, não a
  * lógica de busca em si (isso já está coberto em `vault-real.test.ts`).
  */
-vi.mock("./vault-real", () => ({
+vi.mock("../vault-real", () => ({
   buscarNotas: vi.fn(),
   lerNota: vi.fn(),
   listarNotas: vi.fn(),
@@ -16,12 +16,12 @@ vi.mock("./vault-real", () => ({
 }));
 
 /** `grafo.ts` também é mockado, para testar (sem acoplar) que a escrita invalida o cache do grafo. */
-vi.mock("./grafo", () => ({
+vi.mock("../grafo", () => ({
   invalidarCacheDoGrafo: vi.fn(),
 }));
 
-import { buscarNotas, criarNota, editarNota, lerNota, listarNotas } from "./vault-real";
-import { invalidarCacheDoGrafo } from "./grafo";
+import { buscarNotas, criarNota, editarNota, lerNota, listarNotas } from "../vault-real";
+import { invalidarCacheDoGrafo } from "../grafo";
 
 beforeEach(() => {
   vi.clearAllMocks();

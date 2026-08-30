@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { criarTokenDeSessao, verificarTokenDeSessao } from "./sessao";
+import { criarTokenDeSessao, verificarTokenDeSessao } from "../sessao";
 
 /** HMAC precisa de chave longa; o módulo recusa segredo curto de propósito. */
 const SEGREDO = "um-segredo-de-testes-com-mais-de-32-caracteres";

@@ -12,9 +12,9 @@
 - [x] Implementar fontes
 - [x] Implementar entidades
 - [x] Implementar notas
-- [ ] Implementar relações
-- [ ] Implementar revisões
-- [ ] Implementar metadata
+- [x] Implementar relações
+- [x] Implementar revisões
+- [x] Implementar metadata
 
 ---
 
@@ -99,6 +99,26 @@ Correção feita antes de escrever este módulo: `versoes_nota` não tinha colun
 
 Testado com dado real: criar, atualizar conteúdo, buscar, listar, limpar via cascade — funcionando. Suíte inteira de `src/lib`: **135 testes passando**.
 
-## Próximo ponto do checklist
+## Decisão 8 — Implementar Relações
 
-**Implementar relações** — a tabela `relacoes` já existe desde a Decisão 3; falta a camada de domínio (`criarRelacao`/`removerRelacao`/consultas de grafo), incluindo o constraint de mesmo `userId` entre origem e destino (Decisão 7 do Architecture Audit) que ainda não foi implementado em código.
+[src/lib/relacoes.ts](../src/lib/relacoes.ts): `criarRelacao`/`removerRelacao`/`listarRelacoesDoNo`. `criarRelacao` confirma que origem e destino pertencem ao mesmo usuário antes de inserir (Decisão 7 do Architecture Audit) — isso ainda não é um constraint de banco (exigiria trigger, não desenhado nesta fase), então a checagem vive na camada de domínio. `removerRelacao` só marca `removidoEm`/`removidoPor` — nunca apaga a linha, preservando auditoria (Decisão 4).
+
+Testado com dado real: criar 2 entidades, ligar com relação, listar por nó, remover (soft), confirmar que some da listagem ativa, limpar via cascade.
+
+## Decisão 9 — Implementar Revisões
+
+[src/lib/versoes.ts](../src/lib/versoes.ts): `listarVersoesEntidade`/`restaurarVersaoEntidade`/`listarVersoesNota`/`restaurarVersaoNota`. Restaurar nunca reescreve histórico — chama o próprio `atualizarEntidade`/`atualizarNota` com o conteúdo da versão antiga, o que gera uma versão *nova* (Decisão 4: "restaurar cria uma versão nova, nunca apaga as intermediárias").
+
+Testado com dado real: v1 → v2 → restaurar v1 → confirma que virou v3 (3 versões no total, nenhuma apagada).
+
+Suíte inteira de `src/lib`: **147 testes passando**. (Nota: durante esta etapa, os testes foram reorganizados para `src/lib/tests/` — os `vi.mock("./x", ...)` que sobreviveram à movimentação com caminho antigo foram corrigidos para `../x`.)
+
+## Decisão 10 — Metadata já está coberto
+
+Confirmado com o usuário: não existe lacuna a preencher. `tags`/`pasta` (Nota), `tipo`/`aliases`/`confianca`/`status` (Entidade), `tipoMime`/`nomeArquivoOriginal`/`hashConteudo` (Fonte), e `criadoPor`/`criadoPorFerramenta`/`criadoEm`/`atualizadoEm` (em quase tudo) já são os metadados do sistema — espalhados como colunas fixas, não centralizados numa tabela genérica de chave/valor. Uma tabela de metadados livre foi considerada e descartada por ora (YAGNI — sem necessidade real hoje); pode ser revisitada se um caso concreto de atributo arbitrário aparecer.
+
+---
+
+## Fase 2 — concluída
+
+Todos os pontos do checklist estão fechados (Decisões 1–10). Schema completo (8 tabelas + RLS), camada de domínio para Fonte/Entidade/Nota/Relação/Versão, tudo testado (testes unitários + verificação real contra o Supabase) e documentado. Próxima etapa do roadmap: Fase 3 (Sources & Ingestion).

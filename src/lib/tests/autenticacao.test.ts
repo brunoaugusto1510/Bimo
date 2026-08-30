@@ -5,8 +5,8 @@ import {
   opcoesDoCookieDeSessao,
   respostaDeRecusaParaApi,
   verificarSessaoDoPedido,
-} from "./autenticacao";
-import { NOME_DO_COOKIE, criarTokenDeSessao } from "./sessao";
+} from "../autenticacao";
+import { NOME_DO_COOKIE, criarTokenDeSessao } from "../sessao";
 
 const SEGREDO = "um-segredo-de-testes-com-mais-de-32-caracteres";
 
