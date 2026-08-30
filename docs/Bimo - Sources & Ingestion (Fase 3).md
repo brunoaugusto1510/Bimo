@@ -12,8 +12,8 @@
 - [x] Processamento de Markdown
 - [x] Processamento de PDFs
 - [x] Processamento de páginas web
+- [x] Relacionamento entre fontes e conhecimento
 - [ ] Transcrições
-- [ ] Relacionamento entre fontes e conhecimento
 
 Ordem combinada: Markdown/texto puro → PDF → páginas web → relacionamento fonte↔conhecimento → transcrições (por último, maior decisão de serviço externo).
 
@@ -55,6 +55,27 @@ Testado com dado real: fetch de verdade em `https://example.com` (domínio reser
 
 Suíte inteira de `src/lib`: **165 testes passando**.
 
+## Decisão 5 — Relacionamento entre fontes e conhecimento: camada de dados primeiro
+
+Este item do checklist tem duas partes de natureza bem diferente:
+
+1. **A camada de dados** — gravar/consultar o vínculo Fonte↔Entidade/Nota. Mecânica, sem decisão de design em aberto (a tabela `proveniencia` já existe desde a Fase 2).
+2. **O pipeline de ingestão de verdade** — texto extraído → Gemini decide quais Entidades/Notas criar ou atualizar → cada uma grava sua proveniência. Essa parte tem decisões reais em aberto (quando disparar, que autonomia o agente tem) e ainda não foi implementada — ver "Próximo ponto do checklist" abaixo.
+
+[src/lib/proveniencia.ts](../src/lib/proveniencia.ts) resolve a parte 1, espelhando a forma de `relacoes.ts`: `vincularFonte` (confirma que a Fonte e o nó — Entidade ou Nota, via `nos` — pertencem ao mesmo usuário antes de gravar), `listarProvenienciaDaFonte` (o que uma Fonte originou) e `listarFontesDoNo` (o que embasou uma Entidade/Nota). Sem "remover": apagar proveniência apagaria de onde o conhecimento veio (Princípio 2 do doc de visão), então o vínculo é só criado, nunca desfeito.
+
+Suíte inteira de `src/lib`: **171 testes passando**. `tsc`/lint limpos (os erros que aparecem em `mobile/` são de um gap de config pré-existente, alheio a esta mudança).
+
+Decisão sobre a parte 2 (pipeline de ingestão), com o usuário: **disparo explícito** (não roda sozinho ao criar a Fonte — mais previsível, mais fácil de depurar/testar isoladamente, e não gasta uma chamada ao Gemini toda vez que alguém sobe um arquivo) e **toda Entidade criada por ingestão nasce `status: "rascunho"`**, nunca `aprovada` (Princípio 4 do doc de visão — o agente não aprova sozinho o que ele mesmo extraiu; fica pendente de revisão humana).
+
+[src/lib/ingestao.ts](../src/lib/ingestao.ts): `processarFonte(userId, fonteId)` — extrai o texto da Fonte (reusa `extrairTextoDaFonte`), pede ao Gemini uma sugestão de Entidades/Notas via **saída estruturada** (`responseSchema`, não o laço de function calling de `agente.ts` — aqui é uma extração em lote de uma vez só, sem conversa de ida e volta), cria cada uma (`criadoPor: "agente"`, `criadoPorFerramenta: "processar_fonte"`, Entidade sempre `rascunho`) e grava a proveniência de cada uma de volta pra Fonte via `vincularFonte`. Devolve cedo (`{ entidadesCriadas: 0, notasCriadas: 0 }`, sem chamar o Gemini) quando o texto extraído vem vazio.
+
+Nota não tem campo de status/workflow (só Entidade tem — ver `entidades.ts`), então pra Nota a autoria (`criadoPor: "agente"`) já é o sinal equivalente de "veio da ingestão, ainda não revisado por ninguém".
+
+Testado com mocks (Gemini, extração, criação de Entidade/Nota, proveniência) cobrindo: erro sem `GEMINI_API_KEY`, texto vazio não chama o Gemini, Entidade/Nota sugeridas são criadas e vinculadas corretamente, resposta do Gemini com listas ausentes vira lista vazia (não quebra), erro quando o Gemini não devolve texto. **Não foi possível rodar um E2E contra a API real do Gemini** — `GEMINI_API_KEY` não está configurada no `.env` deste ambiente (gap de documentação pré-existente, também presente em `agente.ts`/chat; adicionei `GEMINI_API_KEY`/`GEMINI_MODEL` ao `.env.example`, que faltavam). Fica como verificação pendente assim que houver uma chave disponível.
+
+Suíte inteira de `src/lib`: **177 testes passando**. `tsc`/lint limpos.
+
 ## Próximo ponto do checklist
 
-**Relacionamento entre fontes e conhecimento** — o pipeline que liga texto extraído → Entidade/Nota criada → `proveniencia` gravada. Provavelmente onde entra a primeira chamada ao Gemini no contexto de ingestão.
+**Transcrições** — áudio/vídeo, precisa de decisão de serviço externo (ex.: Whisper API) — maior decisão de custo/dependência da Fase 3, por isso deixada por último.
