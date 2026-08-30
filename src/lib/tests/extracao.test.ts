@@ -67,6 +67,31 @@ describe("extrairTexto", () => {
     expect(resultado).toEqual({ texto: "conteúdo do pdf", tipoMime: "application/pdf" });
   });
 
+  it("extrai o conteúdo legível de uma página HTML via Readability (sem mock — biblioteca pura)", async () => {
+    const html = `<html><head><title>Artigo</title></head><body>
+      <nav>Menu de navegação irrelevante</nav>
+      <article>
+        <h1>Título do artigo</h1>
+        <p>Este é o parágrafo principal do artigo, com bastante conteúdo textual
+        pra Readability reconhecer como o corpo principal da página em vez do
+        menu ou do rodapé.</p>
+        <p>Um segundo parágrafo, só pra reforçar que isso é o conteúdo real.</p>
+      </article>
+      <footer>Rodapé irrelevante</footer>
+    </body></html>`;
+
+    const resultado = await extrairTexto({
+      conteudo: Buffer.from(html),
+      tipoMime: "text/html",
+      nomeArquivoOriginal: null,
+    });
+
+    expect(resultado.tipoMime).toBe("text/html");
+    expect(resultado.texto).toContain("Título do artigo");
+    expect(resultado.texto).toContain("parágrafo principal");
+    expect(resultado.texto).not.toContain("Menu de navegação");
+  });
+
   it("lança ExtracaoNaoSuportadaError para tipos ainda não implementados (ex.: Word)", async () => {
     await expect(
       extrairTexto({

@@ -8,6 +8,7 @@
  */
 import "./texto-puro";
 import "./pdf";
+import "./pagina-web";
 
 import { obterFonte } from "../fontes";
 import { baixarArquivo, getConfigStorage } from "../supabase-storage";

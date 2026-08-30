@@ -15,6 +15,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
+import { buscarPagina } from "./busca-web";
 import { db } from "./db/cliente";
 import { fontes } from "./db/schema";
 import { enviarArquivo, getConfigStorage, removerArquivo } from "./supabase-storage";
@@ -56,6 +57,45 @@ export async function criarFonte(nova: NovaFonte): Promise<Fonte> {
     await removerArquivo(cfg, caminho).catch(() => {
       // Melhor esforço: se a remoção também falhar, o erro original (do
       // insert) é o que importa reportar — não mascarar um pelo outro.
+    });
+    throw erro;
+  }
+}
+
+export type NovaFonteDeUrl = {
+  userId: string;
+  url: string;
+};
+
+/**
+ * Busca uma página web e cria a Fonte a partir do HTML retornado — o HTML
+ * bruto é o que fica imutável no Storage (Decisão 1 do Architecture Audit);
+ * a extração do texto legível acontece depois, via `extracao/pagina-web.ts`.
+ */
+export async function criarFonteDeUrl(nova: NovaFonteDeUrl): Promise<Fonte> {
+  const pagina = await buscarPagina(nova.url);
+
+  const cfg = getConfigStorage();
+  const caminho = `${nova.userId}/${randomUUID()}`;
+  const hashConteudo = createHash("sha256").update(pagina.conteudo).digest("hex");
+
+  await enviarArquivo(cfg, caminho, pagina.conteudo, pagina.tipoMime);
+
+  try {
+    const [linha] = await db
+      .insert(fontes)
+      .values({
+        userId: nova.userId,
+        caminhoArmazenamento: caminho,
+        urlOrigem: nova.url,
+        tipoMime: pagina.tipoMime,
+        hashConteudo,
+      })
+      .returning();
+    return linha;
+  } catch (erro) {
+    await removerArquivo(cfg, caminho).catch(() => {
+      // Melhor esforço, mesmo motivo do comentário em criarFonte acima.
     });
     throw erro;
   }

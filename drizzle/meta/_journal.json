@@ -22,6 +22,13 @@
       "when": 1788064145740,
       "tag": "0002_noisy_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788120753246,
+      "tag": "0003_fantastic_puck",
+      "breakpoints": true
     }
   ]
 }

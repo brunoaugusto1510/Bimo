@@ -29,7 +29,10 @@ vi.mock("../supabase-storage", () => ({
   getConfigStorage: getConfigStorageMock,
 }));
 
-const { criarFonte, listarFontes, obterFonte } = await import("../fontes");
+const buscarPaginaMock = vi.fn();
+vi.mock("../busca-web", () => ({ buscarPagina: buscarPaginaMock }));
+
+const { criarFonte, criarFonteDeUrl, listarFontes, obterFonte } = await import("../fontes");
 
 /** Devolve algo que funciona tanto com `await` direto quanto com `.orderBy()` encadeado. */
 function resultadoDeQuery<T>(valor: T) {
@@ -84,6 +87,36 @@ describe("criarFonte", () => {
         conteudo: Buffer.from("x"),
         nomeArquivoOriginal: "nota.md",
       }),
+    ).rejects.toThrow("conexão recusada");
+
+    expect(removerArquivoMock).toHaveBeenCalled();
+  });
+});
+
+describe("criarFonteDeUrl", () => {
+  it("busca a página, envia o HTML pro Storage e insere com urlOrigem preenchido", async () => {
+    buscarPaginaMock.mockResolvedValue({
+      conteudo: Buffer.from("<html>conteúdo</html>"),
+      tipoMime: "text/html",
+    });
+    returningMock.mockResolvedValue([{ ...FONTE_FAKE, urlOrigem: "https://exemplo.com/artigo" }]);
+
+    const resultado = await criarFonteDeUrl({ userId: "user-1", url: "https://exemplo.com/artigo" });
+
+    expect(buscarPaginaMock).toHaveBeenCalledWith("https://exemplo.com/artigo");
+    expect(enviarArquivoMock).toHaveBeenCalled();
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ urlOrigem: "https://exemplo.com/artigo", tipoMime: "text/html" }),
+    );
+    expect(resultado.urlOrigem).toBe("https://exemplo.com/artigo");
+  });
+
+  it("remove o arquivo do Storage e relança o erro se o insert falhar", async () => {
+    buscarPaginaMock.mockResolvedValue({ conteudo: Buffer.from("<html></html>"), tipoMime: "text/html" });
+    returningMock.mockRejectedValue(new Error("conexão recusada"));
+
+    await expect(
+      criarFonteDeUrl({ userId: "user-1", url: "https://exemplo.com/artigo" }),
     ).rejects.toThrow("conexão recusada");
 
     expect(removerArquivoMock).toHaveBeenCalled();

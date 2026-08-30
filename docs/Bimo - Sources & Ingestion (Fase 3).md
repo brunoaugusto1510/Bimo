@@ -11,7 +11,7 @@
 - [x] Extração de texto (base do pipeline)
 - [x] Processamento de Markdown
 - [x] Processamento de PDFs
-- [ ] Processamento de páginas web
+- [x] Processamento de páginas web
 - [ ] Transcrições
 - [ ] Relacionamento entre fontes e conhecimento
 
@@ -43,6 +43,18 @@ Testado com dado real: um PDF mínimo escrito à mão, enviado como Fonte de ver
 
 Suíte inteira de `src/lib`: **153 testes passando**.
 
+## Decisão 4 — Processamento de páginas web (busca + extração + SSRF)
+
+Diferente de PDF/Markdown, a fonte não é enviada — é buscada de uma URL. Isso trouxe uma superfície de risco real (SSRF, "External API calls" — trigger de revisão de segurança das regras globais), tratada explicitamente:
+
+- [src/lib/busca-web.ts](../src/lib/busca-web.ts) — cliente de rede fino. Bloqueia esquemas que não sejam http/https, localhost, faixas de IP privadas/link-local e o endereço de metadata de nuvem (169.254.169.254). Segue redirecionamentos manualmente, **revalidando cada salto** (fecha o gap clássico de "SSRF via redirect" — uma URL legítima que redireciona pra um endereço interno). Limite de tamanho (10 MB) e timeout (15s). Documentado como checagem por *nome do host*, não por IP resolvido — não cobre DNS rebinding, suficiente pro cenário de uso pessoal atual.
+- `criarFonteDeUrl` (em [fontes.ts](../src/lib/fontes.ts)) — busca a página, grava o **HTML bruto** como Fonte imutável (Decisão 1). Novo campo `urlOrigem` em `fontes` (migration `0003_fantastic_puck.sql`) pra rastrear de qual URL uma Fonte veio, em vez de forçar isso em `nomeArquivoOriginal`.
+- [src/lib/extracao/pagina-web.ts](../src/lib/extracao/pagina-web.ts) — extrai o conteúdo legível do HTML via `@mozilla/readability` + `jsdom` (o mesmo algoritmo do "modo leitura" do Firefox), isolando o artigo do menu/rodapé/ruído.
+
+Testado com dado real: fetch de verdade em `https://example.com` (domínio reservado da IANA, estável), Fonte criada, texto extraído e conferido — mais os 9 casos de SSRF/redirecionamento/limite de tamanho com mock de `fetch`.
+
+Suíte inteira de `src/lib`: **165 testes passando**.
+
 ## Próximo ponto do checklist
 
-**Processamento de páginas web** — diferente dos outros, a fonte não é enviada pelo usuário, é buscada de uma URL (precisa de uma variante de ingestão, além do extrator de texto/HTML em si).
+**Relacionamento entre fontes e conhecimento** — o pipeline que liga texto extraído → Entidade/Nota criada → `proveniencia` gravada. Provavelmente onde entra a primeira chamada ao Gemini no contexto de ingestão.

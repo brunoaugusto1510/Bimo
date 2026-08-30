@@ -18,6 +18,8 @@ export const fontes = pgTable(
     /** Caminho/chave do objeto no Supabase Storage. */
     caminhoArmazenamento: text("caminho_armazenamento").notNull(),
     nomeArquivoOriginal: text("nome_arquivo_original"),
+    /** URL de origem, quando a Fonte foi buscada da web em vez de enviada como arquivo. */
+    urlOrigem: text("url_origem"),
     tipoMime: text("tipo_mime"),
     /** Hash do conteúdo, útil pra detectar reingestão do mesmo arquivo. */
     hashConteudo: text("hash_conteudo"),
