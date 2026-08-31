@@ -4,7 +4,7 @@
    API oficial da biblioteca. A regra aceita mutar num efeito OU num callback,
    nunca nos dois — e é isso que este hook precisa fazer, porque a simulação é
    reiniciada por efeito (lista de notas nova) e mexida por gesto (nó pego). */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { runOnJS, useAnimatedReaction, useFrameCallback, useSharedValue } from "react-native-reanimated";
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import type { Posicao } from "./posicionamento";
@@ -69,11 +69,6 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
   // reação abaixo — o caminho para desligar o loop de fora dele.
   const esfriada = useSharedValue(false);
 
-  // A ref existe porque `desligarQuadro` é declarado antes de `quadro`: a
-  // reação precisa de uma função estável, e o valor só é preenchido depois.
-  const quadroRef = useRef<{ setActive: (ativo: boolean) => void } | null>(null);
-  const desligarQuadro = useCallback(() => quadroRef.current?.setActive(false), []);
-
   const quadro = useFrameCallback((info) => {
     "worklet";
     const atual = compartilhado.value;
@@ -100,16 +95,20 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
     }
   }, false);
 
+  // Declarado depois de `quadro` de propósito: chegou a existir aqui uma ref
+  // para contornar a ordem, e ela custava um aviso do Worklets a cada
+  // montagem — o objeto da ref entrava na closure serializada pelo runOnJS, e
+  // escrever `.current` depois disso é justamente o que a biblioteca proíbe.
+  // O worklet do quadro segue sem poder citar `quadro` (ele nasce antes); a
+  // reação, não.
+  const desligarQuadro = useCallback(() => quadro.setActive(false), [quadro]);
+
   useAnimatedReaction(
     () => esfriada.value,
     (parou) => {
       if (parou) runOnJS(desligarQuadro)();
     },
   );
-
-  useEffect(() => {
-    quadroRef.current = quadro;
-  }, [quadro]);
 
   useEffect(() => {
     compartilhado.value = estado;
