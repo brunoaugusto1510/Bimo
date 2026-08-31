@@ -16,7 +16,18 @@ import { ChipsDeContexto } from "./componentes/ChipsDeContexto";
 export function TelaNota() {
   const router = useRouter();
   const { vault } = useServicos();
-  const { busca, noSelecionado, passoDaFolha, definirBusca, selecionarNo, limparSelecao, avancarPasso } = useEstadoVault();
+  // Seletores pontuais em vez de assinar o store inteiro: o campo de grafo
+  // roda a 120fps e não deve re-renderizar por mudança de busca ou de altura.
+  const busca = useEstadoVault((estado) => estado.busca);
+  const noSelecionado = useEstadoVault((estado) => estado.noSelecionado);
+  const alturaDaFolha = useEstadoVault((estado) => estado.alturaDaFolha);
+  const alturaMinima = useEstadoVault((estado) => estado.alturaMinima);
+  const alturaMaxima = useEstadoVault((estado) => estado.alturaMaxima);
+  const definirBusca = useEstadoVault((estado) => estado.definirBusca);
+  const selecionarNo = useEstadoVault((estado) => estado.selecionarNo);
+  const limparSelecao = useEstadoVault((estado) => estado.limparSelecao);
+  const definirAlturaDaFolha = useEstadoVault((estado) => estado.definirAlturaDaFolha);
+  const definirLimitesDaFolha = useEstadoVault((estado) => estado.definirLimitesDaFolha);
   const pulso = useEstadoGrafo((estado) => estado.pulso);
   const crescer = useEstadoGrafo((estado) => estado.crescer);
   const grafoLigado = useEstadoConta((estado) => estado.interruptores.grafo);
@@ -27,6 +38,13 @@ export function TelaNota() {
   const [notas, setNotas] = useState<Nota[]>([]);
   const [arestas, setArestas] = useState<Aresta[]>([]);
   const [alturaDisponivel, setAlturaDisponivel] = useState(0);
+  // Alça + rodapé medidos pela própria folha: é o mínimo até onde ela recolhe.
+  const [minimoDaFolha, setMinimoDaFolha] = useState(0);
+
+  // A altura da tela é o máximo — a bandeja em tela cheia.
+  useEffect(() => {
+    if (alturaDisponivel > 0 && minimoDaFolha > 0) definirLimitesDaFolha(minimoDaFolha, alturaDisponivel);
+  }, [alturaDisponivel, minimoDaFolha, definirLimitesDaFolha]);
 
   useEffect(() => {
     carregarOuLogar(vault.listarNotas(), setNotas, "Falha ao listar notas do vault");
@@ -64,9 +82,11 @@ export function TelaNota() {
         noSelecionado={noSelecionado}
         aoSelecionarNota={selecionarNo}
         aoLimparSelecao={limparSelecao}
-        passo={passoDaFolha}
-        aoAvancarPasso={avancarPasso}
-        alturaDisponivel={alturaDisponivel}
+        altura={alturaDaFolha}
+        alturaMinima={alturaMinima}
+        alturaMaxima={alturaMaxima}
+        aoArrastar={definirAlturaDaFolha}
+        aoMedirMinimo={setMinimoDaFolha}
         // A rota /editor/[id] só chega na Task 14 — o cast evita que o
         // typed-routes do expo-router barre a compilação antes de ela
         // existir; tocar no botão hoje falha em navegar, como esperado.

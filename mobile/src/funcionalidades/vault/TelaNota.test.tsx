@@ -28,7 +28,7 @@ describe("TelaNota", () => {
   beforeEach(() => {
     jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
     mockPush.mockClear();
-    useEstadoVault.setState({ busca: "", noSelecionado: null, passoDaFolha: 1 });
+    useEstadoVault.setState({ busca: "", noSelecionado: null, alturaDaFolha: 0, alturaMinima: 0, alturaMaxima: 0 });
   });
 
   afterEach(() => {
@@ -90,9 +90,14 @@ describe("TelaNota", () => {
     expect(mockPush).toHaveBeenCalledWith(`/editor/${notas[0].id}`);
   });
 
-  it("avança o passo da folha ao tocar na alça", async () => {
+  it("recolhe a bandeja ao tocar na alça com ela aberta", async () => {
     await renderizar();
+    // A tela mede alça e rodapé no layout; em teste o `onLayout` não dispara,
+    // então os limites vêm da reserva e a bandeja abre na média.
+    useEstadoVault.setState({ alturaMinima: 100, alturaMaxima: 800, alturaDaFolha: 450 });
+
     await fireEvent.press(await screen.findByRole("button", { name: "Ajustar altura da lista" }));
-    expect(useEstadoVault.getState().passoDaFolha).toBe(2);
+
+    expect(useEstadoVault.getState().alturaDaFolha).toBe(100);
   });
 });
