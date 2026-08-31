@@ -1,4 +1,5 @@
 export { Vidro } from "./Vidro";
+export { AreaQueEvitaTeclado } from "./AreaQueEvitaTeclado";
 export { Botao } from "./Botao";
 export { Chip } from "./Chip";
 export { Cartao } from "./Cartao";

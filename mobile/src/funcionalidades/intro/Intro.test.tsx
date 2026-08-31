@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
-import { useColorScheme } from "react-native";
+import { Dimensions, StyleSheet, useColorScheme } from "react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { Intro } from "./Intro";
 
@@ -68,5 +68,25 @@ describe("Intro", () => {
     useColorSchemeMock.mockReturnValue("dark");
     await renderizar();
     expect(mockUseVideoPlayer).toHaveBeenCalledWith(VIDEO_ESCURO, expect.any(Function));
+  });
+
+  // Os dois MP4 sao 1920x1920 — quadrados, matriz identidade no `tkhd`. Numa
+  // tela de celular em retrato, `contentFit="cover"` sobre a tela inteira
+  // escalava o quadrado pela altura e cortava as laterais: sobrava so a faixa
+  // central, ampliada. A caixa quadrada centralizada mantem o quadro inteiro.
+  it("mostra o video numa caixa quadrada, sem cortar o quadro", async () => {
+    await renderizar();
+    const video = screen.getByTestId("video-da-intro");
+    const estilo = StyleSheet.flatten(video.props.style) as { width: number; height: number };
+    expect(estilo.width).toBe(estilo.height);
+    expect(video.props.contentFit).toBe("contain");
+  });
+
+  it("nao deixa o quadrado passar da menor dimensao da tela", async () => {
+    await renderizar();
+    const video = screen.getByTestId("video-da-intro");
+    const estilo = StyleSheet.flatten(video.props.style) as { width: number; height: number };
+    const { width, height } = Dimensions.get("window");
+    expect(estilo.width).toBe(Math.min(width, height));
   });
 });

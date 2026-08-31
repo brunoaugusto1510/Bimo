@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { ProvedorDeServicos, type Servicos } from "@/servicos";
 import { servicoVaultFake } from "@/servicos/fake/servicoVaultFake";
@@ -94,5 +95,17 @@ describe("Chat", () => {
     await renderizar();
     await fireEvent.press(screen.getByRole("button", { name: "Enviar" }));
     expect(useEstadoChat.getState().mensagens).toHaveLength(0);
+  });
+
+  // O Expo já injeta `android:windowSoftInputMode="adjustResize"`, mas com o
+  // edge-to-edge obrigatório do SDK 57 a janela não encolhe mais quando o
+  // teclado sobe — o app desenha por trás dele e o composer fica escondido.
+  // Quem levanta o composer é a `AreaQueEvitaTeclado`; o cálculo do recuo está
+  // coberto em `AreaQueEvitaTeclado.test.tsx`, aqui só se verifica a ligação.
+  it("levanta o composer acima do teclado", async () => {
+    await renderizar();
+    const area = screen.getByTestId("area-que-evita-o-teclado");
+    const estilo = StyleSheet.flatten(area.props.style) as { paddingBottom?: number };
+    expect(typeof estilo.paddingBottom).toBe("number");
   });
 });

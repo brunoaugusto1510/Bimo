@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { FlatList, View } from "react-native";
+import { FlatList } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
 import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
 import { CampoDeGrafo } from "@/compartilhado/grafo";
+import { AreaQueEvitaTeclado } from "@/compartilhado/ui";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
 import { useEstadoConta } from "@/funcionalidades/conta/estado";
 import type { Mensagem, Nota } from "@/dados/tipos";
@@ -37,7 +38,7 @@ export function Chat() {
   }, [mensagens.length, digitando]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <AreaQueEvitaTeclado style={{ flex: 1 }}>
       <CampoDeGrafo
         modo="ambiente"
         densidade={densidade}
@@ -72,6 +73,6 @@ export function Chat() {
         ListFooterComponent={digitando ? <IndicadorDeDigitacao /> : null}
       />
       <Composer valor={rascunho} aoMudar={definirRascunho} aoEnviar={() => void enviar(ia, pulsar)} />
-    </View>
+    </AreaQueEvitaTeclado>
   );
 }

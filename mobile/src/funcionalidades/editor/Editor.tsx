@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
 import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
-import { Chip, Icone } from "@/compartilhado/ui";
+import { AreaQueEvitaTeclado, Chip, Icone } from "@/compartilhado/ui";
 import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
 import type { Nota } from "@/dados/tipos";
 import { BarraDoEditor } from "./componentes/BarraDoEditor";
@@ -75,7 +75,7 @@ export function Editor() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: cores.superficie }}>
+    <AreaQueEvitaTeclado style={{ flex: 1, backgroundColor: cores.superficie }}>
       <BarraDoEditor
         pasta={nota.pasta}
         aoVoltar={() => router.back()}
@@ -149,6 +149,6 @@ export function Editor() {
         aoFechar={editor.fecharMenu}
         aoEscolher={(tipo) => editor.rodarAcao(ia, tipo, nota, pulsar)}
       />
-    </View>
+    </AreaQueEvitaTeclado>
   );
 }

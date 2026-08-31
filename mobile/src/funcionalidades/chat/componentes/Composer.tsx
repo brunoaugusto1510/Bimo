@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTema } from "@/compartilhado/tema";
 import { Icone, Vidro } from "@/compartilhado/ui";
 
@@ -12,9 +11,16 @@ export function Composer({ valor, aoMudar, aoEnviar }: Props) {
 
   return (
     <View>
-      <LinearGradient colors={cores.protecaoDock as unknown as [string, string, string]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 96 }} pointerEvents="none" />
+      {/*
+        Aqui havia uma faixa `LinearGradient` de 96px com `cores.protecaoDock`,
+        de ponta a ponta atras do dock. No tema escuro ela lia como um
+        retangulo escuro cortando o fim da conversa, em vez de um degrade. O
+        vidro do proprio dock ja separa o composer do chat, entao a faixa so
+        somava peso visual.
+      */}
       <View style={{ paddingHorizontal: espacamento.gutter, paddingTop: espacamento.sm, paddingBottom: espacamento.md }}>
         <Vidro
+          testID="vidro-do-dock"
           nivel="dock"
           style={[
             { padding: espacamento.xs, borderRadius: raios.folha, borderWidth: 1, borderColor: focado ? cores.primaria : cores.fioDeCabelo, overflow: "hidden" },
@@ -28,6 +34,15 @@ export function Composer({ valor, aoMudar, aoEnviar }: Props) {
             onBlur={() => setFocado(false)}
             placeholder="Pergunte ao Bimo ou consulte seu vault..."
             placeholderTextColor={cores.textoPlaceholder}
+            // Sem isto o Android Autofill tratava o campo como formulario e
+            // abria a faixa de sugestoes inline (enderecos de e-mail!) por cima
+            // do teclado. Essa faixa fica fora do `getWindowVisibleDisplayFrame`
+            // de onde sai o `screenY` do `keyboardDidShow`
+            // (`ReactRootView.java:951` e `:977`), entao a `AreaQueEvitaTeclado`
+            // levantava o composer ate o topo do IME e a faixa seguia cobrindo o
+            // fim dele.
+            autoComplete="off"
+            importantForAutofill="no"
             multiline
             style={[tipografia.corpo, { color: cores.sobreSuperficie, minHeight: 46, maxHeight: espacamento.alturaMaximaComposer, padding: espacamento.md }]}
           />

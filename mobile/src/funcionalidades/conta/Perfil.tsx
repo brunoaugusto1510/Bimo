@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useTema } from "@/compartilhado/tema";
 import { useServicos } from "@/servicos";
 import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
-import { Avatar, Botao, Cartao, Icone } from "@/compartilhado/ui";
+import { AreaQueEvitaTeclado, Avatar, Botao, Cartao, Icone } from "@/compartilhado/ui";
 import { useEstadoConta } from "./estado";
 
 function Estatistica({ valor, rotulo }: { valor: number; rotulo: string }) {
@@ -65,7 +65,7 @@ export function Perfil() {
   const iniciais = rascunho.nome.split(" ").slice(0, 2).map((parte) => parte[0]).join("").toUpperCase();
 
   return (
-    <View style={{ flex: 1, backgroundColor: cores.superficie }}>
+    <AreaQueEvitaTeclado style={{ flex: 1, backgroundColor: cores.superficie }}>
       <View style={{ minHeight: espacamento.alturaCabecalho, flexDirection: "row", alignItems: "center", gap: espacamento.sm, paddingHorizontal: espacamento.md, borderBottomWidth: 1, borderBottomColor: cores.fioDeCabelo }}>
         <Pressable
           accessibilityRole="button"
@@ -104,6 +104,6 @@ export function Perfil() {
           <Botao variante="ghost" rotulo="Sair da Conta" icone="logout" aoTocar={() => router.replace("/intro")} />
         </View>
       </ScrollView>
-    </View>
+    </AreaQueEvitaTeclado>
   );
 }

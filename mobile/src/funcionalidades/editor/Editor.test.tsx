@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { ProvedorDeServicos, type Servicos } from "@/servicos";
 import { servicoVaultFake } from "@/servicos/fake/servicoVaultFake";
@@ -99,6 +100,17 @@ describe("Editor", () => {
   it("mostra o rodapé de status do grafo", async () => {
     await renderizar();
     expect(await screen.findByText("O grafo acompanha o que você escreve")).toBeOnTheScreen();
+  });
+
+  // Mesmo motivo do Chat: o `adjustResize` que o Expo injeta não encolhe mais a
+  // janela sob o edge-to-edge obrigatório do SDK 57, então o teclado cobriria o
+  // campo do corpo da nota. O cálculo do recuo está coberto em
+  // `AreaQueEvitaTeclado.test.tsx`; aqui só se verifica a ligação.
+  it("levanta o campo de texto acima do teclado", async () => {
+    await renderizar();
+    const area = screen.getByTestId("area-que-evita-o-teclado");
+    const estilo = StyleSheet.flatten(area.props.style) as { paddingBottom?: number };
+    expect(typeof estilo.paddingBottom).toBe("number");
   });
 
   describe("corrida entre o carregamento da nota e uma ação rápida do usuário", () => {

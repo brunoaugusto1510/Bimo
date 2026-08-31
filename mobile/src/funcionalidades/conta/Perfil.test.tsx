@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { notas } from "@/dados/fixtures/notas";
 import { useEstadoConta } from "./estado";
@@ -39,5 +40,15 @@ describe("Perfil", () => {
   it("tem o campo de instruções para a IA", async () => {
     await renderizar();
     expect(screen.getByLabelText("Como o Bimo deve te tratar")).toBeOnTheScreen();
+  });
+
+  // São três campos editáveis numa `ScrollView`; sem isto o teclado cobre os de
+  // baixo. O cálculo do recuo está coberto em `AreaQueEvitaTeclado.test.tsx`;
+  // aqui só se verifica a ligação.
+  it("levanta os campos acima do teclado", async () => {
+    await renderizar();
+    const area = screen.getByTestId("area-que-evita-o-teclado");
+    const estilo = StyleSheet.flatten(area.props.style) as { paddingBottom?: number };
+    expect(typeof estilo.paddingBottom).toBe("number");
   });
 });
