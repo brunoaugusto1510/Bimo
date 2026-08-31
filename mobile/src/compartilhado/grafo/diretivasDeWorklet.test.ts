@@ -19,6 +19,16 @@ const ESPERADAS: Record<string, string[]> = {
   "src/compartilhado/grafo/posicionamento.ts": ["raioDoNo", "paraCoordenadaDoGrafo", "noMaisProximoDeCoordenada"],
   "src/compartilhado/grafo/simulacao.ts": ["avancarSimulacao", "fixarNo", "liberarNo", "reaquecer", "esfriou"],
   "src/funcionalidades/vault/alturaDaFolha.ts": ["proximaAltura", "alturaMedia", "alternarAltura"],
+  // fisica.ts ficou de fora na primeira versão desta lista, e foi exatamente
+  // por onde a falha voltou: `avancarCampoEmLugar` chamava `raioDoCampo`, que
+  // não era worklet, e a tela morria ao recarregar.
+  "src/compartilhado/grafo/fisica.ts": [
+    "raioDoCampo",
+    "avancarCampoEmLugar",
+    "avancarParticulasEmLugar",
+    "opacidadeDaParticula",
+    "deveRecalcularLigacoes",
+  ],
 };
 
 function corpoDaFuncao(fonte: string, nome: string): string {
