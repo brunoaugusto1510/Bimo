@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import type { NoDoGrafo } from "@/dados/tipos";
 import { GrafoInterativo } from "./implementacao-svg/GrafoInterativo";
@@ -21,6 +22,16 @@ async function renderizar(props: Partial<React.ComponentProps<typeof GrafoIntera
 // Nó da árvore que `RenderResult#toJSON()` devolve — o suficiente para andar
 // por ela procurando um `testID`/`type`/prop específico.
 type NoDaArvore = { type: string; props: Record<string, unknown>; children: (NoDaArvore | string)[] | null };
+
+function acharTodos(no: NoDaArvore | null, predicado: (no: NoDaArvore) => boolean, achados: NoDaArvore[] = []): NoDaArvore[] {
+  if (!no) return achados;
+  if (predicado(no)) achados.push(no);
+  for (const filho of no.children ?? []) {
+    if (typeof filho === "string") continue;
+    acharTodos(filho, predicado, achados);
+  }
+  return achados;
+}
 
 function acharPrimeiro(no: NoDaArvore | null, predicado: (no: NoDaArvore) => boolean): NoDaArvore | null {
   if (!no) return null;
@@ -123,6 +134,44 @@ describe("GrafoInterativo", () => {
 
       expect(camada).not.toBeNull();
       expect(svg?.props.pointerEvents).toBe("box-none");
+    });
+  });
+
+  describe("desenho vindo da simulação", () => {
+    // O que dá para observar aqui tem limite: sob o mock do Reanimated,
+    // `createAnimatedComponent` é a identidade, então `animatedProps` chega ao
+    // `Circle` do react-native-svg, que descarta props que não conhece — a
+    // posição do círculo não aparece na árvore. Já `useAnimatedStyle` é
+    // invocado na hora e o estilo resultante vai para uma `View` comum, então
+    // é pelos alvos de toque que a posição fica observável. É a mesma leitura
+    // do mesmo shared value, só o lado testável dele.
+    it("desenha um círculo por nó e uma linha por aresta", async () => {
+      const { resultado } = await renderizar();
+      const arvore = resultado.toJSON() as NoDaArvore;
+
+      expect(acharTodos(arvore, (no) => no.type.includes("Circle"))).toHaveLength(2);
+      expect(acharTodos(arvore, (no) => no.type.includes("Line"))).toHaveLength(1);
+    });
+
+    it("acrescenta o anel de seleção sem remover o círculo do nó", async () => {
+      const { resultado } = await renderizar({ noSelecionado: "a" });
+      expect(acharTodos(resultado.toJSON() as NoDaArvore, (no) => no.type.includes("Circle"))).toHaveLength(3);
+    });
+
+    it("posiciona os alvos de toque pelas posições da simulação", async () => {
+      await renderizar();
+      const estilo = StyleSheet.flatten(screen.getByTestId("alvo-do-no-a").parent!.props.style);
+
+      expect(typeof estilo.left).toBe("number");
+      expect(typeof estilo.top).toBe("number");
+    });
+
+    it("cada nó recebe a sua própria posição, não uma comum", async () => {
+      await renderizar();
+      const esquerdaDe = (id: string) =>
+        StyleSheet.flatten(screen.getByTestId(`alvo-do-no-${id}`).parent!.props.style).left;
+
+      expect(esquerdaDe("a")).not.toBe(esquerdaDe("b"));
     });
   });
 });
