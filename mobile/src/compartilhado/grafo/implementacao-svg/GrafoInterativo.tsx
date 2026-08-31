@@ -1,61 +1,155 @@
 import { useMemo } from "react";
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
-import Svg, { Circle, G, Line } from "react-native-svg";
-import { useTema } from "@/compartilhado/tema";
+import Svg from "react-native-svg";
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import { deveRotular } from "../fisica";
-import { posicionarNo, raioDoNo } from "../posicionamento";
+import { noMaisProximoDeCoordenada, paraCoordenadaDoGrafo } from "../posicionamento";
+import { useSimulacao, type Posicao } from "../useSimulacao";
+import { ArestaAnimada } from "./ArestaAnimada";
+import { AlvoDoNoAnimado, NoAnimado, RotuloAnimado } from "./NoAnimado";
+
+// Tempo de segurar antes de o nó grudar no dedo. Curto demais e navegar perto
+// de um nó o arrastaria sem querer; longo demais e o gesto parece travado.
+const DURACAO_PARA_PEGAR_MS = 250;
+
+// Alvo de pegada do toque longo. Um nó de peso 1 tem 5,5 px de raio; sem um
+// piso, pegar exigiria pontaria de mouse. 22 px de raio dão os 44 px de
+// diâmetro que o alvo de toque mínimo do tema já usa em outros controles.
+const ALCANCE_PARA_PEGAR = 22;
 
 const ZOOM_MINIMO = 0.6;
 const ZOOM_MAXIMO = 2.4;
-// O rótulo é uma <Text> do RN, não texto do SVG: react-native-svg só entrega
-// toque de forma confiável no elemento raiz (o mesmo motivo dos alvos de
-// toque abaixo), e uma <Text> nativa fica sobreposta ao <Svg> como um rótulo
-// centralizado sob o nó. Bônus: leitor de tela lê <Text> do RN; não lê
-// RNSVGText.
-const LARGURA_DO_ROTULO = 96;
-const ESPACO_DO_ROTULO = 6;
 
 type Props = {
   nos: NoDoGrafo[];
   arestas: Aresta[];
   noSelecionado: string | null;
   aoSelecionarNo: (id: string | null) => void;
+  posicoesIniciais?: Record<string, Posicao>;
+  aoAssentarLayout?: (posicoes: Posicao[]) => void;
 };
 
-export function GrafoInterativo({ nos, arestas, noSelecionado, aoSelecionarNo }: Props) {
-  const { cores, tipografia } = useTema();
+export function GrafoInterativo({
+  nos,
+  arestas,
+  noSelecionado,
+  aoSelecionarNo,
+  posicoesIniciais,
+  aoAssentarLayout,
+}: Props) {
   const { width: largura, height: altura } = useWindowDimensions();
 
   const deslocamentoX = useSharedValue(0);
   const deslocamentoY = useSharedValue(0);
   const zoom = useSharedValue(1);
 
-  const arrastar = Gesture.Pan().onChange((evento) => {
-    deslocamentoX.value += evento.changeX;
-    deslocamentoY.value += evento.changeY;
+  const { posicoes, pegarNo, moverNoPego, soltarNo } = useSimulacao({
+    nos,
+    arestas,
+    largura,
+    altura,
+    posicoesIniciais,
+    aoEsfriar: aoAssentarLayout,
   });
+
+  // Índices resolvidos fora do render de cada aresta: o componente animado só
+  // precisa saber quais duas posições ler.
+  const ligacoes = useMemo(() => {
+    const indicePorId = new Map(nos.map((no, indice) => [no.id, indice]));
+    return arestas.flatMap((aresta) => {
+      const de = indicePorId.get(aresta.de);
+      const para = indicePorId.get(aresta.para);
+      return de === undefined || para === undefined ? [] : [{ de, para, chave: `${aresta.de}-${aresta.para}` }];
+    });
+  }, [nos, arestas]);
+
+  // Arrays paralelos a `posicoes`, resolvidos uma vez: o worklet do gesto não
+  // pode fechar sobre `nos`, que muda de forma a cada recarga do vault.
+  const ids = useMemo(() => nos.map((no) => no.id), [nos]);
+  const pesos = useMemo(() => nos.map((no) => no.peso), [nos]);
+
+  const idPego = useSharedValue<string | null>(null);
+
+  // A camada escala a partir do próprio centro, que é o centro da tela: é esse
+  // ponto que a conversão precisa para desfazer o zoom no lugar certo.
+  const centroDaTela = useMemo(() => ({ x: largura / 2, y: altura / 2 }), [largura, altura]);
+
+  function pontoNoGrafo(x: number, y: number) {
+    "worklet";
+    return paraCoordenadaDoGrafo(
+      { x, y },
+      zoom.value,
+      { x: deslocamentoX.value, y: deslocamentoY.value },
+      centroDaTela,
+    );
+  }
+
+  const pegar = Gesture.LongPress()
+    .minDuration(DURACAO_PARA_PEGAR_MS)
+    .onStart((evento) => {
+      const ponto = pontoNoGrafo(evento.x, evento.y);
+      const indice = noMaisProximoDeCoordenada(posicoes.value, pesos, ponto, ALCANCE_PARA_PEGAR);
+      if (indice === null) return;
+      idPego.value = ids[indice];
+      pegarNo(ids[indice], ponto.x, ponto.y);
+    });
+
+  const arrastar = Gesture.Pan()
+    .onChange((evento) => {
+      // Com um nó preso ao dedo, o mesmo movimento não pode também arrastar a
+      // tela: o nó viajaria o dobro da distância do dedo.
+      if (idPego.value !== null) {
+        const ponto = pontoNoGrafo(evento.x, evento.y);
+        moverNoPego(idPego.value, ponto.x, ponto.y);
+        return;
+      }
+
+      deslocamentoX.value += evento.changeX;
+      deslocamentoY.value += evento.changeY;
+    })
+    .onEnd(() => {
+      if (idPego.value === null) return;
+      // Solta e as molas voltam a agir: o nó desliza e assenta perto de onde
+      // foi largado, como no Obsidian.
+      soltarNo(idPego.value);
+      idPego.value = null;
+    });
 
   const pincar = Gesture.Pinch().onChange((evento) => {
     zoom.value = Math.min(ZOOM_MAXIMO, Math.max(ZOOM_MINIMO, zoom.value * evento.scaleChange));
   });
 
-  const gestos = Gesture.Simultaneous(arrastar, pincar);
+  // `Simultaneous` e não `Race`: o LongPress precisa amadurecer enquanto o Pan
+  // já está ativo. O dedo parado por 250 ms não gera changeX/changeY, então a
+  // navegação não se move nesse intervalo, e assim que `pegar` dispara a
+  // guarda no onChange silencia o pan pelo resto do gesto.
+  const gestos = Gesture.Simultaneous(pegar, arrastar, pincar);
 
   const estiloDaCamada = useAnimatedStyle(() => ({
     transform: [{ translateX: deslocamentoX.value }, { translateY: deslocamentoY.value }, { scale: zoom.value }],
   }));
 
-  const posicoes = useMemo(
-    () => new Map(nos.map((no) => [no.id, posicionarNo(no, largura, altura)])),
-    [nos, largura, altura],
-  );
-
   return (
-    <View testID="grafo-interativo" style={StyleSheet.absoluteFill}>
-      <GestureDetector gesture={gestos}>
+    /*
+      O GestureDetector precisa envolver ESTA view, e não a camada
+      transformada de baixo. A camada é `pointerEvents="box-none"`, e para o
+      RNGH isso significa `PointerEventsConfig.BOX_NONE`: os handlers dela só
+      entram na disputa se algum descendente virar alvo do toque
+      (GestureHandlerOrchestrator.kt, ramo BOX_NONE). E um descendente sem
+      handler próprio só qualifica quando `view !is ViewGroup ||
+      view.getBackground() != null` — o fundo e os alvos dos nós são
+      ReactViewGroup sem background, então nenhum qualifica. Com o detector
+      ali, arrastar, pinçar e segurar simplesmente não chegavam.
+
+      Aqui o pointerEvents é o padrão (AUTO), e nesse ramo o orquestrador
+      registra os handlers da própria view sem depender dos filhos. O
+      `collapsable={false}` que o Android precisa é injetado pelo próprio
+      GestureDetector (Wrap.tsx), então não é escrito aqui.
+    */
+    <GestureDetector gesture={gestos}>
+      <View testID="grafo-interativo" style={StyleSheet.absoluteFill}>
         {/*
           `pointerEvents="box-none"` nesta camada e no `<Svg>` é o que faz o
           `fundo-do-grafo` (montado logo abaixo, dentro da mesma subárvore
@@ -73,102 +167,49 @@ export function GrafoInterativo({ nos, arestas, noSelecionado, aoSelecionarNo }:
           <Pressable testID="fundo-do-grafo" onPress={() => aoSelecionarNo(null)} style={StyleSheet.absoluteFill} />
 
           <Svg pointerEvents="box-none" width={largura} height={altura}>
-            {arestas.map((aresta) => {
-              const de = posicoes.get(aresta.de);
-              const para = posicoes.get(aresta.para);
-              if (!de || !para) return null;
-              return (
-                <Line
-                  key={`${aresta.de}-${aresta.para}`}
-                  x1={de.x}
-                  y1={de.y}
-                  x2={para.x}
-                  y2={para.y}
-                  stroke={cores.grafoLigacaoNomeada}
-                  strokeWidth={1}
-                />
-              );
-            })}
+            {ligacoes.map((ligacao) => (
+              <ArestaAnimada key={ligacao.chave} posicoes={posicoes} de={ligacao.de} para={ligacao.para} />
+            ))}
 
-            {nos.map((no) => {
-              const posicao = posicoes.get(no.id);
-              if (!posicao) return null;
-              const selecionado = no.id === noSelecionado;
-
-              return (
-                <G key={no.id}>
-                  {selecionado ? (
-                    <Circle
-                      cx={posicao.x}
-                      cy={posicao.y}
-                      r={raioDoNo(no.peso) + 7}
-                      fill="none"
-                      stroke={cores.grafoAnelSelecao}
-                      strokeWidth={2}
-                    />
-                  ) : null}
-                  <Circle
-                    cx={posicao.x}
-                    cy={posicao.y}
-                    r={raioDoNo(no.peso)}
-                    fill={selecionado ? cores.grafoNoSinal : cores.grafoNoPreenchimento}
-                    stroke={selecionado ? cores.grafoNoSinal : cores.grafoNoBorda}
-                    strokeWidth={1}
-                  />
-                </G>
-              );
-            })}
+            {nos.map((no, indice) => (
+              <NoAnimado
+                key={no.id}
+                id={no.id}
+                posicoes={posicoes}
+                indice={indice}
+                peso={no.peso}
+                selecionado={no.id === noSelecionado}
+                idPego={idPego}
+              />
+            ))}
           </Svg>
 
-          {nos.map((no) => {
-            const posicao = posicoes.get(no.id);
-            if (!posicao) return null;
-            const selecionado = no.id === noSelecionado;
-            if (!deveRotular(no.peso, selecionado)) return null;
-
-            return (
-              <Text
+          {nos.map((no, indice) =>
+            deveRotular(no.peso, no.id === noSelecionado) ? (
+              <RotuloAnimado
                 key={`rotulo-${no.id}`}
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  left: posicao.x - LARGURA_DO_ROTULO / 2,
-                  top: posicao.y + raioDoNo(no.peso) + ESPACO_DO_ROTULO,
-                  width: LARGURA_DO_ROTULO,
-                  textAlign: "center",
-                  fontFamily: tipografia.rotuloSm.fontFamily,
-                  fontSize: tipografia.rotuloSm.fontSize,
-                  color: selecionado ? cores.grafoNoRotuloSelecionado : cores.grafoNoRotulo,
-                }}
-              >
-                {no.titulo}
-              </Text>
-            );
-          })}
-
-          {nos.map((no) => {
-            const posicao = posicoes.get(no.id);
-            if (!posicao) return null;
-            const alvo = raioDoNo(no.peso) + 10;
-            return (
-              <Pressable
-                key={`alvo-${no.id}`}
-                testID={`alvo-do-no-${no.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={no.titulo}
-                onPress={() => aoSelecionarNo(no.id)}
-                style={{
-                  position: "absolute",
-                  left: posicao.x - alvo,
-                  top: posicao.y - alvo,
-                  width: alvo * 2,
-                  height: alvo * 2,
-                }}
+                posicoes={posicoes}
+                indice={indice}
+                peso={no.peso}
+                selecionado={no.id === noSelecionado}
+                titulo={no.titulo}
               />
-            );
-          })}
+            ) : null,
+          )}
+
+          {nos.map((no, indice) => (
+            <AlvoDoNoAnimado
+              key={`alvo-${no.id}`}
+              posicoes={posicoes}
+              indice={indice}
+              peso={no.peso}
+              id={no.id}
+              titulo={no.titulo}
+              aoTocar={() => aoSelecionarNo(no.id)}
+            />
+          ))}
         </Animated.View>
-      </GestureDetector>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }

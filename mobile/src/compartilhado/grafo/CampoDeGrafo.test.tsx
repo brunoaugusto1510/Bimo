@@ -11,12 +11,9 @@ async function renderizar(props: Partial<React.ComponentProps<typeof CampoDeGraf
 }
 
 describe("CampoDeGrafo em modo ambiente", () => {
-  // Timers falsos: o campo abre um setInterval de 30fps assim que monta. Com
-  // timers reais, esse intervalo dispara enquanto o `act()` assíncrono do
-  // RNTL v14 ainda está de olho em atualizações pendentes — como ele nunca
-  // pára sozinho, o `act()` nunca conclui e o teste estoura o timeout. Isso é
-  // adaptação de ambiente (timer real vs. falso), não mudança do que se
-  // verifica: as asserções continuam as mesmas.
+  // Timers falsos: o campo mantém um loop de `requestAnimationFrame` vivo
+  // enquanto ligado, e com timers reais o `act()` assíncrono do RNTL v14 fica
+  // esperando atualizações que não cessam até estourar o timeout.
   beforeEach(() => {
     jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
   });
@@ -38,5 +35,29 @@ describe("CampoDeGrafo em modo ambiente", () => {
   it("não intercepta toques em modo ambiente", async () => {
     await renderizar();
     expect(screen.getByTestId("campo-de-grafo")).toHaveStyle({ pointerEvents: "none" });
+  });
+
+  // Aqui existia um teste que avançava os quadros e exigia que o desenho
+  // mudasse. Ele valia enquanto o loop era `requestAnimationFrame`; agora o
+  // campo roda em `useFrameCallback`, que o mock do Reanimated não executa —
+  // e um mock que executasse quadros trava a suíte com cascata de timers.
+  //
+  // O que sobrou coberto: as funções de física em fisica.test.ts (que não
+  // precisam de render) e o liga/desliga do loop em useSimulacao.test.ts. Que
+  // o campo realmente anda no aparelho é verificação manual.
+});
+
+describe("CampoDeGrafo em modo interativo", () => {
+  it("não monta o campo decorativo por baixo do grafo real", async () => {
+    // Dois grafos em tela cheia empilhados custavam ~240 elementos extras com
+    // re-render a 30fps, e a tela de Nota rodava a 9-10fps por causa disso.
+    await render(
+      <ProvedorDeTema>
+        <CampoDeGrafo modo="interativo" densidade={60} ligado particulasLigadas pulso={0} crescer={0} nos={[]} arestas={[]} />
+      </ProvedorDeTema>,
+    );
+
+    expect(screen.queryByTestId("campo-de-grafo")).toBeNull();
+    expect(screen.getByTestId("grafo-interativo")).toBeOnTheScreen();
   });
 });

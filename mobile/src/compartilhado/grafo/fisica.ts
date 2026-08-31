@@ -20,7 +20,10 @@ const FRAMES_ATE_CRESCER = 50;
 const ESCALA_INICIAL = 0.4;
 const PASSO_DA_FASE = 0.05;
 
+// Leva "worklet" porque `avancarCampoEmLugar` a chama no loop de quadros, na
+// UI. Continua chamável do lado do React — a diretiva não impede isso.
 export function raioDoCampo(largura: number, altura: number): number {
+  "worklet";
   return Math.min(largura, altura) * FRACAO_DO_RAIO;
 }
 
@@ -119,6 +122,7 @@ export function avancarParticulas(particulas: Particula[]): Particula[] {
 }
 
 export function opacidadeDaParticula(progresso: number): number {
+  "worklet";
   return Math.sin(progresso * Math.PI);
 }
 
@@ -144,4 +148,76 @@ export function nascerNo(nos: NoAmbiente[], { largura, altura, aleatorio }: Opco
 
 export function deveRotular(peso: number, selecionado: boolean): boolean {
   return selecionado || peso >= 1.2;
+}
+
+// As ligações do campo ambiente mudam devagar — os nós andam a menos de
+// 0,12 px por quadro. Recalculá-las por quadro custava 1770 pares na
+// densidade padrão de 60, e era o caminho quente que travava a 120 Hz.
+const INTERVALO_DAS_LIGACOES_MS = 200;
+
+export function deveRecalcularLigacoes(ultimoCalculo: number, agora: number): boolean {
+  "worklet";
+  // Zero é a sentinela de "nunca calculou". Sem esse caso, um primeiro quadro
+  // com timestamp abaixo do intervalo deixaria o campo sem ligação nenhuma
+  // até os 200 ms fecharem — um piscar visível na entrada da tela.
+  if (ultimoCalculo === 0) return true;
+  return agora - ultimoCalculo >= INTERVALO_DAS_LIGACOES_MS;
+}
+
+// Versão in-place de `avancarCampo`, para rodar como worklet na UI thread. A
+// original devolve um array novo por passo, o que serve ao caminho de React
+// mas produz lixo se chamada a cada quadro — mesma decisão já tomada em
+// `avancarSimulacao`. As duas coexistem porque `nascerNo` e `criarCampo`
+// continuam no lado do React, onde a lista de nós é montada.
+export function avancarCampoEmLugar(nos: NoAmbiente[], largura: number, altura: number): void {
+  "worklet";
+  const raio = raioDoCampo(largura, altura);
+  const limite = raio * LIMITE_DE_FUGA;
+  const centroX = largura / 2;
+  const centroY = altura / 2;
+
+  for (let i = 0; i < nos.length; i += 1) {
+    const no = nos[i];
+
+    if (Math.hypot(no.x - centroX, no.y - centroY) > limite) {
+      no.vx = -no.vx;
+      no.vy = -no.vy;
+    }
+
+    no.x += no.vx;
+    no.y += no.vy;
+    no.fase += PASSO_DA_FASE;
+
+    if (no.framesDeVida !== null) {
+      no.framesDeVida += 1;
+      no.escala = Math.min(1, ESCALA_INICIAL + (1 - ESCALA_INICIAL) * (no.framesDeVida / FRAMES_ATE_CRESCER));
+    }
+  }
+}
+
+// Idem para as partículas: avança o progresso e devolve quantas continuam
+// vivas, compactando as sobreviventes no início do array. Compactar em vez de
+// filtrar evita alocar por quadro.
+export function avancarParticulasEmLugar(particulas: Particula[], vivas: number): number {
+  "worklet";
+  let restantes = 0;
+
+  for (let i = 0; i < vivas; i += 1) {
+    const particula = particulas[i];
+    particula.progresso += particula.velocidade;
+    if (particula.progresso >= 1) continue;
+
+    if (restantes !== i) {
+      const alvo = particulas[restantes];
+      alvo.deX = particula.deX;
+      alvo.deY = particula.deY;
+      alvo.paraX = particula.paraX;
+      alvo.paraY = particula.paraY;
+      alvo.progresso = particula.progresso;
+      alvo.velocidade = particula.velocidade;
+    }
+    restantes += 1;
+  }
+
+  return restantes;
 }

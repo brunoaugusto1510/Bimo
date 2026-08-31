@@ -1,6 +1,7 @@
 import {
   avancarCampo, avancarParticulas, calcularLigacoes, criarCampo, criarParticulas,
   deveRotular, nascerNo, opacidadeDaParticula, raioDoCampo,
+  deveRecalcularLigacoes,
 } from "./fisica";
 
 const OPCOES = { largura: 402, altura: 700, quantidade: 60, aleatorio: () => 0.5 };
@@ -185,5 +186,22 @@ describe("deveRotular", () => {
 
   it("sempre rotula o nó selecionado", () => {
     expect(deveRotular(0.4, true)).toBe(true);
+  });
+});
+
+describe("deveRecalcularLigacoes", () => {
+  // Com densidade 60, calcularLigacoes testa 1770 pares. Rodar isso a cada
+  // quadro era o caminho quente que travava a 120 Hz — e as ligações mudam
+  // devagar demais para justificar.
+  it("calcula na primeira vez", () => {
+    expect(deveRecalcularLigacoes(0, 0)).toBe(true);
+  });
+
+  it("não recalcula dentro do intervalo", () => {
+    expect(deveRecalcularLigacoes(1000, 1050)).toBe(false);
+  });
+
+  it("recalcula quando o intervalo fecha", () => {
+    expect(deveRecalcularLigacoes(1000, 1250)).toBe(true);
   });
 });
