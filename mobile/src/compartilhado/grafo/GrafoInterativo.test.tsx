@@ -174,4 +174,27 @@ describe("GrafoInterativo", () => {
       expect(esquerdaDe("a")).not.toBe(esquerdaDe("b"));
     });
   });
+
+  describe("pegar o nó", () => {
+    // O arrasto em si depende do runtime de gestos, que não existe no Jest: a
+    // conversão de coordenada está coberta em posicionamento.test.ts e o
+    // efeito na física em simulacao.test.ts. O que sobra de observável aqui é
+    // o feedback visual de "peguei" e a garantia de que o toque curto não
+    // virou arrasto.
+    it("marca o nó selecionado com o anel", async () => {
+      await renderizar({ noSelecionado: "a" });
+      expect(screen.getByTestId("anel-do-no-a")).toBeOnTheScreen();
+    });
+
+    it("nó não selecionado não tem anel", async () => {
+      await renderizar({ noSelecionado: "a" });
+      expect(screen.queryByTestId("anel-do-no-b")).toBeNull();
+    });
+
+    it("o toque curto continua só selecionando", async () => {
+      const { aoSelecionarNo } = await renderizar();
+      await fireEvent.press(screen.getByTestId("alvo-do-no-b"));
+      expect(aoSelecionarNo).toHaveBeenCalledWith("b");
+    });
+  });
 });

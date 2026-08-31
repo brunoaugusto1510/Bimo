@@ -5,9 +5,14 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 import Svg from "react-native-svg";
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import { deveRotular } from "../fisica";
+import { noMaisProximoDeCoordenada, paraCoordenadaDoGrafo } from "../posicionamento";
 import { useSimulacao, type Posicao } from "../useSimulacao";
 import { ArestaAnimada } from "./ArestaAnimada";
 import { AlvoDoNoAnimado, NoAnimado, RotuloAnimado } from "./NoAnimado";
+
+// Tempo de segurar antes de o nó grudar no dedo. Curto demais e navegar perto
+// de um nó o arrastaria sem querer; longo demais e o gesto parece travado.
+const DURACAO_PARA_PEGAR_MS = 250;
 
 const ZOOM_MINIMO = 0.6;
 const ZOOM_MAXIMO = 2.4;
@@ -35,7 +40,7 @@ export function GrafoInterativo({
   const deslocamentoY = useSharedValue(0);
   const zoom = useSharedValue(1);
 
-  const { posicoes } = useSimulacao({
+  const { posicoes, pegarNo, moverNoPego, soltarNo } = useSimulacao({
     nos,
     arestas,
     largura,
@@ -55,16 +60,58 @@ export function GrafoInterativo({
     });
   }, [nos, arestas]);
 
-  const arrastar = Gesture.Pan().onChange((evento) => {
-    deslocamentoX.value += evento.changeX;
-    deslocamentoY.value += evento.changeY;
-  });
+  // Arrays paralelos a `posicoes`, resolvidos uma vez: o worklet do gesto não
+  // pode fechar sobre `nos`, que muda de forma a cada recarga do vault.
+  const ids = useMemo(() => nos.map((no) => no.id), [nos]);
+  const pesos = useMemo(() => nos.map((no) => no.peso), [nos]);
+
+  const idPego = useSharedValue<string | null>(null);
+
+  function pontoNoGrafo(x: number, y: number) {
+    "worklet";
+    return paraCoordenadaDoGrafo({ x, y }, zoom.value, { x: deslocamentoX.value, y: deslocamentoY.value });
+  }
+
+  const pegar = Gesture.LongPress()
+    .minDuration(DURACAO_PARA_PEGAR_MS)
+    .onStart((evento) => {
+      const ponto = pontoNoGrafo(evento.x, evento.y);
+      const indice = noMaisProximoDeCoordenada(posicoes.value, pesos, ponto);
+      if (indice === null) return;
+      idPego.value = ids[indice];
+      pegarNo(ids[indice], ponto.x, ponto.y);
+    });
+
+  const arrastar = Gesture.Pan()
+    .onChange((evento) => {
+      // Com um nó preso ao dedo, o mesmo movimento não pode também arrastar a
+      // tela: o nó viajaria o dobro da distância do dedo.
+      if (idPego.value !== null) {
+        const ponto = pontoNoGrafo(evento.x, evento.y);
+        moverNoPego(idPego.value, ponto.x, ponto.y);
+        return;
+      }
+
+      deslocamentoX.value += evento.changeX;
+      deslocamentoY.value += evento.changeY;
+    })
+    .onEnd(() => {
+      if (idPego.value === null) return;
+      // Solta e as molas voltam a agir: o nó desliza e assenta perto de onde
+      // foi largado, como no Obsidian.
+      soltarNo(idPego.value);
+      idPego.value = null;
+    });
 
   const pincar = Gesture.Pinch().onChange((evento) => {
     zoom.value = Math.min(ZOOM_MAXIMO, Math.max(ZOOM_MINIMO, zoom.value * evento.scaleChange));
   });
 
-  const gestos = Gesture.Simultaneous(arrastar, pincar);
+  // `Simultaneous` e não `Race`: o LongPress precisa amadurecer enquanto o Pan
+  // já está ativo. O dedo parado por 250 ms não gera changeX/changeY, então a
+  // navegação não se move nesse intervalo, e assim que `pegar` dispara a
+  // guarda no onChange silencia o pan pelo resto do gesto.
+  const gestos = Gesture.Simultaneous(pegar, arrastar, pincar);
 
   const estiloDaCamada = useAnimatedStyle(() => ({
     transform: [{ translateX: deslocamentoX.value }, { translateY: deslocamentoY.value }, { scale: zoom.value }],
