@@ -5,6 +5,11 @@ const EXPANSAO = 1.05;
 const RAIO_POR_PESO = 5.5;
 const TOLERANCIA_DE_TOQUE = 10;
 
+// Mora aqui, e não em useSimulacao.ts, porque `useSimulacao` -> `simulacao` ->
+// `posicionamento` já é a cadeia de import: declarar do outro lado fecharia
+// um ciclo.
+export type Posicao = { x: number; y: number };
+
 export function raioDoNo(peso: number): number {
   return peso * RAIO_POR_PESO;
 }
