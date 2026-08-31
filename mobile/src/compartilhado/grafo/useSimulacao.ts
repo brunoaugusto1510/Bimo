@@ -1,5 +1,11 @@
-import { useEffect, useMemo } from "react";
-import { runOnJS, useFrameCallback, useSharedValue, type SharedValue } from "react-native-reanimated";
+/* eslint-disable react-hooks/immutability -- O React Compiler modela todo valor
+   criado no corpo do hook como imutável, mas o shared value do Reanimated é
+   exatamente o oposto: uma caixa mutável de identidade estável, e mutá-la é a
+   API oficial da biblioteca. A regra aceita mutar num efeito OU num callback,
+   nunca nos dois — e é isso que este hook precisa fazer, porque a simulação é
+   reiniciada por efeito (lista de notas nova) e mexida por gesto (nó pego). */
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { runOnJS, useAnimatedReaction, useFrameCallback, useSharedValue } from "react-native-reanimated";
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import type { Posicao } from "./posicionamento";
 import {
@@ -59,6 +65,14 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
   // os objetos é o que mantém o caminho quente sem alocação.
   const buffers = useSharedValue<[Posicao[], Posicao[]]>([copiarPosicoes(estado), copiarPosicoes(estado)]);
   const buffer = useSharedValue(0);
+  // Bandeira de "a simulação esfriou", levantada pelo worklet e consumida pela
+  // reação abaixo — o caminho para desligar o loop de fora dele.
+  const esfriada = useSharedValue(false);
+
+  // A ref existe porque `desligarQuadro` é declarado antes de `quadro`: a
+  // reação precisa de uma função estável, e o valor só é preenchido depois.
+  const quadroRef = useRef<{ setActive: (ativo: boolean) => void } | null>(null);
+  const desligarQuadro = useCallback(() => quadroRef.current?.setActive(false), []);
 
   const quadro = useFrameCallback((info) => {
     "worklet";
@@ -73,21 +87,42 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
     posicoes.value = proximo;
     buffer.value = buffer.value === 0 ? 1 : 0;
 
-    // Grafo parado não merece quadros: o loop se desliga sozinho e volta
-    // quando algo o reaquece. É também o único momento em que vale gravar as
-    // posições — o layout só está assentado aqui.
-    if (esfriou(atual)) {
-      quadro.setActive(false);
+    // Grafo parado não merece quadros. O desligamento não acontece aqui
+    // dentro: o worklet não pode referenciar `quadro`, que só existe depois
+    // desta chamada — ele capturaria `undefined`. Levanta a bandeira e quem
+    // desliga é a reação lá embaixo.
+    //
+    // É também o único momento em que vale gravar as posições: o layout só
+    // está assentado aqui.
+    if (esfriou(atual) && !esfriada.value) {
+      esfriada.value = true;
       if (aoEsfriar) runOnJS(aoEsfriar)(proximo.map((posicao) => ({ x: posicao.x, y: posicao.y })));
     }
   }, false);
+
+  useAnimatedReaction(
+    () => esfriada.value,
+    (parou) => {
+      if (parou) runOnJS(desligarQuadro)();
+    },
+  );
+
+  useEffect(() => {
+    quadroRef.current = quadro;
+  }, [quadro]);
 
   useEffect(() => {
     compartilhado.value = estado;
     posicoes.value = copiarPosicoes(estado);
     buffers.value = [copiarPosicoes(estado), copiarPosicoes(estado)];
+    esfriada.value = false;
     quadro.setActive(true);
-  }, [estado, compartilhado, posicoes, buffers, quadro]);
+    // Os shared values ficam fora das dependências de propósito: são estáveis
+    // por construção (o Reanimated devolve sempre o mesmo objeto) e listá-los
+    // faz o React Compiler tratá-los como valor de render, proibindo as
+    // escritas que este hook precisa fazer nos gestos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado, quadro]);
 
   return {
     posicoes,
@@ -96,6 +131,7 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
       "worklet";
       fixarNo(compartilhado.value, id, x, y);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
+      esfriada.value = false;
       quadro.setActive(true);
     },
 
@@ -103,12 +139,15 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
       "worklet";
       fixarNo(compartilhado.value, id, x, y);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
+      esfriada.value = false;
     },
 
     soltarNo: (id: string) => {
       "worklet";
       liberarNo(compartilhado.value, id);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
+      esfriada.value = false;
+      quadro.setActive(true);
     },
   };
 }

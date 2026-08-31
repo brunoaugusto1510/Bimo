@@ -1,3 +1,9 @@
+/* eslint-disable react-hooks/immutability -- O React Compiler modela todo valor
+   criado no corpo do hook como imutável, mas o shared value do Reanimated é
+   exatamente o oposto: uma caixa mutável de identidade estável, e mutá-la é a
+   API oficial da biblioteca. A regra aceita mutar num efeito OU num callback,
+   nunca nos dois — e é isso que este arquivo precisa fazer, porque a altura
+   muda tanto por fora (store) quanto pelo dedo (gesto). */
 import { useEffect, useRef } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
