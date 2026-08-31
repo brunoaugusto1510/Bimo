@@ -59,13 +59,16 @@ export function NoAnimado({ posicoes, indice, peso, selecionado, id }: PropsDoNo
 
 export function RotuloAnimado({ posicoes, indice, peso, selecionado, titulo }: Omit<PropsDoNo, "id"> & { titulo: string }) {
   const { cores, tipografia } = useTema();
+  // Calculado fora do worklet: o peso não muda entre quadros, e refazer a conta
+  // 120 vezes por segundo dentro da UI não paga nada.
+  const raio = raioDoNo(peso);
 
   const estilo = useAnimatedStyle(() => {
     const posicao = posicoes.value[indice];
     if (!posicao) return {};
     return {
       left: posicao.x - LARGURA_DO_ROTULO / 2,
-      top: posicao.y + raioDoNo(peso) + ESPACO_DO_ROTULO,
+      top: posicao.y + raio + ESPACO_DO_ROTULO,
     };
   });
 

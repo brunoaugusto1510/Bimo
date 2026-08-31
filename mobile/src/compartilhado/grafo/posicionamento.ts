@@ -10,7 +10,12 @@ const TOLERANCIA_DE_TOQUE = 10;
 // um ciclo.
 export type Posicao = { x: number; y: number };
 
+// Leva "worklet" porque roda na UI: `noMaisProximoDeCoordenada` a chama no
+// hit-test do gesto, e os componentes animados a usam para posicionar rótulo e
+// alvo. Sem a diretiva vira uma chamada de função remota e derruba a tela com
+// "Tried to synchronously call a Remote Function".
 export function raioDoNo(peso: number): number {
+  "worklet";
   return peso * RAIO_POR_PESO;
 }
 
