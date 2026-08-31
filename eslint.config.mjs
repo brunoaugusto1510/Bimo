@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // O app Expo tem o eslint.config.js dele e o próprio node_modules.
+    "mobile/**",
   ]),
 ]);
 
