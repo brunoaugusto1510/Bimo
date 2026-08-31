@@ -145,3 +145,17 @@ export function nascerNo(nos: NoAmbiente[], { largura, altura, aleatorio }: Opco
 export function deveRotular(peso: number, selecionado: boolean): boolean {
   return selecionado || peso >= 1.2;
 }
+
+// As ligações do campo ambiente mudam devagar — os nós andam a menos de
+// 0,12 px por quadro. Recalculá-las por quadro custava 1770 pares na
+// densidade padrão de 60, e era o caminho quente que travava a 120 Hz.
+const INTERVALO_DAS_LIGACOES_MS = 200;
+
+export function deveRecalcularLigacoes(ultimoCalculo: number, agora: number): boolean {
+  "worklet";
+  // Zero é a sentinela de "nunca calculou". Sem esse caso, um primeiro quadro
+  // com timestamp abaixo do intervalo deixaria o campo sem ligação nenhuma
+  // até os 200 ms fecharem — um piscar visível na entrada da tela.
+  if (ultimoCalculo === 0) return true;
+  return agora - ultimoCalculo >= INTERVALO_DAS_LIGACOES_MS;
+}

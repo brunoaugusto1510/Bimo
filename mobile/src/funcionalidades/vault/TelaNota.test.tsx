@@ -20,20 +20,11 @@ async function renderizar() {
 
 describe("TelaNota", () => {
   // Timers falsos: o TelaNota renderiza o CampoDeGrafo em modo interativo, que
-  // por baixo ainda monta o CampoDeGrafoSvg com o mesmo setInterval de 30fps
-  // dos modos "ambiente" (ver CampoDeGrafo.test.tsx e Chat.test.tsx). Sem
-  // timers falsos o intervalo nunca para sozinho e o `act()` assíncrono do
-  // RNTL v14 estoura o timeout. Isso é adaptação de ambiente, não mudança do
-  // que se verifica.
   beforeEach(() => {
-    jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
     mockPush.mockClear();
     useEstadoVault.setState({ busca: "", noSelecionado: null, alturaDaFolha: 0, alturaMinima: 0, alturaMaxima: 0 });
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
 
   it("mostra a contagem de nós no chip de contexto", async () => {
     await renderizar();

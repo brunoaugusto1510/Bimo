@@ -40,12 +40,12 @@ async function renderizar() {
 }
 
 describe("Chat", () => {
-  // Timers falsos: o Chat renderiza o CampoDeGrafo em modo ambiente, que abre
-  // um setInterval de 30fps assim que monta (mesmo motivo do CampoDeGrafo.test.tsx
-  // da Task 10). Com timers reais, esse intervalo dispara enquanto o `act()`
-  // assíncrono do RNTL v14 ainda está de olho em atualizações pendentes — como
-  // ele nunca pára sozinho, o `act()` nunca conclui e o teste estoura o
-  // timeout. Isso é adaptação de ambiente, não mudança do que se verifica.
+  // Timers falsos: o serviço de IA fake responde depois de um atraso simulado.
+  // Com timers reais, "mostra o indicador de digitação" fica dependente de
+  // carga — a resposta às vezes chega antes da asserção síncrona, e o teste
+  // falha só quando a suíte roda inteira. (O motivo antigo era outro: o
+  // setInterval de 30fps do campo de grafo, que saiu com a troca para
+  // useFrameCallback.)
   beforeEach(() => {
     jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
     mockPush.mockClear();
@@ -55,6 +55,7 @@ describe("Chat", () => {
   afterEach(() => {
     jest.useRealTimers();
   });
+
 
   it("mostra o placeholder do composer", async () => {
     await renderizar();
