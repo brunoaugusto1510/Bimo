@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react-native";
+import { render, screen } from "@testing-library/react-native";
 import { ProvedorDeTema } from "@/compartilhado/tema";
 import { CampoDeGrafo } from "./index";
 
@@ -37,22 +37,27 @@ describe("CampoDeGrafo em modo ambiente", () => {
     expect(screen.getByTestId("campo-de-grafo")).toHaveStyle({ pointerEvents: "none" });
   });
 
-  // Este teste existe por causa de um bug que passou por todas as outras
-  // verificações: o loop chegou a ser escrito com `useFrameCallback` do
-  // Reanimated, cujo callback o plugin transforma em worklet — e o loop chama
-  // `setNos`, que é dispatch de estado do React. No aparelho isso derruba a
-  // tela ("Tried to synchronously call a Remote Function"); em teste passava
-  // despercebido, porque o mock do Reanimated nunca executa o callback. Um
-  // teste que prova que o campo realmente anda fecha esse buraco.
-  it("anda com o passar dos quadros", async () => {
-    const resultado = await renderizar();
-    const desenho = () => JSON.stringify(resultado.toJSON());
+  // Aqui existia um teste que avançava os quadros e exigia que o desenho
+  // mudasse. Ele valia enquanto o loop era `requestAnimationFrame`; agora o
+  // campo roda em `useFrameCallback`, que o mock do Reanimated não executa —
+  // e um mock que executasse quadros trava a suíte com cascata de timers.
+  //
+  // O que sobrou coberto: as funções de física em fisica.test.ts (que não
+  // precisam de render) e o liga/desliga do loop em useSimulacao.test.ts. Que
+  // o campo realmente anda no aparelho é verificação manual.
+});
 
-    const antes = desenho();
-    await act(async () => {
-      jest.advanceTimersByTime(200);
-    });
+describe("CampoDeGrafo em modo interativo", () => {
+  it("não monta o campo decorativo por baixo do grafo real", async () => {
+    // Dois grafos em tela cheia empilhados custavam ~240 elementos extras com
+    // re-render a 30fps, e a tela de Nota rodava a 9-10fps por causa disso.
+    await render(
+      <ProvedorDeTema>
+        <CampoDeGrafo modo="interativo" densidade={60} ligado particulasLigadas pulso={0} crescer={0} nos={[]} arestas={[]} />
+      </ProvedorDeTema>,
+    );
 
-    expect(desenho()).not.toBe(antes);
+    expect(screen.queryByTestId("campo-de-grafo")).toBeNull();
+    expect(screen.getByTestId("grafo-interativo")).toBeOnTheScreen();
   });
 });

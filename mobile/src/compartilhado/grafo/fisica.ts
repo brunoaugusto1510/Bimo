@@ -119,6 +119,7 @@ export function avancarParticulas(particulas: Particula[]): Particula[] {
 }
 
 export function opacidadeDaParticula(progresso: number): number {
+  "worklet";
   return Math.sin(progresso * Math.PI);
 }
 
@@ -157,4 +158,62 @@ export function deveRecalcularLigacoes(ultimoCalculo: number, agora: number): bo
   // até os 200 ms fecharem — um piscar visível na entrada da tela.
   if (ultimoCalculo === 0) return true;
   return agora - ultimoCalculo >= INTERVALO_DAS_LIGACOES_MS;
+}
+
+// Versão in-place de `avancarCampo`, para rodar como worklet na UI thread. A
+// original devolve um array novo por passo, o que serve ao caminho de React
+// mas produz lixo se chamada a cada quadro — mesma decisão já tomada em
+// `avancarSimulacao`. As duas coexistem porque `nascerNo` e `criarCampo`
+// continuam no lado do React, onde a lista de nós é montada.
+export function avancarCampoEmLugar(nos: NoAmbiente[], largura: number, altura: number): void {
+  "worklet";
+  const raio = raioDoCampo(largura, altura);
+  const limite = raio * LIMITE_DE_FUGA;
+  const centroX = largura / 2;
+  const centroY = altura / 2;
+
+  for (let i = 0; i < nos.length; i += 1) {
+    const no = nos[i];
+
+    if (Math.hypot(no.x - centroX, no.y - centroY) > limite) {
+      no.vx = -no.vx;
+      no.vy = -no.vy;
+    }
+
+    no.x += no.vx;
+    no.y += no.vy;
+    no.fase += PASSO_DA_FASE;
+
+    if (no.framesDeVida !== null) {
+      no.framesDeVida += 1;
+      no.escala = Math.min(1, ESCALA_INICIAL + (1 - ESCALA_INICIAL) * (no.framesDeVida / FRAMES_ATE_CRESCER));
+    }
+  }
+}
+
+// Idem para as partículas: avança o progresso e devolve quantas continuam
+// vivas, compactando as sobreviventes no início do array. Compactar em vez de
+// filtrar evita alocar por quadro.
+export function avancarParticulasEmLugar(particulas: Particula[], vivas: number): number {
+  "worklet";
+  let restantes = 0;
+
+  for (let i = 0; i < vivas; i += 1) {
+    const particula = particulas[i];
+    particula.progresso += particula.velocidade;
+    if (particula.progresso >= 1) continue;
+
+    if (restantes !== i) {
+      const alvo = particulas[restantes];
+      alvo.deX = particula.deX;
+      alvo.deY = particula.deY;
+      alvo.paraX = particula.paraX;
+      alvo.paraY = particula.paraY;
+      alvo.progresso = particula.progresso;
+      alvo.velocidade = particula.velocidade;
+    }
+    restantes += 1;
+  }
+
+  return restantes;
 }

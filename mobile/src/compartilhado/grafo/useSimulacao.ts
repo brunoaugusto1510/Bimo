@@ -5,7 +5,10 @@
    nunca nos dois — e é isso que este hook precisa fazer, porque a simulação é
    reiniciada por efeito (lista de notas nova) e mexida por gesto (nó pego). */
 import { useEffect, useMemo, useState } from "react";
-import { runOnJS, useFrameCallback, useSharedValue } from "react-native-reanimated";
+import { useFrameCallback, useSharedValue } from "react-native-reanimated";
+// `runOnJS` está preterido no Reanimated 4 em favor de `scheduleOnRN`, que vem
+// do react-native-worklets — já dependência direta do projeto.
+import { scheduleOnRN } from "react-native-worklets";
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import type { Posicao } from "./posicionamento";
 import {
@@ -99,8 +102,8 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
     // está assentado aqui.
     if (esfriou(atual) && !esfriada.value) {
       esfriada.value = true;
-      runOnJS(setAtivo)(false);
-      if (aoEsfriar) runOnJS(aoEsfriar)(proximo.map((posicao) => ({ x: posicao.x, y: posicao.y })));
+      scheduleOnRN(setAtivo, false);
+      if (aoEsfriar) scheduleOnRN(aoEsfriar, proximo.map((posicao) => ({ x: posicao.x, y: posicao.y })));
     }
   }, false);
 
@@ -134,7 +137,7 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
       fixarNo(compartilhado.value, id, x, y);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
       esfriada.value = false;
-      runOnJS(setAtivo)(true);
+      scheduleOnRN(setAtivo, true);
     },
 
     moverNoPego: (id: string, x: number, y: number) => {
@@ -149,7 +152,7 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
       liberarNo(compartilhado.value, id);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
       esfriada.value = false;
-      runOnJS(setAtivo)(true);
+      scheduleOnRN(setAtivo, true);
     },
   };
 }

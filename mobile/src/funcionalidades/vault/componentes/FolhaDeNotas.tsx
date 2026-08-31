@@ -7,7 +7,9 @@
 import { useEffect, useRef } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+// `runOnJS` está preterido no Reanimated 4 em favor de `scheduleOnRN`.
+import { scheduleOnRN } from "react-native-worklets";
 import { useTema } from "@/compartilhado/tema";
 import { Botao, CampoDeBusca, Sobrancelha, Vidro } from "@/compartilhado/ui";
 import type { Nota } from "@/dados/tipos";
@@ -75,7 +77,7 @@ export function FolhaDeNotas(props: Props) {
     .onEnd(() => {
       // Só ao soltar o valor volta para o store: gravar a cada quadro
       // re-renderizaria a árvore inteira 120 vezes por segundo.
-      runOnJS(props.aoArrastar)(altura.value);
+      scheduleOnRN(props.aoArrastar, altura.value);
     });
 
   const estilo = useAnimatedStyle(() => ({ height: altura.value }));

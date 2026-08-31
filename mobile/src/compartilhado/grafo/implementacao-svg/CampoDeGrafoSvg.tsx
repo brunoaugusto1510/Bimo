@@ -1,111 +1,159 @@
-import { useEffect, useRef, useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect -- Os dois setState em efeito
+   aqui reagem a mudança vinda de fora (dimensões da tela, rajada de partículas)
+   e sincronizam a lista que o React desenha com o shared value que o loop de
+   quadros avança. Não cascateiam: as dependências são props e valores
+   memoizados, nenhuma delas mudada por esses efeitos. */
+/* eslint-disable react-hooks/immutability -- O React Compiler modela todo valor
+   criado no corpo do hook como imutável, mas o shared value do Reanimated é o
+   oposto: uma caixa mutável de identidade estável, e mutá-la é a API da
+   biblioteca. A regra aceita mutar num efeito OU num callback, nunca nos dois —
+   e este componente precisa dos dois, porque a lista de nós é remontada por
+   efeito e as posições avançam no loop de quadros. */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import Svg, { Circle, Line } from "react-native-svg";
+import { useFrameCallback, useSharedValue } from "react-native-reanimated";
+// `runOnJS` está preterido no Reanimated 4 em favor de `scheduleOnRN`, que vem
+// do react-native-worklets — já dependência direta do projeto.
+import { scheduleOnRN } from "react-native-worklets";
+import Svg from "react-native-svg";
 import { useTema } from "@/compartilhado/tema";
 import {
-  avancarCampo,
-  avancarParticulas,
+  avancarCampoEmLugar,
+  avancarParticulasEmLugar,
   calcularLigacoes,
   criarCampo,
   criarParticulas,
   deveRecalcularLigacoes,
   nascerNo,
-  opacidadeDaParticula,
   raioDoCampo,
   type NoAmbiente,
   type OpcoesDeCampo,
   type Particula,
 } from "../fisica";
-import { corDoTom } from "./tomDoNo";
+import { LigacaoDoCampo, NoDoCampo, ParticulaDoCampo } from "./elementosDoCampo";
 import type { PropsDoCampoDeGrafo } from "../contrato";
 
 const PARTICULAS_POR_RAJADA = 8;
-// O campo é decoração de fundo: 30 quadros por segundo bastam para ele parecer
-// vivo, e segurar esse ritmo evita gastar os 120 quadros do aparelho com o
-// pano de fundo em vez do que o dedo está tocando.
+// Teto de partículas simultâneas. O pool é alocado uma vez e reaproveitado: o
+// que "morre" só sai do pedaço vivo do array, nada é criado por quadro.
+const MAXIMO_DE_PARTICULAS = 48;
+// O campo é decoração de fundo: 30 passos por segundo bastam para ele parecer
+// vivo, e segurar esse ritmo deixa os quadros restantes do aparelho para o que
+// o dedo está tocando.
 const INTERVALO_DO_CAMPO_MS = 1000 / 30;
+
+function poolDeParticulas(): Particula[] {
+  return Array.from({ length: MAXIMO_DE_PARTICULAS }, () => ({
+    deX: 0, deY: 0, paraX: 0, paraY: 0, progresso: 1, velocidade: 0,
+  }));
+}
 
 export function CampoDeGrafoSvg({ densidade, ligado, particulasLigadas, pulso, crescer }: PropsDoCampoDeGrafo) {
   const { cores } = useTema();
   const { width: largura, height: altura } = useWindowDimensions();
 
-  const opcoes: OpcoesDeCampo = { largura, altura, quantidade: densidade, aleatorio: Math.random };
+  const opcoes: OpcoesDeCampo = useMemo(
+    () => ({ largura, altura, quantidade: densidade, aleatorio: Math.random }),
+    [largura, altura, densidade],
+  );
+
+  // A lista de nós vive no React porque só muda em eventos raros (densidade,
+  // rotação, nó que nasce); as posições vivem no shared value e são avançadas
+  // pelo loop de quadros, sem passar pelo React.
+  const [nos, setNos] = useState<NoAmbiente[]>(() => criarCampo(opcoes));
+  const [ligacoes, setLigacoes] = useState<[number, number][]>([]);
+  const [particulasVivas, setParticulasVivas] = useState(0);
+
+  const campo = useSharedValue<NoAmbiente[]>(nos);
+  const particulas = useSharedValue<Particula[]>(poolDeParticulas());
+  const vivas = useSharedValue(0);
+  const ultimoPasso = useSharedValue(0);
+  const ultimoCalculoDeLigacoes = useSharedValue(0);
+
   const opcoesRef = useRef(opcoes);
-  // Atualiza a ref depois de cada render (nunca durante) para que o loop e os
-  // outros efeitos sempre leiam largura/altura/densidade atuais sem precisar
-  // reiniciar a cada mudança.
   useEffect(() => {
     opcoesRef.current = opcoes;
-  });
+  }, [opcoes]);
 
-  const [nos, setNos] = useState<NoAmbiente[]>(() => criarCampo(opcoes));
-  const [particulas, setParticulas] = useState<Particula[]>([]);
-  const [ligacoes, setLigacoes] = useState<[number, number][]>([]);
+  // Só o conjunto de ligações volta ao React, e no máximo a cada 200 ms: são
+  // O(n²) para calcular (1770 pares na densidade padrão) e mudam devagar.
+  const publicarLigacoes = useCallback((posicoes: NoAmbiente[]) => {
+    const { largura: l, altura: a } = opcoesRef.current;
+    setLigacoes(calcularLigacoes(posicoes, raioDoCampo(l, a)));
+  }, []);
 
-  const nosRef = useRef(nos);
+  const publicarVivas = useCallback((quantidade: number) => setParticulasVivas(quantidade), []);
+
+  // Declarados antes do loop porque o worklet captura o que usa no momento em
+  // que é criado: definidos depois, chegariam como `undefined` na UI.
+  const larguraDoCampo = useSharedValue(largura);
+  const alturaDoCampo = useSharedValue(altura);
+
+  const quadro = useFrameCallback((info) => {
+    "worklet";
+    const agora = info.timeSinceFirstFrame;
+    if (agora - ultimoPasso.value < INTERVALO_DO_CAMPO_MS) return;
+    ultimoPasso.value = agora;
+
+    avancarCampoEmLugar(campo.value, larguraDoCampo.value, alturaDoCampo.value);
+
+    const restantes = avancarParticulasEmLugar(particulas.value, vivas.value);
+    if (restantes !== vivas.value) {
+      vivas.value = restantes;
+      scheduleOnRN(publicarVivas, restantes);
+    }
+
+    if (deveRecalcularLigacoes(ultimoCalculoDeLigacoes.value, agora)) {
+      ultimoCalculoDeLigacoes.value = agora;
+      scheduleOnRN(publicarLigacoes, campo.value.map((no) => ({ ...no })));
+    }
+  }, false);
+
+  // Os shared values ficam fora das listas de dependências deste arquivo. São
+  // estáveis por construção no runtime real, e listá-los faz o efeito
+  // re-executar a cada render sob o mock do Jest, onde `useSharedValue`
+  // devolve um objeto novo — o que dá "Maximum update depth exceeded".
   useEffect(() => {
-    nosRef.current = nos;
-  }, [nos]);
+    larguraDoCampo.value = largura;
+    alturaDoCampo.value = altura;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [largura, altura]);
 
   useEffect(() => {
-    setNos(criarCampo(opcoesRef.current));
-  }, [densidade, largura, altura]);
+    const novo = criarCampo(opcoes);
+    setNos(novo);
+    campo.value = novo;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opcoes]);
 
-  // `requestAnimationFrame` no lugar do `setInterval` que estava aqui: no React
-  // Native ele é agendado pelo Choreographer, então acompanha o vsync em vez de
-  // acumular drift — era o drift que aparecia como judder num aparelho de 120 Hz.
-  //
-  // E não `useFrameCallback` do Reanimated: o plugin transforma aquele callback
-  // em worklet, e este loop precisa chamar `setNos`/`setParticulas`, que são
-  // dispatch de estado do React e só existem na thread de JS. Tentar isso
-  // derruba a tela com "Tried to synchronously call a Remote Function".
   useEffect(() => {
-    if (!ligado) return;
-
-    let cancelado = false;
-    let pedido = 0;
-    let ultimoPasso = 0;
-    let ultimoCalculoDeLigacoes = 0;
-
-    const passo = (agora: number) => {
-      if (cancelado) return;
-      pedido = requestAnimationFrame(passo);
-
-      if (agora - ultimoPasso < INTERVALO_DO_CAMPO_MS) return;
-      ultimoPasso = agora;
-
-      setNos((atuais) => avancarCampo(atuais, opcoesRef.current));
-      setParticulas(avancarParticulas);
-
-      // As ligações saem do caminho quente: são O(n²) — 1770 pares na densidade
-      // padrão de 60 — e os nós andam devagar demais para justificar recalculá-las
-      // a cada passo.
-      if (deveRecalcularLigacoes(ultimoCalculoDeLigacoes, agora)) {
-        ultimoCalculoDeLigacoes = agora;
-        const { largura: larguraAtual, altura: alturaAtual } = opcoesRef.current;
-        setLigacoes(calcularLigacoes(nosRef.current, raioDoCampo(larguraAtual, alturaAtual)));
-      }
-    };
-
-    pedido = requestAnimationFrame(passo);
-
-    return () => {
-      cancelado = true;
-      cancelAnimationFrame(pedido);
-    };
-  }, [ligado]);
+    quadro.setActive(ligado);
+  }, [ligado, quadro]);
 
   useEffect(() => {
     if (pulso === 0 || !particulasLigadas) return;
-    setParticulas((anteriores) => [
-      ...anteriores,
-      ...criarParticulas(nosRef.current, PARTICULAS_POR_RAJADA, Math.random),
-    ]);
+
+    const novas = criarParticulas(campo.value, PARTICULAS_POR_RAJADA, Math.random);
+    const pool = particulas.value;
+    let indice = vivas.value;
+
+    for (const nova of novas) {
+      if (indice >= MAXIMO_DE_PARTICULAS) break;
+      pool[indice] = nova;
+      indice += 1;
+    }
+
+    vivas.value = indice;
+    setParticulasVivas(indice);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pulso, particulasLigadas]);
 
   useEffect(() => {
     if (crescer === 0) return;
-    setNos((atuais) => nascerNo(atuais, opcoesRef.current));
+    const comMaisUm = nascerNo(campo.value, opcoesRef.current);
+    setNos(comMaisUm);
+    campo.value = comMaisUm;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [crescer]);
 
   if (!ligado) return null;
@@ -116,36 +164,19 @@ export function CampoDeGrafoSvg({ densidade, ligado, particulasLigadas, pulso, c
       style={[StyleSheet.absoluteFill, { opacity: 0.8, pointerEvents: "none" }]}
     >
       <Svg width={largura} height={altura}>
-        {ligacoes.map(([a, b]) =>
-          nos[a] && nos[b] ? (
-            <Line
-              key={`${a}-${b}`}
-              x1={nos[a].x}
-              y1={nos[a].y}
-              x2={nos[b].x}
-              y2={nos[b].y}
-              stroke={cores.grafoLigacao}
-              strokeWidth={1}
-            />
-          ) : null,
-        )}
-        {nos.map((no, indice) => (
-          <Circle
-            key={indice}
-            cx={no.x}
-            cy={no.y}
-            r={no.raio * no.escala * (1 + Math.sin(no.fase) * 0.06)}
-            fill={corDoTom(no.tom, cores)}
-          />
+        {ligacoes.map(([a, b]) => (
+          <LigacaoDoCampo key={`${a}-${b}`} campo={campo} de={a} para={b} cor={cores.grafoLigacao} />
         ))}
-        {particulas.map((particula, indice) => (
-          <Circle
+        {nos.map((no, indice) => (
+          <NoDoCampo key={indice} campo={campo} indice={indice} tom={no.tom} cores={cores} />
+        ))}
+        {Array.from({ length: Math.min(particulasVivas, MAXIMO_DE_PARTICULAS) }, (_, indice) => (
+          <ParticulaDoCampo
             key={`particula-${indice}`}
-            cx={particula.deX + (particula.paraX - particula.deX) * particula.progresso}
-            cy={particula.deY + (particula.paraY - particula.deY) * particula.progresso}
-            r={2.4}
-            fill={cores.grafoNoSinal}
-            opacity={opacidadeDaParticula(particula.progresso)}
+            particulas={particulas}
+            indice={indice}
+            vivas={vivas}
+            cor={cores.grafoNoSinal}
           />
         ))}
       </Svg>
