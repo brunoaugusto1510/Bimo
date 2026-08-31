@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Stack, usePathname, useRouter, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTema } from "@/compartilhado/tema";
+import { opcoesDePilha, useTema } from "@/compartilhado/tema";
 import { Cabecalho } from "@/compartilhado/ui/Cabecalho";
 import type { Destino } from "@/compartilhado/ui/TabSwitcher";
 import { MenuDeConta } from "@/funcionalidades/conta/componentes/MenuDeConta";
@@ -35,7 +35,7 @@ export default function LayoutDoApp() {
         iniciais={iniciaisDe(nomeDoPerfil)}
       />
       <View style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={opcoesDePilha(cores)}>
           <Stack.Screen name="bimo" />
           <Stack.Screen name="nota" />
           <Stack.Screen name="editor/[id]" options={{ presentation: "fullScreenModal" }} />

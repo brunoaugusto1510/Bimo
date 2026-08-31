@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useEventListener } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -17,8 +17,17 @@ const DURACAO_MAXIMA_MS = 7100;
 
 export function Intro() {
   const { cores, tipografia, espacamento, escuro } = useTema();
+  const { width: largura, height: altura } = useWindowDimensions();
   const router = useRouter();
   const jaAvancouRef = useRef(false);
+
+  // Os dois MP4 sao 1920x1920 — quadrados, matriz identidade no `tkhd`. Ocupando
+  // a tela inteira com `contentFit="cover"`, o quadrado era escalado pela altura
+  // do aparelho (em retrato, o dobro da largura) e as laterais eram cortadas:
+  // sobrava so a faixa central, ampliada. Uma caixa quadrada do tamanho da menor
+  // dimensao da tela cabe sempre — em retrato e em paisagem — e mostra o quadro
+  // inteiro; o resto da tela fica com `cores.fundo`, o mesmo fundo do video.
+  const ladoDoVideo = Math.min(largura, altura);
 
   const player = useVideoPlayer(escuro ? VIDEO_ESCURO : VIDEO_CLARO, (instancia) => {
     instancia.loop = false;
@@ -43,11 +52,17 @@ export function Intro() {
   }, [avancarParaChat]);
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: cores.fundo }]}>
+    <View
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: cores.fundo, alignItems: "center", justifyContent: "center" },
+      ]}
+    >
       <VideoView
+        testID="video-da-intro"
         player={player}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
+        style={{ width: ladoDoVideo, height: ladoDoVideo }}
+        contentFit="contain"
         nativeControls={false}
       />
       <Pressable
