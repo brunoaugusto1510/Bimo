@@ -1,4 +1,4 @@
-import { noMaisProximo, posicionarNo, raioDoNo } from "./posicionamento";
+import { noMaisProximoDeCoordenada, paraCoordenadaDoGrafo, posicionarNo, raioDoNo } from "./posicionamento";
 import type { NoDoGrafo } from "@/dados/tipos";
 
 const LARGURA = 402;
@@ -29,19 +29,48 @@ describe("raioDoNo", () => {
   });
 });
 
-describe("noMaisProximo", () => {
-  it("acha o nó sob o toque", () => {
-    const { x, y } = posicionarNo(nos[0], LARGURA, ALTURA);
-    expect(noMaisProximo(nos, x, y, LARGURA, ALTURA)).toBe("a");
+describe("paraCoordenadaDoGrafo", () => {
+  it("desfaz o deslocamento", () => {
+    expect(paraCoordenadaDoGrafo({ x: 150, y: 250 }, 1, { x: 50, y: 100 })).toEqual({ x: 100, y: 150 });
   });
 
-  it("aceita um toque a até raio + 10 px do centro do nó", () => {
-    const { x, y } = posicionarNo(nos[0], LARGURA, ALTURA);
-    expect(noMaisProximo(nos, x + raioDoNo(nos[0].peso) + 9, y, LARGURA, ALTURA)).toBe("a");
+  it("desfaz o zoom", () => {
+    expect(paraCoordenadaDoGrafo({ x: 200, y: 100 }, 2, { x: 0, y: 0 })).toEqual({ x: 100, y: 50 });
   });
 
-  it("devolve null quando o toque cai longe de todo mundo", () => {
-    const { x, y } = posicionarNo(nos[0], LARGURA, ALTURA);
-    expect(noMaisProximo(nos, x + raioDoNo(nos[0].peso) + 40, y, LARGURA, ALTURA)).toBeNull();
+  it("desfaz deslocamento e zoom na ordem certa", () => {
+    // A camada aplica translate e só depois scale; desfazer na ordem errada
+    // erra o alvo por um fator do zoom — é aqui que o hit-test fura na prática.
+    expect(paraCoordenadaDoGrafo({ x: 250, y: 100 }, 2, { x: 50, y: 20 })).toEqual({ x: 100, y: 40 });
+  });
+});
+
+describe("noMaisProximoDeCoordenada", () => {
+  const posicoes = [
+    { x: 100, y: 100 },
+    { x: 300, y: 300 },
+  ];
+  const pesos = [1, 1];
+
+  it("acha o nó sob o ponto", () => {
+    expect(noMaisProximoDeCoordenada(posicoes, pesos, { x: 102, y: 98 })).toBe(0);
+  });
+
+  it("aceita um ponto a até raio + 10 px do centro do nó", () => {
+    expect(noMaisProximoDeCoordenada(posicoes, pesos, { x: 100 + raioDoNo(1) + 9, y: 100 })).toBe(0);
+  });
+
+  it("devolve null longe de qualquer nó", () => {
+    expect(noMaisProximoDeCoordenada(posicoes, pesos, { x: 800, y: 800 })).toBeNull();
+  });
+
+  it("escolhe o mais próximo quando dois alvos se sobrepõem", () => {
+    expect(
+      noMaisProximoDeCoordenada([{ x: 100, y: 100 }, { x: 110, y: 100 }], pesos, { x: 109, y: 100 }),
+    ).toBe(1);
+  });
+
+  it("aguenta grafo vazio", () => {
+    expect(noMaisProximoDeCoordenada([], [], { x: 1, y: 2 })).toBeNull();
   });
 });

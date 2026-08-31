@@ -22,22 +22,26 @@ export function posicionarNo(no: NoDoGrafo, largura: number, altura: number): { 
   };
 }
 
-export function noMaisProximo(
-  nos: NoDoGrafo[],
-  toqueX: number,
-  toqueY: number,
-  largura: number,
-  altura: number,
-): string | null {
-  let escolhido: string | null = null;
+// A camada do grafo aplica translate e depois scale, então desfazer é subtrair
+// o deslocamento e só então dividir pelo zoom. Na ordem trocada o erro é de um
+// fator do zoom — o toque acerta um vizinho, ou nenhum.
+export function paraCoordenadaDoGrafo(toque: Posicao, zoom: number, deslocamento: Posicao): Posicao {
+  "worklet";
+  return { x: (toque.x - deslocamento.x) / zoom, y: (toque.y - deslocamento.y) / zoom };
+}
+
+// Devolve o índice, não o id: quem chama já tem os arrays paralelos da
+// simulação em mãos e o índice é o que o shared value de posições usa.
+export function noMaisProximoDeCoordenada(posicoes: Posicao[], pesos: number[], ponto: Posicao): number | null {
+  "worklet";
+  let escolhido: number | null = null;
   let menorDistancia = Number.POSITIVE_INFINITY;
 
-  for (const no of nos) {
-    const { x, y } = posicionarNo(no, largura, altura);
-    const distancia = Math.hypot(x - toqueX, y - toqueY);
-    if (distancia <= raioDoNo(no.peso) + TOLERANCIA_DE_TOQUE && distancia < menorDistancia) {
+  for (let i = 0; i < posicoes.length; i += 1) {
+    const distancia = Math.hypot(posicoes[i].x - ponto.x, posicoes[i].y - ponto.y);
+    if (distancia <= raioDoNo(pesos[i]) + TOLERANCIA_DE_TOQUE && distancia < menorDistancia) {
       menorDistancia = distancia;
-      escolhido = no.id;
+      escolhido = i;
     }
   }
 
