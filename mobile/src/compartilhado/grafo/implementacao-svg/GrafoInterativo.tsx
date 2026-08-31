@@ -118,8 +118,24 @@ export function GrafoInterativo({
   }));
 
   return (
-    <View testID="grafo-interativo" style={StyleSheet.absoluteFill}>
-      <GestureDetector gesture={gestos}>
+    /*
+      O GestureDetector precisa envolver ESTA view, e não a camada
+      transformada de baixo. A camada é `pointerEvents="box-none"`, e para o
+      RNGH isso significa `PointerEventsConfig.BOX_NONE`: os handlers dela só
+      entram na disputa se algum descendente virar alvo do toque
+      (GestureHandlerOrchestrator.kt, ramo BOX_NONE). E um descendente sem
+      handler próprio só qualifica quando `view !is ViewGroup ||
+      view.getBackground() != null` — o fundo e os alvos dos nós são
+      ReactViewGroup sem background, então nenhum qualifica. Com o detector
+      ali, arrastar, pinçar e segurar simplesmente não chegavam.
+
+      Aqui o pointerEvents é o padrão (AUTO), e nesse ramo o orquestrador
+      registra os handlers da própria view sem depender dos filhos. O
+      `collapsable={false}` que o Android precisa é injetado pelo próprio
+      GestureDetector (Wrap.tsx), então não é escrito aqui.
+    */
+    <GestureDetector gesture={gestos}>
+      <View testID="grafo-interativo" style={StyleSheet.absoluteFill}>
         {/*
           `pointerEvents="box-none"` nesta camada e no `<Svg>` é o que faz o
           `fundo-do-grafo` (montado logo abaixo, dentro da mesma subárvore
@@ -178,7 +194,7 @@ export function GrafoInterativo({
             />
           ))}
         </Animated.View>
-      </GestureDetector>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }

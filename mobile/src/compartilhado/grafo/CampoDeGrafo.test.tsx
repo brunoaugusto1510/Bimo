@@ -11,6 +11,17 @@ async function renderizar(props: Partial<React.ComponentProps<typeof CampoDeGraf
 }
 
 describe("CampoDeGrafo em modo ambiente", () => {
+  // Timers falsos: o campo mantém um loop de `requestAnimationFrame` vivo
+  // enquanto ligado, e com timers reais o `act()` assíncrono do RNTL v14 fica
+  // esperando atualizações que não cessam até estourar o timeout.
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("desenha o campo quando ligado", async () => {
     await renderizar();
     expect(screen.getByTestId("campo-de-grafo")).toBeOnTheScreen();
@@ -34,20 +45,14 @@ describe("CampoDeGrafo em modo ambiente", () => {
   // despercebido, porque o mock do Reanimated nunca executa o callback. Um
   // teste que prova que o campo realmente anda fecha esse buraco.
   it("anda com o passar dos quadros", async () => {
-    jest.useFakeTimers();
+    const resultado = await renderizar();
+    const desenho = () => JSON.stringify(resultado.toJSON());
 
-    try {
-      const resultado = await renderizar();
-      const desenho = () => JSON.stringify(resultado.toJSON());
+    const antes = desenho();
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+    });
 
-      const antes = desenho();
-      await act(async () => {
-        jest.advanceTimersByTime(200);
-      });
-
-      expect(desenho()).not.toBe(antes);
-    } finally {
-      jest.useRealTimers();
-    }
+    expect(desenho()).not.toBe(antes);
   });
 });

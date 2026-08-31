@@ -20,7 +20,14 @@ async function renderizar() {
 
 describe("TelaNota", () => {
   // Timers falsos: o TelaNota renderiza o CampoDeGrafo em modo interativo, que
+  // Timers falsos: a tela monta o campo de grafo, que mantém um loop de
+  // `requestAnimationFrame` vivo enquanto estiver ligado. Com timers reais esse
+  // loop nunca pára sozinho, o `act()` assíncrono do RNTL v14 fica esperando
+  // atualizações que não cessam, e os testes estouram o timeout — só quando a
+  // suíte roda inteira, porque aí a máquina está sob carga. É adaptação de
+  // ambiente, não mudança do que se verifica.
   beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ["setImmediate", "queueMicrotask"] });
     mockPush.mockClear();
     useEstadoVault.setState({ busca: "", noSelecionado: null, alturaDaFolha: 0, alturaMinima: 0, alturaMaxima: 0 });
   });

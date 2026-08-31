@@ -197,4 +197,38 @@ describe("GrafoInterativo", () => {
       expect(aoSelecionarNo).toHaveBeenCalledWith("b");
     });
   });
+
+  describe("alcance dos gestos (regressão: pan, pinça e toque longo mortos)", () => {
+    // Os gestos ficaram inertes enquanto o GestureDetector envolvia a camada
+    // `box-none`. Para o RNGH isso é `PointerEventsConfig.BOX_NONE`, e nesse
+    // ramo os handlers da view só entram na disputa se algum descendente virar
+    // alvo do toque; um descendente sem handler só qualifica quando
+    // `view !is ViewGroup || view.getBackground() != null`
+    // (GestureHandlerOrchestrator.kt:735-744). O fundo e os alvos dos nós são
+    // ReactViewGroup sem background — nenhum qualifica, e nada chegava.
+    //
+    // O toque simples seguia funcionando porque passa pelo sistema de toque do
+    // React Native, não pelo RNGH: foi isso que escondeu a falha dos outros
+    // testes.
+    //
+    // O que denuncia qual view o detector envolve é o `collapsable: false` que
+    // ele injeta no próprio filho (GestureDetector/Wrap.tsx). Afirmar sobre
+    // `pointerEvents` não serviria: a view externa não o define nos dois
+    // arranjos, e o teste passaria igual.
+    it("os gestos são anexados à view externa, de pointerEvents automático", async () => {
+      await renderizar();
+      expect(screen.getByTestId("grafo-interativo").props.collapsable).toBe(false);
+    });
+
+    it("os gestos não são anexados à camada box-none", async () => {
+      const { resultado } = await renderizar();
+      const camada = acharPrimeiro(
+        resultado.toJSON() as NoDaArvore,
+        (no) => no.type === "View" && no.props.pointerEvents === "box-none",
+      );
+
+      expect(camada).not.toBeNull();
+      expect(camada!.props.collapsable).not.toBe(false);
+    });
+  });
 });
