@@ -25,8 +25,11 @@ type PropsDoNo = {
 export function NoAnimado({ posicoes, indice, peso, selecionado, id }: PropsDoNo) {
   const { cores } = useTema();
 
-  const propsDoCirculo = useAnimatedProps(() => {
+  const propsDoCirculo = useAnimatedProps<{ cx?: number; cy?: number }>(() => {
     const posicao = posicoes.value[indice];
+    // Vale o mesmo de ArestaAnimada: no render em que `nos` cresceu e o efeito
+    // ainda não reescreveu o shared value, este índice não existe.
+    if (!posicao) return {};
     return { cx: posicao.x, cy: posicao.y };
   });
 
@@ -59,6 +62,7 @@ export function RotuloAnimado({ posicoes, indice, peso, selecionado, titulo }: O
 
   const estilo = useAnimatedStyle(() => {
     const posicao = posicoes.value[indice];
+    if (!posicao) return {};
     return {
       left: posicao.x - LARGURA_DO_ROTULO / 2,
       top: posicao.y + raioDoNo(peso) + ESPACO_DO_ROTULO,
@@ -93,6 +97,7 @@ export function AlvoDoNoAnimado({ posicoes, indice, peso, id, titulo, aoTocar }:
 
   const estilo = useAnimatedStyle(() => {
     const posicao = posicoes.value[indice];
+    if (!posicao) return {};
     return { left: posicao.x - alvo, top: posicao.y - alvo };
   });
 

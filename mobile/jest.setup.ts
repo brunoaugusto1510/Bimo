@@ -18,5 +18,25 @@ jest.mock("react-native-reanimated", () => {
   // Em teste não existe loop de quadros: devolvemos um controle inerte para o
   // componente montar. A lógica de cada quadro é coberta por simulacao.test.ts,
   // que não precisa de render.
-  return { ...mock, useFrameCallback: () => ({ setActive: jest.fn(), isActive: false }) };
+  // O controle precisa ser estável entre renders, como o do Reanimated de
+  // verdade: um objeto novo por render faria os efeitos que dependem dele
+  // re-executarem à toa e o teste mediria algo que o app não faz. Cada controle
+  // criado fica em `globalThis.quadrosDeTeste` para os testes poderem afirmar
+  // sobre o liga/desliga do loop.
+  const { useRef } = require("react") as typeof import("react");
+
+  return {
+    ...mock,
+    useFrameCallback: () => {
+      const referencia = useRef<{ setActive: jest.Mock; isActive: boolean } | null>(null);
+
+      if (referencia.current === null) {
+        referencia.current = { setActive: jest.fn(), isActive: false };
+        (globalThis as { quadrosDeTeste?: unknown[] }).quadrosDeTeste ??= [];
+        (globalThis as { quadrosDeTeste?: unknown[] }).quadrosDeTeste!.push(referencia.current);
+      }
+
+      return referencia.current;
+    },
+  };
 });

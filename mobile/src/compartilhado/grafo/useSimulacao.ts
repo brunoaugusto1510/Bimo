@@ -4,8 +4,8 @@
    API oficial da biblioteca. A regra aceita mutar num efeito OU num callback,
    nunca nos dois — e é isso que este hook precisa fazer, porque a simulação é
    reiniciada por efeito (lista de notas nova) e mexida por gesto (nó pego). */
-import { useCallback, useEffect, useMemo } from "react";
-import { runOnJS, useAnimatedReaction, useFrameCallback, useSharedValue } from "react-native-reanimated";
+import { useEffect, useMemo, useState } from "react";
+import { runOnJS, useFrameCallback, useSharedValue } from "react-native-reanimated";
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import type { Posicao } from "./posicionamento";
 import {
@@ -69,6 +69,14 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
   // reação abaixo — o caminho para desligar o loop de fora dele.
   const esfriada = useSharedValue(false);
 
+  // Ligar/desligar o loop é decisão do JS, nunca do worklet. O objeto que o
+  // `useFrameCallback` devolve guarda estado interno (`callbackId`,
+  // `isActive`), e citá-lo dentro de um worklet o serializa — a partir daí
+  // qualquer `setActive` reclama "Tried to modify key ... of an object which
+  // has been already passed to a worklet". Os worklets só levantam a bandeira
+  // por `runOnJS`; quem chama `setActive` é o efeito lá embaixo.
+  const [ativo, setAtivo] = useState(true);
+
   const quadro = useFrameCallback((info) => {
     "worklet";
     const atual = compartilhado.value;
@@ -91,30 +99,21 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
     // está assentado aqui.
     if (esfriou(atual) && !esfriada.value) {
       esfriada.value = true;
+      runOnJS(setAtivo)(false);
       if (aoEsfriar) runOnJS(aoEsfriar)(proximo.map((posicao) => ({ x: posicao.x, y: posicao.y })));
     }
   }, false);
-
-  // Declarado depois de `quadro` de propósito: chegou a existir aqui uma ref
-  // para contornar a ordem, e ela custava um aviso do Worklets a cada
-  // montagem — o objeto da ref entrava na closure serializada pelo runOnJS, e
-  // escrever `.current` depois disso é justamente o que a biblioteca proíbe.
-  // O worklet do quadro segue sem poder citar `quadro` (ele nasce antes); a
-  // reação, não.
-  const desligarQuadro = useCallback(() => quadro.setActive(false), [quadro]);
-
-  useAnimatedReaction(
-    () => esfriada.value,
-    (parou) => {
-      if (parou) runOnJS(desligarQuadro)();
-    },
-  );
 
   useEffect(() => {
     compartilhado.value = estado;
     posicoes.value = copiarPosicoes(estado);
     buffers.value = [copiarPosicoes(estado), copiarPosicoes(estado)];
     esfriada.value = false;
+    // Liga direto, sem passar por `setAtivo`: aqui é a thread de JS, onde tocar
+    // `quadro` é seguro, e um setState dentro de efeito dispararia um render em
+    // cascata. `ativo` pode ficar em `false` enquanto o loop roda — o efeito
+    // abaixo só reage a mudanças dele, então não desliga nada por conta própria,
+    // e o próximo gesto ou resfriamento volta a sincronizar os dois.
     quadro.setActive(true);
     // Os shared values ficam fora das dependências de propósito: são estáveis
     // por construção (o Reanimated devolve sempre o mesmo objeto) e listá-los
@@ -122,6 +121,10 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
     // escritas que este hook precisa fazer nos gestos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estado, quadro]);
+
+  useEffect(() => {
+    quadro.setActive(ativo);
+  }, [ativo, quadro]);
 
   return {
     posicoes,
@@ -131,7 +134,7 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
       fixarNo(compartilhado.value, id, x, y);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
       esfriada.value = false;
-      quadro.setActive(true);
+      runOnJS(setAtivo)(true);
     },
 
     moverNoPego: (id: string, x: number, y: number) => {
@@ -146,7 +149,7 @@ export function useSimulacao({ nos, arestas, largura, altura, posicoesIniciais, 
       liberarNo(compartilhado.value, id);
       reaquecer(compartilhado.value, ALPHA_AO_REAQUECER);
       esfriada.value = false;
-      quadro.setActive(true);
+      runOnJS(setAtivo)(true);
     },
   };
 }

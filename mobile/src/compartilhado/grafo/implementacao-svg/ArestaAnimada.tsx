@@ -12,9 +12,15 @@ export function ArestaAnimada({ posicoes, de, para }: {
 }) {
   const { cores } = useTema();
 
-  const props = useAnimatedProps(() => {
+  // O tipo é explícito porque o primeiro `return` é o objeto vazio da guarda,
+  // e sem anotação o TypeScript infere as quatro props como `undefined`.
+  const props = useAnimatedProps<{ x1?: number; y1?: number; x2?: number; y2?: number }>(() => {
     const origem = posicoes.value[de];
     const destino = posicoes.value[para];
+    // As posições vêm de um shared value que só é reescrito num efeito, ou
+    // seja, um render depois de `nos` mudar. No render entre os dois, o array
+    // ainda tem o tamanho da lista anterior e estes índices não existem.
+    if (!origem || !destino) return {};
     return { x1: origem.x, y1: origem.y, x2: destino.x, y2: destino.y };
   });
 
