@@ -122,3 +122,94 @@ describe("reaquecer", () => {
     expect(estado.alpha).toBe(1);
   });
 });
+
+describe("layout resultante (14 notas, como o vault de exemplo)", () => {
+  const LARGURA_REAL = 400;
+  const ALTURA_REAL = 800;
+
+  function grafoDeExemplo(): NoDoGrafo[] {
+    // Mesma distribuição que `montarGrafo` produz: círculo com raio embaralhado.
+    return Array.from({ length: 14 }, (_, i) => {
+      const angulo = (i / 14) * Math.PI * 2;
+      const distancia = 0.2 + ((i * 37) % 100) / 100 * 0.3;
+      return {
+        id: `n${i}`,
+        titulo: `Nota ${i}`,
+        x: 0.5 + Math.cos(angulo) * distancia,
+        y: 0.5 + Math.sin(angulo) * distancia,
+        peso: 0.6 + (i % 5) * 0.3,
+      };
+    });
+  }
+
+  function estabilizar() {
+    const estado = criarSimulacao(
+      grafoDeExemplo(),
+      [
+        { de: "n0", para: "n1" }, { de: "n1", para: "n2" }, { de: "n2", para: "n3" },
+        { de: "n0", para: "n5" }, { de: "n5", para: "n8" }, { de: "n8", para: "n11" },
+        { de: "n3", para: "n7" }, { de: "n7", para: "n12" },
+      ],
+      LARGURA_REAL,
+      ALTURA_REAL,
+    );
+    for (let i = 0; i < 600; i += 1) avancarSimulacao(estado, 16.67);
+    return estado;
+  }
+
+  function raioVisual(peso: number) {
+    return peso * 5.5;
+  }
+
+  it("nenhum par de nós fica sobreposto", () => {
+    // Sem uma força de colisão, dois nós podem repousar no mesmo ponto: a
+    // repulsão cai com o quadrado da distância e a mola vence de perto.
+    const estado = estabilizar();
+
+    for (let a = 0; a < estado.nos.length; a += 1) {
+      for (let b = a + 1; b < estado.nos.length; b += 1) {
+        const distancia = Math.hypot(estado.nos[a].x - estado.nos[b].x, estado.nos[a].y - estado.nos[b].y);
+        const encostado = raioVisual(estado.nos[a].peso) + raioVisual(estado.nos[b].peso);
+        expect(distancia).toBeGreaterThan(encostado);
+      }
+    }
+  });
+
+  it("o grafo ocupa a tela em vez de virar um novelo no centro", () => {
+    // "Muito agrupado" em números: a nuvem precisa ter largura de verdade.
+    const estado = estabilizar();
+    const xs = estado.nos.map((no) => no.x);
+    const ys = estado.nos.map((no) => no.y);
+
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(LARGURA_REAL * 0.5);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(LARGURA_REAL * 0.5);
+  });
+
+  it("mas não explode para fora da tela", () => {
+    const estado = estabilizar();
+
+    for (const no of estado.nos) {
+      expect(Math.hypot(no.x - LARGURA_REAL / 2, no.y - ALTURA_REAL / 2)).toBeLessThan(LARGURA_REAL);
+    }
+  });
+
+  it("nós ligados continuam mais perto entre si que a média geral", () => {
+    // A repulsão maior não pode apagar o sinal do grafo: vizinho tem que
+    // continuar parecendo vizinho.
+    const estado = estabilizar();
+
+    const distanciaDe = (a: number, b: number) =>
+      Math.hypot(estado.nos[a].x - estado.nos[b].x, estado.nos[a].y - estado.nos[b].y);
+
+    const ligadas = estado.ligacoes.map(([a, b]) => distanciaDe(a, b));
+    const mediaLigadas = ligadas.reduce((soma, d) => soma + d, 0) / ligadas.length;
+
+    const todas: number[] = [];
+    for (let a = 0; a < estado.nos.length; a += 1) {
+      for (let b = a + 1; b < estado.nos.length; b += 1) todas.push(distanciaDe(a, b));
+    }
+    const mediaTodas = todas.reduce((soma, d) => soma + d, 0) / todas.length;
+
+    expect(mediaLigadas).toBeLessThan(mediaTodas);
+  });
+});

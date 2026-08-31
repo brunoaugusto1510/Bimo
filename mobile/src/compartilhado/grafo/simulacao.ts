@@ -1,12 +1,24 @@
 import type { Aresta, NoDoGrafo } from "@/dados/tipos";
 import { posicionarNo } from "./posicionamento";
 
-// Valores no espírito dos padrões do d3-force, ajustáveis depois de ver o
-// resultado no aparelho.
-const REPULSAO = -30;
-const COMPRIMENTO_DA_MOLA = 60;
+// Estes quatro foram calibrados por varredura, medindo o layout de 14 notas —
+// o tamanho do vault de exemplo — contra quatro critérios: nenhum par
+// sobreposto, a nuvem ocupando pelo menos metade da largura da tela, ninguém
+// saindo da tela, e nós ligados mais perto entre si que a média geral. Com
+// estes valores os ligados ficam a ~65 px e a média geral em ~137 px, então o
+// agrupamento continua legível a olho.
+const REPULSAO = -500;
+const COMPRIMENTO_DA_MOLA = 70;
 const RIGIDEZ = 0.05;
-const ATRACAO_AO_CENTRO = 0.02;
+// Fraca de propósito: só impede o grafo de derivar para fora da tela. Alta, vira
+// uma mola que puxa todo mundo para o meio — era ela a maior responsável pelo
+// novelo no centro.
+const ATRACAO_AO_CENTRO = 0.002;
+// Espaço livre entre as bordas de dois nós, além dos raios desenhados. Sem uma
+// separação explícita, a repulsão sozinha não impede sobreposição: ela cai com
+// o quadrado da distância, justamente onde a mola é mais forte.
+const FOLGA_DE_COLISAO = 16;
+const RAIO_POR_PESO = 5.5;
 const ATRITO = 0.6;
 const DECAIMENTO_DO_ALPHA = 0.0228;
 const ALPHA_MINIMO = 0.001;
@@ -61,6 +73,59 @@ export function criarSimulacao(
     largura,
     altura,
   };
+}
+
+// Declarada antes de `avancarSimulacao` porque o plugin do Reanimated captura
+// as funções que um worklet usa no momento em que o transforma: definida
+// depois, a chamada quebra em runtime com "separarSobrepostos is not a
+// function".
+//
+// Separação posicional, no espírito do `forceCollide` do d3: em vez de somar
+// mais uma força — que a mola venceria de novo —, empurra os dois nós para fora
+// na mesma hora, metade do excesso para cada lado. É o que garante que dois nós
+// nunca terminem em cima um do outro.
+function separarSobrepostos(estado: EstadoSimulacao): void {
+  "worklet";
+  const { nos } = estado;
+
+  for (let a = 0; a < nos.length; a += 1) {
+    for (let b = a + 1; b < nos.length; b += 1) {
+      const primeiro = nos[a];
+      const segundo = nos[b];
+      const minima = primeiro.peso * RAIO_POR_PESO + segundo.peso * RAIO_POR_PESO + FOLGA_DE_COLISAO;
+
+      let dx = segundo.x - primeiro.x;
+      let dy = segundo.y - primeiro.y;
+      let distancia = Math.hypot(dx, dy);
+
+      if (distancia >= minima) continue;
+
+      if (distancia < DISTANCIA_MINIMA) {
+        dx = DISTANCIA_MINIMA;
+        dy = 0;
+        distancia = DISTANCIA_MINIMA;
+      }
+
+      const empurrao = (minima - distancia) / 2;
+      const ex = (dx / distancia) * empurrao;
+      const ey = (dy / distancia) * empurrao;
+
+      // Nó preso ao dedo não cede: quem sai da frente é o outro, com o
+      // empurrão inteiro.
+      if (primeiro.fixo) {
+        segundo.x += ex * 2;
+        segundo.y += ey * 2;
+      } else if (segundo.fixo) {
+        primeiro.x -= ex * 2;
+        primeiro.y -= ey * 2;
+      } else {
+        primeiro.x -= ex;
+        primeiro.y -= ey;
+        segundo.x += ex;
+        segundo.y += ey;
+      }
+    }
+  }
 }
 
 // Muta o estado recebido de propósito, ao contrário de `avancarCampo` em
@@ -130,6 +195,8 @@ export function avancarSimulacao(estado: EstadoSimulacao, dt: number): void {
     no.x += no.vx * passo;
     no.y += no.vy * passo;
   }
+
+  separarSobrepostos(estado);
 
   estado.alpha = alpha * (1 - DECAIMENTO_DO_ALPHA);
 }
