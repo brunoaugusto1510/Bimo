@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useServicos } from "@/servicos";
 import { carregarOuLogar } from "@/compartilhado/utils/carregarOuLogar";
 import { CampoDeGrafo } from "@/compartilhado/grafo";
-import { useEstadoGrafo } from "@/funcionalidades/grafo/estado";
+import { useEstadoGrafo, useEstadoLayoutDoGrafo } from "@/funcionalidades/grafo/estado";
+import { reconciliarLayout } from "@/funcionalidades/grafo/layoutPersistido";
 import { useEstadoChat } from "@/funcionalidades/chat/estado";
 import { useEstadoConta } from "@/funcionalidades/conta/estado";
 import type { Aresta, Nota } from "@/dados/tipos";
@@ -34,6 +35,8 @@ export function TelaNota() {
   const particulasLigadas = useEstadoConta((estado) => estado.interruptores.particulas);
   const densidade = useEstadoConta((estado) => estado.densidade);
   const preencherRascunho = useEstadoChat((estado) => estado.preencherRascunho);
+  const layoutSalvo = useEstadoLayoutDoGrafo((estado) => estado.posicoes);
+  const guardarLayout = useEstadoLayoutDoGrafo((estado) => estado.guardarLayout);
 
   const [notas, setNotas] = useState<Nota[]>([]);
   const [arestas, setArestas] = useState<Aresta[]>([]);
@@ -46,12 +49,38 @@ export function TelaNota() {
     if (alturaDisponivel > 0 && minimoDaFolha > 0) definirLimitesDaFolha(minimoDaFolha, alturaDisponivel);
   }, [alturaDisponivel, minimoDaFolha, definirLimitesDaFolha]);
 
+  // A altura escolhida viaja junto com o layout do grafo, pelo mesmo motivo:
+  // é ajuste manual do usuário, não estado derivado.
+  useEffect(() => {
+    if (alturaDaFolha > 0) guardarLayout({ alturaDaFolha });
+  }, [alturaDaFolha, guardarLayout]);
+
   useEffect(() => {
     carregarOuLogar(vault.listarNotas(), setNotas, "Falha ao listar notas do vault");
     carregarOuLogar(vault.listarArestas(), setArestas, "Falha ao listar arestas do vault");
   }, [vault]);
 
   const nosDoGrafo = useMemo(() => montarGrafo(notas, arestas), [notas, arestas]);
+
+  // Lido uma vez por lista de notas: posição salva vence, nota nova entra pelo
+  // círculo de `montarGrafo`, órfã de nota apagada é descartada.
+  const posicoesIniciais = useMemo(
+    () => reconciliarLayout({ ...useEstadoLayoutDoGrafo.getState(), posicoes: layoutSalvo }, nosDoGrafo.map((no) => no.id)),
+    [nosDoGrafo, layoutSalvo],
+  );
+
+  // Só quando a simulação esfria — o layout está assentado e a gravação é uma
+  // por repouso, nunca uma por quadro.
+  const aoAssentarLayout = useCallback(
+    (posicoes: { x: number; y: number }[]) => {
+      const porId: Record<string, { x: number; y: number }> = {};
+      nosDoGrafo.forEach((no, indice) => {
+        if (posicoes[indice]) porId[no.id] = posicoes[indice];
+      });
+      guardarLayout({ posicoes: porId });
+    },
+    [nosDoGrafo, guardarLayout],
+  );
   const visiveis = useMemo(() => filtrarNotas(notas, busca, noSelecionado, arestas), [notas, busca, noSelecionado, arestas]);
   const selecionada = notas.find((nota) => nota.id === noSelecionado) ?? null;
 
@@ -71,6 +100,8 @@ export function TelaNota() {
         arestas={arestas}
         noSelecionado={noSelecionado}
         aoSelecionarNo={selecionarNo}
+        posicoesIniciais={posicoesIniciais}
+        aoAssentarLayout={aoAssentarLayout}
       />
 
       <ChipsDeContexto escopo={escopo} contagem={contagem} />

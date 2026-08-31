@@ -12,6 +12,8 @@ export function CampoDeGrafo(props: PropsDoCampoDeGrafo) {
           arestas={props.arestas ?? []}
           noSelecionado={props.noSelecionado ?? null}
           aoSelecionarNo={props.aoSelecionarNo ?? (() => {})}
+          posicoesIniciais={props.posicoesIniciais}
+          aoAssentarLayout={props.aoAssentarLayout}
         />
       </>
     );

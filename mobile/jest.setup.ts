@@ -1,6 +1,13 @@
 import "@testing-library/react-native";
 import "react-native-gesture-handler/jestSetup";
 
+// Sem isto o módulo nativo é null em teste e qualquer suíte que toque a tela
+// de Nota falha ao carregar ("NativeModule: AsyncStorage is null"). O mock
+// vem pronto no próprio pacote.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
+);
+
 jest.mock("react-native-reanimated", () => {
   const mock = require("react-native-reanimated/mock");
   // O mock oficial não implementa useFrameCallback — o próprio arquivo diz
