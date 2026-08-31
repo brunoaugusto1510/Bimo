@@ -13,6 +13,9 @@ const LARGURA_DO_ROTULO = 96;
 const ESPACO_DO_ROTULO = 6;
 const FOLGA_DO_ALVO = 10;
 const FOLGA_DO_ANEL = 7;
+// O nó cresce enquanto está preso ao dedo. Sem esse retorno não há como
+// distinguir "não peguei" de "peguei e não arrastei".
+const ESCALA_AO_PEGAR = 1.6;
 
 type PropsDoNo = {
   posicoes: SharedValue<Posicao[]>;
@@ -20,17 +23,19 @@ type PropsDoNo = {
   peso: number;
   selecionado: boolean;
   id: string;
+  idPego?: SharedValue<string | null>;
 };
 
-export function NoAnimado({ posicoes, indice, peso, selecionado, id }: PropsDoNo) {
+export function NoAnimado({ posicoes, indice, peso, selecionado, id, idPego }: PropsDoNo) {
   const { cores } = useTema();
 
-  const propsDoCirculo = useAnimatedProps<{ cx?: number; cy?: number }>(() => {
+  const propsDoCirculo = useAnimatedProps<{ cx?: number; cy?: number; r?: number }>(() => {
     const posicao = posicoes.value[indice];
     // Vale o mesmo de ArestaAnimada: no render em que `nos` cresceu e o efeito
     // ainda não reescreveu o shared value, este índice não existe.
     if (!posicao) return {};
-    return { cx: posicao.x, cy: posicao.y };
+    const pego = idPego !== undefined && idPego.value === id;
+    return { cx: posicao.x, cy: posicao.y, r: raioDoNo(peso) * (pego ? ESCALA_AO_PEGAR : 1) };
   });
 
   return (

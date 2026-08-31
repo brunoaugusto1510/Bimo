@@ -14,6 +14,11 @@ import { AlvoDoNoAnimado, NoAnimado, RotuloAnimado } from "./NoAnimado";
 // de um nó o arrastaria sem querer; longo demais e o gesto parece travado.
 const DURACAO_PARA_PEGAR_MS = 250;
 
+// Alvo de pegada do toque longo. Um nó de peso 1 tem 5,5 px de raio; sem um
+// piso, pegar exigiria pontaria de mouse. 22 px de raio dão os 44 px de
+// diâmetro que o alvo de toque mínimo do tema já usa em outros controles.
+const ALCANCE_PARA_PEGAR = 22;
+
 const ZOOM_MINIMO = 0.6;
 const ZOOM_MAXIMO = 2.4;
 
@@ -67,16 +72,25 @@ export function GrafoInterativo({
 
   const idPego = useSharedValue<string | null>(null);
 
+  // A camada escala a partir do próprio centro, que é o centro da tela: é esse
+  // ponto que a conversão precisa para desfazer o zoom no lugar certo.
+  const centroDaTela = useMemo(() => ({ x: largura / 2, y: altura / 2 }), [largura, altura]);
+
   function pontoNoGrafo(x: number, y: number) {
     "worklet";
-    return paraCoordenadaDoGrafo({ x, y }, zoom.value, { x: deslocamentoX.value, y: deslocamentoY.value });
+    return paraCoordenadaDoGrafo(
+      { x, y },
+      zoom.value,
+      { x: deslocamentoX.value, y: deslocamentoY.value },
+      centroDaTela,
+    );
   }
 
   const pegar = Gesture.LongPress()
     .minDuration(DURACAO_PARA_PEGAR_MS)
     .onStart((evento) => {
       const ponto = pontoNoGrafo(evento.x, evento.y);
-      const indice = noMaisProximoDeCoordenada(posicoes.value, pesos, ponto);
+      const indice = noMaisProximoDeCoordenada(posicoes.value, pesos, ponto, ALCANCE_PARA_PEGAR);
       if (indice === null) return;
       idPego.value = ids[indice];
       pegarNo(ids[indice], ponto.x, ponto.y);
@@ -165,6 +179,7 @@ export function GrafoInterativo({
                 indice={indice}
                 peso={no.peso}
                 selecionado={no.id === noSelecionado}
+                idPego={idPego}
               />
             ))}
           </Svg>

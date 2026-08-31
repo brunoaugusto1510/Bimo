@@ -30,18 +30,33 @@ describe("raioDoNo", () => {
 });
 
 describe("paraCoordenadaDoGrafo", () => {
-  it("desfaz o deslocamento", () => {
-    expect(paraCoordenadaDoGrafo({ x: 150, y: 250 }, 1, { x: 50, y: 100 })).toEqual({ x: 100, y: 150 });
+  const CENTRO = { x: 200, y: 400 };
+
+  it("sem zoom nem deslocamento, o ponto é ele mesmo", () => {
+    expect(paraCoordenadaDoGrafo({ x: 150, y: 250 }, 1, { x: 0, y: 0 }, CENTRO)).toEqual({ x: 150, y: 250 });
   });
 
-  it("desfaz o zoom", () => {
-    expect(paraCoordenadaDoGrafo({ x: 200, y: 100 }, 2, { x: 0, y: 0 })).toEqual({ x: 100, y: 50 });
+  it("desfaz o deslocamento", () => {
+    expect(paraCoordenadaDoGrafo({ x: 150, y: 250 }, 1, { x: 50, y: 100 }, CENTRO)).toEqual({ x: 100, y: 150 });
+  });
+
+  it("o centro da tela não se move com o zoom", () => {
+    // O React Native escala a partir do centro da view, não do canto. É por
+    // isso que a conta precisa do centro: sem ele, o erro é de
+    // centro × (1 - 1/zoom) — dezenas de pixels — e o toque longo acerta
+    // sempre o lugar errado depois de qualquer zoom.
+    expect(paraCoordenadaDoGrafo(CENTRO, 2, { x: 0, y: 0 }, CENTRO)).toEqual(CENTRO);
+  });
+
+  it("desfaz o zoom em torno do centro", () => {
+    // 100 px à direita do centro na tela, com zoom 2, são 50 px no grafo.
+    expect(paraCoordenadaDoGrafo({ x: 300, y: 400 }, 2, { x: 0, y: 0 }, CENTRO)).toEqual({ x: 250, y: 400 });
   });
 
   it("desfaz deslocamento e zoom na ordem certa", () => {
-    // A camada aplica translate e só depois scale; desfazer na ordem errada
-    // erra o alvo por um fator do zoom — é aqui que o hit-test fura na prática.
-    expect(paraCoordenadaDoGrafo({ x: 250, y: 100 }, 2, { x: 50, y: 20 })).toEqual({ x: 100, y: 40 });
+    // A camada aplica translate e escala a partir do centro; desfazer na ordem
+    // errada erra por um fator do zoom.
+    expect(paraCoordenadaDoGrafo({ x: 340, y: 420 }, 2, { x: 40, y: 20 }, CENTRO)).toEqual({ x: 250, y: 400 });
   });
 });
 
@@ -72,5 +87,18 @@ describe("noMaisProximoDeCoordenada", () => {
 
   it("aguenta grafo vazio", () => {
     expect(noMaisProximoDeCoordenada([], [], { x: 1, y: 2 })).toBeNull();
+  });
+
+  it("com alcance mínimo, aceita o dedo mais longe do centro", () => {
+    // Um nó de peso 1 tem raio 5,5 px; com a tolerância de 10 o alvo fica com
+    // 15,5 px de raio, menor que a ponta de um dedo. O gesto de pegar passa um
+    // alcance mínimo para não exigir pontaria.
+    expect(noMaisProximoDeCoordenada(posicoes, pesos, { x: 120, y: 100 })).toBeNull();
+    expect(noMaisProximoDeCoordenada(posicoes, pesos, { x: 120, y: 100 }, 22)).toBe(0);
+  });
+
+  it("o alcance mínimo não vale mais que o raio do nó quando o nó é grande", () => {
+    const pesado = [4];
+    expect(noMaisProximoDeCoordenada([{ x: 100, y: 100 }], pesado, { x: 128, y: 100 }, 22)).toBe(0);
   });
 });

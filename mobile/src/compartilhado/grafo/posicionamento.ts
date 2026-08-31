@@ -27,24 +27,46 @@ export function posicionarNo(no: NoDoGrafo, largura: number, altura: number): { 
   };
 }
 
-// A camada do grafo aplica translate e depois scale, então desfazer é subtrair
-// o deslocamento e só então dividir pelo zoom. Na ordem trocada o erro é de um
-// fator do zoom — o toque acerta um vizinho, ou nenhum.
-export function paraCoordenadaDoGrafo(toque: Posicao, zoom: number, deslocamento: Posicao): Posicao {
+// A camada do grafo aplica translate e escala **a partir do centro** — é o
+// `transformOrigin` padrão do React Native, e não o canto superior esquerdo.
+// Desfazer é: tirar o deslocamento, medir a distância até o centro e dividir
+// essa distância pelo zoom. Ignorar o centro dá um erro de
+// `centro × (1 - 1/zoom)`: com zoom 2 numa tela de 800 px de altura, 200 px
+// fora do alvo — o toque longo simplesmente não acha o nó depois de um zoom.
+export function paraCoordenadaDoGrafo(
+  toque: Posicao,
+  zoom: number,
+  deslocamento: Posicao,
+  centro: Posicao,
+): Posicao {
   "worklet";
-  return { x: (toque.x - deslocamento.x) / zoom, y: (toque.y - deslocamento.y) / zoom };
+  return {
+    x: centro.x + (toque.x - deslocamento.x - centro.x) / zoom,
+    y: centro.y + (toque.y - deslocamento.y - centro.y) / zoom,
+  };
 }
 
 // Devolve o índice, não o id: quem chama já tem os arrays paralelos da
 // simulação em mãos e o índice é o que o shared value de posições usa.
-export function noMaisProximoDeCoordenada(posicoes: Posicao[], pesos: number[], ponto: Posicao): number | null {
+//
+// `alcanceMinimo` existe porque os nós são desenhados pequenos — peso 1 dá
+// 5,5 px de raio, e com a tolerância o alvo fica menor que a ponta de um dedo.
+// Quem precisa de pontaria confortável (o gesto de pegar o nó) passa um piso;
+// quem não passa fica com o alvo do desenho.
+export function noMaisProximoDeCoordenada(
+  posicoes: Posicao[],
+  pesos: number[],
+  ponto: Posicao,
+  alcanceMinimo = 0,
+): number | null {
   "worklet";
   let escolhido: number | null = null;
   let menorDistancia = Number.POSITIVE_INFINITY;
 
   for (let i = 0; i < posicoes.length; i += 1) {
     const distancia = Math.hypot(posicoes[i].x - ponto.x, posicoes[i].y - ponto.y);
-    if (distancia <= raioDoNo(pesos[i]) + TOLERANCIA_DE_TOQUE && distancia < menorDistancia) {
+    const alcance = Math.max(raioDoNo(pesos[i]) + TOLERANCIA_DE_TOQUE, alcanceMinimo);
+    if (distancia <= alcance && distancia < menorDistancia) {
       menorDistancia = distancia;
       escolhido = i;
     }
