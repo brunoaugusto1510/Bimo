@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import { useFrameCallback } from "react-native-reanimated";
 import Svg, { Circle, Line } from "react-native-svg";
 import { useTema } from "@/compartilhado/tema";
 import {
@@ -48,37 +47,53 @@ export function CampoDeGrafoSvg({ densidade, ligado, particulasLigadas, pulso, c
     nosRef.current = nos;
   }, [nos]);
 
-  const ultimoQuadro = useRef(0);
-  const ultimoCalculoDeLigacoes = useRef(0);
-
   useEffect(() => {
     setNos(criarCampo(opcoesRef.current));
   }, [densidade, largura, altura]);
 
-  // `useFrameCallback` no lugar do `setInterval` que estava aqui: o intervalo
-  // não é alinhado ao vsync e acumula drift, o que num aparelho de 120 Hz
-  // aparece como judder constante no fundo de todas as telas.
-  const quadro = useFrameCallback((info) => {
-    const agora = info.timeSinceFirstFrame;
-    if (agora - ultimoQuadro.current < INTERVALO_DO_CAMPO_MS) return;
-    ultimoQuadro.current = agora;
-
-    setNos((atuais) => avancarCampo(atuais, opcoesRef.current));
-    setParticulas(avancarParticulas);
-
-    // As ligações saem do caminho quente: são O(n²) — 1770 pares na densidade
-    // padrão de 60 — e os nós andam devagar demais para justificar recalculá-las
-    // a cada passo.
-    if (deveRecalcularLigacoes(ultimoCalculoDeLigacoes.current, agora)) {
-      ultimoCalculoDeLigacoes.current = agora;
-      const { largura: larguraAtual, altura: alturaAtual } = opcoesRef.current;
-      setLigacoes(calcularLigacoes(nosRef.current, raioDoCampo(larguraAtual, alturaAtual)));
-    }
-  }, false);
-
+  // `requestAnimationFrame` no lugar do `setInterval` que estava aqui: no React
+  // Native ele é agendado pelo Choreographer, então acompanha o vsync em vez de
+  // acumular drift — era o drift que aparecia como judder num aparelho de 120 Hz.
+  //
+  // E não `useFrameCallback` do Reanimated: o plugin transforma aquele callback
+  // em worklet, e este loop precisa chamar `setNos`/`setParticulas`, que são
+  // dispatch de estado do React e só existem na thread de JS. Tentar isso
+  // derruba a tela com "Tried to synchronously call a Remote Function".
   useEffect(() => {
-    quadro.setActive(ligado);
-  }, [ligado, quadro]);
+    if (!ligado) return;
+
+    let cancelado = false;
+    let pedido = 0;
+    let ultimoPasso = 0;
+    let ultimoCalculoDeLigacoes = 0;
+
+    const passo = (agora: number) => {
+      if (cancelado) return;
+      pedido = requestAnimationFrame(passo);
+
+      if (agora - ultimoPasso < INTERVALO_DO_CAMPO_MS) return;
+      ultimoPasso = agora;
+
+      setNos((atuais) => avancarCampo(atuais, opcoesRef.current));
+      setParticulas(avancarParticulas);
+
+      // As ligações saem do caminho quente: são O(n²) — 1770 pares na densidade
+      // padrão de 60 — e os nós andam devagar demais para justificar recalculá-las
+      // a cada passo.
+      if (deveRecalcularLigacoes(ultimoCalculoDeLigacoes, agora)) {
+        ultimoCalculoDeLigacoes = agora;
+        const { largura: larguraAtual, altura: alturaAtual } = opcoesRef.current;
+        setLigacoes(calcularLigacoes(nosRef.current, raioDoCampo(larguraAtual, alturaAtual)));
+      }
+    };
+
+    pedido = requestAnimationFrame(passo);
+
+    return () => {
+      cancelado = true;
+      cancelAnimationFrame(pedido);
+    };
+  }, [ligado]);
 
   useEffect(() => {
     if (pulso === 0 || !particulasLigadas) return;

@@ -152,7 +152,6 @@ export function deveRotular(peso: number, selecionado: boolean): boolean {
 const INTERVALO_DAS_LIGACOES_MS = 200;
 
 export function deveRecalcularLigacoes(ultimoCalculo: number, agora: number): boolean {
-  "worklet";
   // Zero é a sentinela de "nunca calculou". Sem esse caso, um primeiro quadro
   // com timestamp abaixo do intervalo deixaria o campo sem ligação nenhuma
   // até os 200 ms fecharem — um piscar visível na entrada da tela.
