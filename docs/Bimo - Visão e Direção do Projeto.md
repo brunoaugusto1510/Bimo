@@ -688,7 +688,7 @@ Nenhuma migração estrutural foi realizada nesta etapa — apenas o desenho con
 - [ ] Processamento de PDFs
 - [ ] Processamento de Markdown
 - [ ] Processamento de páginas web
-- [ ] Transcrições
+- [ ] Transcrições — adiada por enquanto (custo e dependência de serviço externo)
 - [ ] Relacionamento entre fontes e conhecimento
 
 ---

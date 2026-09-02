@@ -13,9 +13,9 @@
 - [x] Processamento de PDFs
 - [x] Processamento de páginas web
 - [x] Relacionamento entre fontes e conhecimento
-- [ ] Transcrições
+- [ ] Transcrições — adiada por enquanto (envolve custo e dependência de serviço externo)
 
-Ordem combinada: Markdown/texto puro → PDF → páginas web → relacionamento fonte↔conhecimento → transcrições (por último, maior decisão de serviço externo).
+Ordem combinada: Markdown/texto puro → PDF → páginas web → relacionamento fonte↔conhecimento. Transcrições ficam fora do escopo atual; o roadmap segue para a Fase 4 (Retrieval).
 
 ---
 
@@ -76,6 +76,6 @@ Testado com mocks (Gemini, extração, criação de Entidade/Nota, proveniência
 
 Suíte inteira de `src/lib`: **177 testes passando**. `tsc`/lint limpos.
 
-## Próximo ponto do checklist
+## Decisão 6 — Transcrições adiadas
 
-**Transcrições** — áudio/vídeo, precisa de decisão de serviço externo (ex.: Whisper API) — maior decisão de custo/dependência da Fase 3, por isso deixada por último.
+**Transcrições** — áudio/vídeo exigiria um serviço externo (ex.: Whisper API), adicionando custo e dependência operacional. Por decisão do usuário, esta entrega fica adiada por enquanto e não bloqueia o encerramento do escopo atual da Fase 3. O próximo passo do roadmap passa a ser a **Fase 4 — Retrieval**.
