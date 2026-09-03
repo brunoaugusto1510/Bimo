@@ -1,0 +1,4 @@
+ALTER TABLE "entidades" ADD COLUMN "vetor_busca" "tsvector" GENERATED ALWAYS AS (setweight(to_tsvector('public.portugues_sem_acento', coalesce(nome, '')), 'A') || setweight(to_tsvector('public.portugues_sem_acento', public.texto_de_lista(aliases)), 'B') || setweight(to_tsvector('public.portugues_sem_acento', coalesce(tipo, '')), 'C')) STORED NOT NULL;--> statement-breakpoint
+ALTER TABLE "notas" ADD COLUMN "vetor_busca" "tsvector" GENERATED ALWAYS AS (setweight(to_tsvector('public.portugues_sem_acento', coalesce(titulo, '')), 'A') || setweight(to_tsvector('public.portugues_sem_acento', public.texto_de_lista(tags)), 'B') || setweight(to_tsvector('public.portugues_sem_acento', coalesce(conteudo, '')), 'C')) STORED NOT NULL;--> statement-breakpoint
+CREATE INDEX "entidades_vetor_busca_idx" ON "entidades" USING gin ("vetor_busca");--> statement-breakpoint
+CREATE INDEX "notas_vetor_busca_idx" ON "notas" USING gin ("vetor_busca");

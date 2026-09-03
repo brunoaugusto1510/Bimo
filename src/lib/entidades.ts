@@ -26,7 +26,27 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "./db/cliente";
 import { entidades, nos, versoesEntidade } from "./db/schema";
 
-export type Entidade = typeof entidades.$inferSelect;
+/**
+ * `vetorBusca` (coluna gerada para full-text search, ver `db/schema/entidades.ts`)
+ * fica de fora: é uso interno do Postgres, nunca precisa trafegar até a
+ * aplicação — por isso as leituras abaixo usam projeção explícita em vez de
+ * `db.select()` genérico.
+ */
+export type Entidade = Omit<typeof entidades.$inferSelect, "vetorBusca">;
+
+const colunasDaEntidade = {
+  id: entidades.id,
+  userId: entidades.userId,
+  nome: entidades.nome,
+  tipo: entidades.tipo,
+  aliases: entidades.aliases,
+  confianca: entidades.confianca,
+  status: entidades.status,
+  criadoPor: entidades.criadoPor,
+  criadoPorFerramenta: entidades.criadoPorFerramenta,
+  criadoEm: entidades.criadoEm,
+  atualizadoEm: entidades.atualizadoEm,
+};
 
 type AutorDaEdicao = "usuario" | "agente";
 type StatusEntidade = "rascunho" | "aprovada" | "mesclada";
@@ -80,7 +100,7 @@ export async function criarEntidade(nova: NovaEntidade): Promise<Entidade> {
         criadoPor: nova.criadoPor,
         criadoPorFerramenta: nova.criadoPorFerramenta,
       })
-      .returning();
+      .returning(colunasDaEntidade);
 
     await tx.insert(versoesEntidade).values({
       entidadeId: linha.id,
@@ -116,7 +136,7 @@ export async function atualizarEntidade(
       .update(entidades)
       .set(valores)
       .where(and(eq(entidades.id, id), eq(entidades.userId, userId)))
-      .returning();
+      .returning(colunasDaEntidade);
 
     if (!linha) {
       throw new Error(`Entidade ${id} não encontrada para este usuário.`);
@@ -141,7 +161,7 @@ export async function atualizarEntidade(
 /** Busca uma Entidade por id, restrita ao dono. */
 export async function obterEntidade(userId: string, id: number): Promise<Entidade | undefined> {
   const [linha] = await db
-    .select()
+    .select(colunasDaEntidade)
     .from(entidades)
     .where(and(eq(entidades.id, id), eq(entidades.userId, userId)));
   return linha;
@@ -150,7 +170,7 @@ export async function obterEntidade(userId: string, id: number): Promise<Entidad
 /** Lista as Entidades de um usuário, mais recentes primeiro. */
 export async function listarEntidades(userId: string): Promise<Entidade[]> {
   return db
-    .select()
+    .select(colunasDaEntidade)
     .from(entidades)
     .where(eq(entidades.userId, userId))
     .orderBy(desc(entidades.criadoEm));

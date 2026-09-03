@@ -3,6 +3,7 @@ import { bigint, index, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle
 import { usuariosAuth } from "./auth";
 import { criadoPorEnum } from "./enums";
 import { nos } from "./nos";
+import { tsvector } from "./tipos-customizados";
 
 /**
  * Nota: documento pesado, majoritariamente autoral do usuário (Decisão 1 do
@@ -36,9 +37,21 @@ export const notas = pgTable(
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /**
+     * Coluna gerada (STORED) para full-text search (Fase 4 - Retrieval).
+     * Peso A = título, B = tags, C = conteúdo — `ts_rank` usa isso pra
+     * priorizar match no título acima de match perdido no meio do corpo.
+     * `portugues_sem_acento` (ver migration `0004_busca_textual_infra`) é a
+     * config `portuguese` do Postgres com `unaccent` acoplado ao mapeamento,
+     * pra "codigo" achar "código" sem o usuário precisar digitar o acento.
+     */
+    vetorBusca: tsvector("vetor_busca").notNull().generatedAlwaysAs(
+      sql`setweight(to_tsvector('public.portugues_sem_acento', coalesce(titulo, '')), 'A') || setweight(to_tsvector('public.portugues_sem_acento', public.texto_de_lista(tags)), 'B') || setweight(to_tsvector('public.portugues_sem_acento', coalesce(conteudo, '')), 'C')`,
+    ),
   },
   (tabela) => [
     index("notas_user_id_idx").on(tabela.userId),
+    index("notas_vetor_busca_idx").using("gin", tabela.vetorBusca),
     pgPolicy("notas_dono_policy", {
       for: "all",
       to: "authenticated",

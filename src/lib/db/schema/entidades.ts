@@ -12,6 +12,7 @@ import {
 import { usuariosAuth } from "./auth";
 import { criadoPorEnum, statusEntidadeEnum } from "./enums";
 import { nos } from "./nos";
+import { tsvector } from "./tipos-customizados";
 
 /**
  * Entidade: nó leve do grafo de conhecimento (Decisão 1 do Architecture
@@ -42,9 +43,18 @@ export const entidades = pgTable(
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /**
+     * Coluna gerada (STORED) para full-text search (Fase 4 - Retrieval).
+     * Peso A = nome, B = aliases, C = tipo/categoria — ver comentário
+     * equivalente em `notas.ts` sobre `portugues_sem_acento`.
+     */
+    vetorBusca: tsvector("vetor_busca").notNull().generatedAlwaysAs(
+      sql`setweight(to_tsvector('public.portugues_sem_acento', coalesce(nome, '')), 'A') || setweight(to_tsvector('public.portugues_sem_acento', public.texto_de_lista(aliases)), 'B') || setweight(to_tsvector('public.portugues_sem_acento', coalesce(tipo, '')), 'C')`,
+    ),
   },
   (tabela) => [
     index("entidades_user_id_idx").on(tabela.userId),
+    index("entidades_vetor_busca_idx").using("gin", tabela.vetorBusca),
     pgPolicy("entidades_dono_policy", {
       for: "all",
       to: "authenticated",

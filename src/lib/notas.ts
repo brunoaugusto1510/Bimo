@@ -16,7 +16,26 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "./db/cliente";
 import { nos, notas, versoesNota } from "./db/schema";
 
-export type Nota = typeof notas.$inferSelect;
+/**
+ * `vetorBusca` (coluna gerada para full-text search, ver `db/schema/notas.ts`)
+ * fica de fora: é uso interno do Postgres, nunca precisa trafegar até a
+ * aplicação — por isso as leituras abaixo usam projeção explícita em vez de
+ * `db.select()` genérico.
+ */
+export type Nota = Omit<typeof notas.$inferSelect, "vetorBusca">;
+
+const colunasDaNota = {
+  id: notas.id,
+  userId: notas.userId,
+  titulo: notas.titulo,
+  conteudo: notas.conteudo,
+  pasta: notas.pasta,
+  tags: notas.tags,
+  criadoPor: notas.criadoPor,
+  criadoPorFerramenta: notas.criadoPorFerramenta,
+  criadoEm: notas.criadoEm,
+  atualizadoEm: notas.atualizadoEm,
+};
 
 type AutorDaEdicao = "usuario" | "agente";
 
@@ -60,7 +79,7 @@ export async function criarNota(nova: NovaNota): Promise<Nota> {
         criadoPor: nova.criadoPor,
         criadoPorFerramenta: nova.criadoPorFerramenta,
       })
-      .returning();
+      .returning(colunasDaNota);
 
     await tx.insert(versoesNota).values({
       notaId: linha.id,
@@ -94,7 +113,7 @@ export async function atualizarNota(
       .update(notas)
       .set(valores)
       .where(and(eq(notas.id, id), eq(notas.userId, userId)))
-      .returning();
+      .returning(colunasDaNota);
 
     if (!linha) {
       throw new Error(`Nota ${id} não encontrada para este usuário.`);
@@ -118,7 +137,7 @@ export async function atualizarNota(
 /** Busca uma Nota por id, restrita ao dono. */
 export async function obterNota(userId: string, id: number): Promise<Nota | undefined> {
   const [linha] = await db
-    .select()
+    .select(colunasDaNota)
     .from(notas)
     .where(and(eq(notas.id, id), eq(notas.userId, userId)));
   return linha;
@@ -126,5 +145,9 @@ export async function obterNota(userId: string, id: number): Promise<Nota | unde
 
 /** Lista as Notas de um usuário, mais recentes primeiro. */
 export async function listarNotas(userId: string): Promise<Nota[]> {
-  return db.select().from(notas).where(eq(notas.userId, userId)).orderBy(desc(notas.criadoEm));
+  return db
+    .select(colunasDaNota)
+    .from(notas)
+    .where(eq(notas.userId, userId))
+    .orderBy(desc(notas.criadoEm));
 }

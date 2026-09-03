@@ -29,6 +29,20 @@
       "when": 1788120753246,
       "tag": "0003_fantastic_puck",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788391448928,
+      "tag": "0004_busca_textual_infra",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788391545193,
+      "tag": "0005_busca_textual_colunas",
+      "breakpoints": true
     }
   ]
 }
