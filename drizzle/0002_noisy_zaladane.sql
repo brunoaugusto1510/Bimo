@@ -1,0 +1,1 @@
+ALTER TABLE "versoes_nota" ADD COLUMN "pasta" text;

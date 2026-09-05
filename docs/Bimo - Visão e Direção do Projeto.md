@@ -666,34 +666,40 @@ Nenhuma migração estrutural foi realizada nesta etapa — apenas o desenho con
 
 ## Fase 2 - Knowledge Core
 
-- [ ] Definir banco
-- [ ] Configurar PostgreSQL
-- [ ] Criar modelo de dados
-- [ ] Implementar notas
-- [ ] Implementar fontes
-- [ ] Implementar entidades
-- [ ] Implementar relações
-- [ ] Implementar revisões
-- [ ] Implementar metadata
+**Status: concluída** — decisões registradas em [Bimo - Knowledge Core (Fase 2).md](./Bimo%20-%20Knowledge%20Core%20%28Fase%202%29.md)
+
+- [x] Definir banco
+- [x] Configurar PostgreSQL
+- [x] Criar modelo de dados
+- [x] Implementar notas
+- [x] Implementar fontes
+- [x] Implementar entidades
+- [x] Implementar relações
+- [x] Implementar revisões
+- [x] Implementar metadata
 
 ---
 
 ## Fase 3 - Sources & Ingestion
 
-- [ ] Upload de fontes
-- [ ] Armazenamento
-- [ ] Extração de texto
-- [ ] Processamento de PDFs
-- [ ] Processamento de Markdown
-- [ ] Processamento de páginas web
-- [ ] Transcrições
-- [ ] Relacionamento entre fontes e conhecimento
+**Status: concluída** (Transcrições adiada) — decisões registradas em [Bimo - Sources & Ingestion (Fase 3).md](./Bimo%20-%20Sources%20%26%20Ingestion%20%28Fase%203%29.md)
+
+- [x] Upload de fontes
+- [x] Armazenamento
+- [x] Extração de texto
+- [x] Processamento de PDFs
+- [x] Processamento de Markdown
+- [x] Processamento de páginas web
+- [ ] Transcrições — adiada por enquanto (custo e dependência de serviço externo)
+- [x] Relacionamento entre fontes e conhecimento
 
 ---
 
 ## Fase 4 - Retrieval
 
-- [ ] Busca textual
+**Status: em andamento** — decisões registradas em [Bimo - Retrieval (Fase 4).md](./Bimo%20-%20Retrieval%20%28Fase%204%29.md)
+
+- [x] Busca textual
 - [ ] Embeddings
 - [ ] pgvector
 - [ ] Busca semântica
