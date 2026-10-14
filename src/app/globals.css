@@ -35,6 +35,8 @@
   --grafo-cor-6: #008300;
   --grafo-cor-7: #4a3aa7;
   --grafo-cor-8: #e34948;
+  /* Nós de tag (`showTags` no graph.json): fora da paleta para não parecerem mais um grupo de pasta. */
+  --grafo-tag: #5f8f8b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -61,6 +63,7 @@
     --grafo-cor-6: #008300;
     --grafo-cor-7: #9085e9;
     --grafo-cor-8: #e66767;
+    --grafo-tag: #7fb3ae;
   }
 }
 
@@ -89,6 +92,7 @@
   --color-grafo-cor-6: var(--grafo-cor-6);
   --color-grafo-cor-7: var(--grafo-cor-7);
   --color-grafo-cor-8: var(--grafo-cor-8);
+  --color-grafo-tag: var(--grafo-tag);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

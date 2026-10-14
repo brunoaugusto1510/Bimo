@@ -104,6 +104,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
           <GrafoDeFundo
             nos={grafo.nos}
             arestas={grafo.arestas}
+            configuracao={grafo.configuracao}
             notaAberta={notaAberta}
             pulso={pulsoDoGrafo}
             onAbrirNota={abrirNota}

@@ -6,6 +6,7 @@ import {
   listTree,
   putFile,
   readBlob,
+  readFile,
   type GitHubConfig,
 } from "../github";
 
@@ -148,6 +149,32 @@ describe("getFileSha", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("boom", { status: 500 })));
 
     await expect(getFileSha(CFG, "Estudos/TCP.md")).rejects.toThrow(GitHubError);
+  });
+});
+
+describe("readFile", () => {
+  it("pede o arquivo em texto puro, na branch configurada", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"linkDistance": 249}'));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const texto = await readFile(CFG, ".obsidian/graph.json");
+
+    expect(texto).toBe('{"linkDistance": 249}');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.github.com/repos/usuario/vault/contents/.obsidian/graph.json?ref=main");
+    expect(init.headers.Accept).toBe("application/vnd.github.raw");
+  });
+
+  it("devolve null quando o arquivo não existe (404)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not found", { status: 404 })));
+
+    expect(await readFile(CFG, ".obsidian/graph.json")).toBeNull();
+  });
+
+  it("repropaga outros erros (ex: 500)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("boom", { status: 500 })));
+
+    await expect(readFile(CFG, ".obsidian/graph.json")).rejects.toThrow(GitHubError);
   });
 });
 

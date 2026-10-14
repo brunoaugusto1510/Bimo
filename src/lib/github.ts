@@ -142,6 +142,25 @@ export async function readBlob(cfg: GitHubConfig, sha: string): Promise<string> 
 }
 
 /**
+ * Baixa o conteúdo de um arquivo pelo caminho dentro do repositório (texto
+ * puro). Devolve `null` se o arquivo não existe — para arquivos opcionais,
+ * em que a ausência não é erro.
+ */
+export async function readFile(cfg: GitHubConfig, path: string): Promise<string | null> {
+  try {
+    const res = await request(
+      cfg,
+      `/repos/${cfg.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(cfg.branch)}`,
+      { accept: "application/vnd.github.raw" },
+    );
+    return await res.text();
+  } catch (error) {
+    if (error instanceof GitHubError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
  * O sha que o GitHub exige ao sobrescrever um arquivo existente.
  * Devolve `null` se o arquivo ainda não existe (aí é criação, não edição).
  */
