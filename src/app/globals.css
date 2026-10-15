@@ -172,6 +172,9 @@
   --text-meta--line-height: 1.4;
   --text-secao: 11px;
   --text-secao--line-height: 1.4;
+  /* Não vem do DS: texto de controles (botões, pílulas, campo de busca, itens da árvore). */
+  --text-controle: 13.5px;
+  --text-controle--line-height: 1.5;
 
   --radius-tag: 6px; /* tag badge */
   --radius-bloco: 10px; /* botão bloco de formulário */

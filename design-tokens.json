@@ -1,0 +1,114 @@
+{
+  "$description": "Tokens do design system do Bimo. Fonte de verdade em runtime: src/app/globals.css. Base de design: artifact 'Bimo — Design System' (https://claude.ai/artifact/BZGehoJQFuhgXiS9M61zfJ, project/tokens.json). Cada token diz de onde veio: 'ds' (definido no artifact) ou 'app' (acrescentado aqui, o DS não cobre).",
+  "version": 1,
+  "baseDesignSystem": "Bimo — Design System v1 (tema claro apenas)",
+  "color": {
+    "light": {
+      "fundo":                 { "css": "--fundo",                 "tailwind": "bg-fundo",                 "value": "#fbfaf8", "origem": "ds", "ds": "bg",               "usage": "Fundo geral das telas." },
+      "painel":                { "css": "--painel",                "tailwind": "bg-painel",                "value": "#ffffff", "origem": "ds", "ds": "superficie",       "usage": "Cards, editor, painéis, bolha do agente." },
+      "painelAlt":             { "css": "--painel-alt",            "tailwind": "bg-painel-alt",            "value": "#f4f2ec", "origem": "ds", "ds": "superficie-alt",   "usage": "Barra lateral, listas, fundo da tag." },
+      "borda":                 { "css": "--borda",                 "tailwind": "border-borda",             "value": "#e7e3d9", "origem": "ds", "ds": "borda",            "usage": "Contornos de 1px; arestas do grafo." },
+      "texto":                 { "css": "--texto",                 "tailwind": "text-texto",               "value": "#23252b", "origem": "ds", "ds": "texto",            "usage": "Texto principal." },
+      "textoSuave":            { "css": "--texto-suave",           "tailwind": "text-suave",               "value": "#8b8f94", "origem": "ds", "ds": "texto-suave",      "usage": "Meta, datas, rótulos de seção, itens inativos. Nunca texto essencial (3.1:1).", "a11y": "abaixo de 4.5:1 de propósito (mantido como no DS)" },
+      "destaque":              { "css": "--destaque",              "tailwind": "bg-destaque",              "value": "#2574e0", "origem": "ds", "ds": "azul",             "usage": "ÚNICA cor de ação: botão primário, seleção, chip ativo, nó em foco." },
+      "destaqueHover":         { "css": "--destaque-hover",        "tailwind": "bg-destaque-hover",        "value": "#1e66c4", "origem": "ds", "ds": "azul-hover",       "usage": "Hover de ações em azul." },
+      "sobreDestaque":         { "css": "--sobre-destaque",        "tailwind": "text-sobre-destaque",      "value": "#ffffff", "origem": "app",                           "usage": "Texto e ícones sobre `destaque`." },
+      "destaqueTexto":         { "css": "--destaque-texto",        "tailwind": "text-destaque-texto",      "value": "#2574e0", "origem": "app",                           "usage": "O azul quando é cor de texto: links, título de nota, item selecionado." },
+      "destaqueSuave":         { "css": "--destaque-suave",        "tailwind": "bg-destaque-suave",        "value": "#e8f1fc", "origem": "ds", "ds": "azul-suave",       "usage": "Sugestões e escritas do Bimo." },
+      "destaqueSuaveBorda":    { "css": "--destaque-suave-borda",  "tailwind": "border-destaque-suave-borda", "value": "#cfe0f8", "origem": "ds", "ds": "azul-suave-borda", "usage": "Contorno do card de sugestão." },
+      "desabilitado":          { "css": "--desabilitado",          "tailwind": "bg-desabilitado",          "value": "#eceae4", "origem": "app", "usage": "Fundo de botão desabilitado." },
+      "desabilitadoTexto":     { "css": "--desabilitado-texto",    "tailwind": "text-desabilitado-texto",  "value": "#b3b0a8", "origem": "app", "usage": "Texto de botão desabilitado." },
+      "noNeutro":              { "css": "--no-neutro",             "tailwind": null,                       "value": "#c9c6bd", "origem": "app", "usage": "Nós neutros do BimoThinking." },
+      "arestaNeutra":          { "css": "--aresta-neutra",         "tailwind": null,                       "value": "#d8d4c9", "origem": "app", "usage": "Arestas neutras do BimoThinking." },
+      "bolhaUsuario":          { "css": "--bolha-usuario",         "tailwind": "bg-bolha-usuario",         "value": "#2574e0", "origem": "app", "usage": "Bolha de quem digita." },
+      "bolhaUsuarioTexto":     { "css": "--bolha-usuario-texto",   "tailwind": "text-bolha-usuario-texto", "value": "#ffffff", "origem": "app", "usage": "Texto da bolha do usuário." },
+      "bolhaAgente":           { "css": "--bolha-agente",          "tailwind": "bg-bolha-agente",          "value": "#ffffff", "origem": "app", "usage": "Bolha do Bimo." },
+      "erro":                  { "css": "--erro",                  "tailwind": "text-erro",                "value": "#c53030", "origem": "app", "usage": "Texto/ícone de erro." },
+      "erroSuave":             { "css": "--erro-suave",            "tailwind": "bg-erro-suave",            "value": "#fbeaea", "origem": "app", "usage": "Fundo de aviso de erro." }
+    },
+    "dark": {
+      "$note": "O DS só define o tema claro. Estes valores são derivados no app, mesma família de tons.",
+      "fundo": "#161513",
+      "painel": "#23221e",
+      "painelAlt": "#1c1b18",
+      "borda": "#34312b",
+      "texto": "#ecebe6",
+      "textoSuave": "#9c9890",
+      "destaque": "#2574e0",
+      "destaqueHover": "#1e66c4",
+      "sobreDestaque": "#ffffff",
+      "destaqueTexto": "#6ea8f2",
+      "destaqueSuave": "#16263b",
+      "destaqueSuaveBorda": "#24405f",
+      "desabilitado": "#2a2824",
+      "desabilitadoTexto": "#6b675f",
+      "noNeutro": "#5a564e",
+      "arestaNeutra": "#46423b",
+      "bolhaUsuario": "#2574e0",
+      "bolhaUsuarioTexto": "#ffffff",
+      "bolhaAgente": "#23221e",
+      "erro": "#ff8080",
+      "erroSuave": "#3a1f1f"
+    },
+    "grafo": {
+      "$note": "Paleta categórica do grafo (uma cor por grupo de pasta). Não vem do DS: validada para daltonismo. Ordem fixa.",
+      "light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"],
+      "dark":  ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
+      "tag":   { "light": "#5f8f8b", "dark": "#7fb3ae" }
+    },
+    "naoAdotado": {
+      "teal": { "value": "#3fd1be", "ds": "teal", "motivo": "Só para avatar sem foto no DS; o app não tem avatares." }
+    }
+  },
+  "type": {
+    "family": {
+      "fonte": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, Roboto, Arial, sans-serif",
+      "mono": "var(--font-geist-mono)"
+    },
+    "scale": {
+      "tituloNota": { "tailwind": "text-titulo-nota", "size": "26px",   "lineHeight": 1.25, "weight": 600, "color": "destaqueTexto", "origem": "ds" },
+      "corpo":      { "tailwind": "text-corpo",        "size": "15px",   "lineHeight": 1.6,  "weight": 400, "color": "texto",         "origem": "ds" },
+      "meta":       { "tailwind": "text-meta",         "size": "12.5px", "lineHeight": 1.4,  "weight": 400, "color": "textoSuave",    "origem": "ds" },
+      "controle":   { "tailwind": "text-controle",     "size": "13.5px", "lineHeight": 1.5,  "weight": 600, "color": "texto",         "origem": "app", "$note": "Botões, pílulas, campo de busca, itens da árvore." },
+      "secao":      { "tailwind": "text-secao",        "size": "11px",   "lineHeight": 1.4,  "weight": 600, "letterSpacing": "0.08em", "transform": "uppercase", "color": "textoSuave", "origem": "ds" },
+      "tag":        { "size": "12px", "weight": 400, "color": "destaqueTexto", "origem": "ds", "tailwind": null, "$note": "Sem token no app: tags ainda não têm componente." },
+      "numero":     { "size": "30px", "weight": 700, "origem": "ds", "tailwind": null, "$note": "Sem token no app: não há stat tile." }
+    }
+  },
+  "spacing": {
+    "$note": "Escala do Tailwind (4px). Nomes do DS mapeados para a utilidade equivalente.",
+    "espaco-1": { "value": "4px",  "tailwind": "1" },
+    "espaco-2": { "value": "8px",  "tailwind": "2" },
+    "espaco-3": { "value": "12px", "tailwind": "3" },
+    "espaco-4": { "value": "16px", "tailwind": "4" },
+    "espaco-6": { "value": "24px", "tailwind": "6" },
+    "espaco-8": { "value": "32px", "tailwind": "8" },
+    "touchTarget": { "value": "40px", "tailwind": "h-10 / min-h-10", "usage": "Alvo mínimo de toque; se o visual for menor, estender com `after:-inset-*`." }
+  },
+  "radius": {
+    "tag":    { "value": "6px",   "tailwind": "rounded-tag",    "origem": "ds", "ds": "raio-tag" },
+    "bloco":  { "value": "10px",  "tailwind": "rounded-bloco",  "origem": "ds", "ds": "raio-bloco" },
+    "card":   { "value": "12px",  "tailwind": "rounded-card",   "origem": "ds", "ds": "raio-card" },
+    "painel": { "value": "14px",  "tailwind": "rounded-painel", "origem": "ds", "ds": "raio-painel" },
+    "bolha":  { "value": "16px",  "tailwind": "rounded-bolha",  "origem": "ds", "ds": "raio-bolha", "$note": "Canto de quem fala em 4px (`rounded-*-sm`)." },
+    "pill":   { "value": "999px", "tailwind": "rounded-full",   "origem": "ds", "ds": "raio-pill" }
+  },
+  "shadow": {
+    "foco": { "value": "0 8px 24px rgba(0, 0, 0, 0.06)", "tailwind": "shadow-foco", "origem": "ds", "ds": "sombra-foco", "usage": "A única sombra do sistema: cartão sobre o grafo." }
+  },
+  "motion": {
+    "entrada": {
+      "tailwind": "motion-safe:animate-entrada",
+      "duration": "200ms",
+      "easing": "cubic-bezier(0.16, 1, 0.3, 1)",
+      "from": { "opacity": 0, "transform": "translateY(4px)" },
+      "to": { "opacity": 1, "transform": "none" },
+      "$note": "Só entrada; a saída é instantânea."
+    },
+    "pressionar": { "tailwind": "motion-safe:active:scale-[0.96]", "$note": "Sempre com lista explícita em `transition-[…]`, nunca `transition-all`." },
+    "bimoPensando": { "duration": "2.4s", "easing": "ease-in-out", "$note": "Arestas se desenham e um pulso azul passa de nó em nó; com prefers-reduced-motion fica parado, nó central em azul." }
+  },
+  "theme": {
+    "mecanismo": "`:root[data-tema=\"escuro\"]` escrito por JS (src/lib/tema.ts); preferência em localStorage['bimo_tema'] = sistema | claro | escuro. Sem @media (prefers-color-scheme) no CSS."
+  }
+}

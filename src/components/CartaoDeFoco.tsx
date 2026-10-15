@@ -61,21 +61,21 @@ export default function CartaoDeFoco({
         <button
           type="button"
           onClick={onAbrir}
-          className="min-h-10 rounded-full bg-destaque px-3.5 text-[13px] font-semibold text-sobre-destaque transition-[background-color,transform] hover:bg-destaque-hover motion-safe:active:scale-[0.96]"
+          className="min-h-10 rounded-full bg-destaque px-3.5 text-controle font-semibold text-sobre-destaque transition-[background-color,transform] hover:bg-destaque-hover motion-safe:active:scale-[0.96]"
         >
           Abrir Nota
         </button>
         <button
           type="button"
           onClick={onVizinhos}
-          className="min-h-10 rounded-full border border-borda px-3.5 text-[13px] font-semibold transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]"
+          className="min-h-10 rounded-full border border-borda px-3.5 text-controle font-semibold transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]"
         >
           Ver vizinhos
         </button>
         <button
           type="button"
           onClick={onPerguntar}
-          className="flex min-h-10 items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 text-[13px] font-semibold text-destaque-texto transition-[background-color,transform] hover:bg-destaque-suave motion-safe:active:scale-[0.96]"
+          className="flex min-h-10 items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 text-controle font-semibold text-destaque-texto transition-[background-color,transform] hover:bg-destaque-suave motion-safe:active:scale-[0.96]"
         >
           <MarcaBimo tamanho={14} />
           Perguntar ao Bimo

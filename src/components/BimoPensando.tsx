@@ -10,7 +10,7 @@
  */
 export default function BimoPensando({ texto = "Pensando…" }: { texto?: string }) {
   return (
-    <div role="status" className="inline-flex items-center gap-2 text-[13px] whitespace-nowrap text-suave">
+    <div role="status" className="inline-flex items-center gap-2 text-controle whitespace-nowrap text-suave">
       <svg className="bimo-pensando h-6 w-16 shrink-0" viewBox="0 0 64 24" aria-hidden>
         <line className="a1" x1="6" y1="14" x2="20" y2="6" />
         <line className="a2" x1="20" y1="6" x2="31" y2="16" />

@@ -147,7 +147,7 @@ reference for the agent loop and tool contracts, not working code to run as-is.
 
 No component uses a literal color. Every color is a CSS custom property defined
 once in `src/app/globals.css` (`:root` for light, overridden inside
-`@media (prefers-color-scheme: dark)`), then exposed to Tailwind via `@theme
+`:root[data-tema="escuro"]`, which `src/lib/tema.ts` sets from JS), then exposed to Tailwind via `@theme
 inline` as classes like `bg-painel`, `text-suave`, `border-borda`, `bg-destaque`.
 Add new colors there, never as arbitrary Tailwind values or inline hex.
 

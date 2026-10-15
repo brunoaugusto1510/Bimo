@@ -175,7 +175,8 @@ How it lands in this repo (the DS names are the artifact's, the app's are in pt-
   paint from `localStorage["bimo_tema"]` (`sistema` | `claro` | `escuro`), and the
   header's `AlternadorDeTema` cycles the preference. Anything that reads colors outside
   CSS (the graph canvas) must re-read them when `data-tema` changes.
-- Type and shape: `text-titulo-nota`, `text-corpo`, `text-meta`, `text-secao`;
+- Type and shape: `text-titulo-nota`, `text-corpo`, `text-meta`, `text-secao`, plus
+  `text-controle` (13.5px, ours, for buttons/pills/inputs/tree rows — not in the DS);
   `rounded-bolha`, `rounded-painel`, `rounded-bloco`, `rounded-tag`, `shadow-foco`
   (the DS's only shadow). Actions, chips and switches are pills (`rounded-full`).
 - Brand: `MarcaBimo` renders the official brain-graph logo (`src/assets/`, used
@@ -195,7 +196,7 @@ is the only place values live.
 
 No component uses a literal color. Every color is a CSS custom property defined
 once in `src/app/globals.css` (`:root` for light, overridden inside
-`@media (prefers-color-scheme: dark)`), then exposed to Tailwind via `@theme
+`:root[data-tema="escuro"]`), then exposed to Tailwind via `@theme
 inline` as classes like `bg-painel`, `text-suave`, `border-borda`, `bg-destaque`.
 Add new colors there, never as arbitrary Tailwind values or inline hex.
 

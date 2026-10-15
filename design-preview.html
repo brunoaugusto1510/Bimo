@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bimo — Prévia do design system</title>
+<style>
+/* Mesmos nomes e valores de src/app/globals.css. Se mudar lá, mude aqui. */
+:root {
+  color-scheme: light;
+  --fonte: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Arial, sans-serif;
+  --fundo: #fbfaf8; --painel: #ffffff; --painel-alt: #f4f2ec; --borda: #e7e3d9;
+  --texto: #23252b; --texto-suave: #8b8f94;
+  --destaque: #2574e0; --destaque-hover: #1e66c4; --sobre-destaque: #ffffff; --destaque-texto: #2574e0;
+  --destaque-suave: #e8f1fc; --destaque-suave-borda: #cfe0f8;
+  --desabilitado: #eceae4; --desabilitado-texto: #b3b0a8;
+  --no-neutro: #c9c6bd; --aresta-neutra: #d8d4c9;
+  --bolha-usuario: #2574e0; --bolha-usuario-texto: #ffffff; --bolha-agente: #ffffff;
+  --erro: #c53030; --erro-suave: #fbeaea;
+  --grafo-cor-1: #2a78d6; --grafo-cor-2: #eb6834; --grafo-cor-3: #1baf7a; --grafo-cor-4: #eda100;
+  --grafo-cor-5: #e87ba4; --grafo-cor-6: #008300; --grafo-cor-7: #4a3aa7; --grafo-cor-8: #e34948; --grafo-tag: #5f8f8b;
+  --raio-tag: 6px; --raio-bloco: 10px; --raio-card: 12px; --raio-painel: 14px; --raio-bolha: 16px;
+  --sombra-foco: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+  --fundo: #161513; --painel: #23221e; --painel-alt: #1c1b18; --borda: #34312b;
+  --texto: #ecebe6; --texto-suave: #9c9890;
+  --destaque-texto: #6ea8f2; --destaque-suave: #16263b; --destaque-suave-borda: #24405f;
+  --desabilitado: #2a2824; --desabilitado-texto: #6b675f;
+  --no-neutro: #5a564e; --aresta-neutra: #46423b;
+  --bolha-agente: #23221e; --erro: #ff8080; --erro-suave: #3a1f1f;
+  --grafo-cor-1: #3987e5; --grafo-cor-2: #d95926; --grafo-cor-3: #199e70; --grafo-cor-4: #c98500;
+  --grafo-cor-5: #d55181; --grafo-cor-6: #008300; --grafo-cor-7: #9085e9; --grafo-cor-8: #e66767; --grafo-tag: #7fb3ae;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fundo); color: var(--texto); font-family: var(--fonte); font-size: 15px; line-height: 1.6; }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 26px; line-height: 1.25; font-weight: 600; color: var(--destaque-texto); margin: 0; text-wrap: balance; }
+h2 { font-size: 11px; line-height: 1.4; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--texto-suave); margin: 40px 0 12px; }
+p { margin: 0; text-wrap: pretty; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; background: var(--painel-alt); padding: 1px 4px; border-radius: 4px; }
+.meta { font-size: 12.5px; line-height: 1.4; color: var(--texto-suave); }
+.num { font-variant-numeric: tabular-nums; }
+
+header.topo { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 16px; margin-top: 16px;
+  background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio-painel); }
+
+button { font: inherit; cursor: pointer; }
+.pill { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--borda); background: var(--painel); color: var(--texto);
+  font-size: 13.5px; font-weight: 600; transition: background-color .15s, color .15s, transform .15s; }
+.pill:hover { background: var(--painel-alt); }
+.pill:active { transform: scale(0.96); }
+.pill:focus-visible, .btn:focus-visible { outline: 2px solid var(--destaque); outline-offset: 2px; }
+.btn { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid transparent; font-size: 13px; font-weight: 600;
+  transition: background-color .15s, transform .15s; }
+.btn:active:not(:disabled) { transform: scale(0.96); }
+.btn.primario { background: var(--destaque); color: var(--sobre-destaque); }
+.btn.primario:hover { background: var(--destaque-hover); }
+.btn.secundario { background: transparent; border-color: var(--borda); color: var(--texto); }
+.btn.secundario:hover { background: var(--painel-alt); }
+.btn.contorno { background: transparent; border-color: var(--destaque-texto); color: var(--destaque-texto); }
+.btn.contorno:hover { background: var(--destaque-suave); }
+.btn:disabled { background: var(--desabilitado); color: var(--desabilitado-texto); cursor: not-allowed; }
+
+.grade { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.amostra { background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio-card); overflow: hidden; }
+.amostra .cor { height: 56px; border-bottom: 1px solid var(--borda); }
+.amostra .info { padding: 8px 10px; font-size: 12.5px; line-height: 1.4; }
+.amostra b { display: block; font-weight: 600; }
+.amostra .hex { color: var(--texto-suave); font-variant-numeric: tabular-nums; }
+.amostra .meta { display: block; overflow-wrap: anywhere; }
+
+.cartao { background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio-card); padding: 16px; }
+.linha { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.coluna { display: flex; flex-direction: column; gap: 12px; }
+
+.tipo { display: grid; gap: 0; background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio-painel); }
+.tipo > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 12px 16px; border-bottom: 1px solid var(--borda); }
+.tipo > div:last-child { border-bottom: 0; }
+
+.raios { display: flex; flex-wrap: wrap; gap: 12px; }
+.raio { width: 104px; padding: 8px; text-align: center; background: var(--painel-alt); border: 1px solid var(--borda); font-size: 12.5px; line-height: 1.4; }
+.raio i { display: block; height: 44px; margin-bottom: 6px; background: var(--destaque-suave); border: 1px solid var(--destaque-suave-borda); }
+
+.bolha { max-width: 85%; padding: 10px 14px; border-radius: var(--raio-bolha); font-size: 14px; line-height: 1.5; }
+.bolha.agente { align-self: flex-start; background: var(--bolha-agente); border: 1px solid var(--borda); border-bottom-left-radius: 4px; }
+.bolha.usuario { align-self: flex-end; background: var(--bolha-usuario); color: var(--bolha-usuario-texto); border-bottom-right-radius: 4px; }
+.sugestao { background: var(--destaque-suave); border: 1px solid var(--destaque-suave-borda); border-radius: var(--raio-card); padding: 16px; }
+.sugestao strong { display: block; color: var(--destaque-texto); margin-bottom: 4px; }
+.tag { display: inline-block; font-size: 12px; color: var(--destaque-texto); background: var(--painel-alt); border-radius: var(--raio-tag); padding: 2px 8px; }
+.foco { background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio-card); padding: 16px; box-shadow: var(--sombra-foco); }
+.erro { background: var(--erro-suave); color: var(--erro); border-radius: var(--raio-card); padding: 12px 16px; font-size: 13.5px; }
+.campo { width: 100%; min-height: 40px; padding: 0 14px; border-radius: var(--raio-card); border: 1px solid var(--borda); background: var(--painel); color: var(--texto); font: inherit; font-size: 13.5px; outline: none; }
+.campo:focus { border-color: var(--destaque); }
+.campo::placeholder { color: var(--texto-suave); }
+
+.pensando { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--texto-suave); }
+.pensando line { stroke: var(--aresta-neutra); stroke-width: 1; stroke-dasharray: 30; stroke-dashoffset: 30; animation: liga 2.4s ease-in-out infinite; }
+.pensando circle { fill: var(--no-neutro); transform-box: fill-box; transform-origin: center; animation: pulso 2.4s ease-in-out infinite; }
+.pensando .a2 { animation-delay: .2s } .pensando .a3 { animation-delay: .4s } .pensando .a4 { animation-delay: .6s }
+.pensando .n2 { animation-delay: .3s } .pensando .n3 { animation-delay: .6s } .pensando .n4 { animation-delay: .9s } .pensando .n5 { animation-delay: 1.2s }
+@keyframes liga { 0% { stroke-dashoffset: 30; opacity: 1 } 40%, 80% { stroke-dashoffset: 0; opacity: 1 } 100% { stroke-dashoffset: 0; opacity: 0 } }
+@keyframes pulso { 0%, 40%, 100% { fill: var(--no-neutro); transform: scale(1) } 20% { fill: var(--destaque); transform: scale(1.4) } }
+@keyframes entrada { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+.entra { animation: entrada 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .pensando line, .pensando circle, .entra { animation: none; }
+  .pensando line { stroke-dashoffset: 0; }
+  .pensando .n3 { fill: var(--destaque); }
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--painel); border: 1px solid var(--borda); border-radius: var(--raio-card); overflow: hidden; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--borda); font-variant-numeric: tabular-nums; }
+th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--texto-suave); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.ok { color: var(--destaque-texto); font-weight: 600; } .abaixo { color: var(--erro); font-weight: 600; }
+
+@media (min-width: 768px) { main { padding: 32px 32px 96px; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="topo">
+    <div>
+      <h1>Bimo — design system</h1>
+      <p class="meta">Prévia gerada de <code>globals.css</code> + artifact "Bimo — Design System" · 1 azul, 1 sombra, 0 gradientes</p>
+    </div>
+    <button class="pill" id="tema" type="button" aria-live="polite">Tema: sistema</button>
+  </header>
+
+  <h2>Cor</h2>
+  <div class="grade" id="cores"></div>
+
+  <h2>Paleta do grafo (categórica)</h2>
+  <div class="linha" id="grafo"></div>
+
+  <h2>Tipografia</h2>
+  <div class="tipo">
+    <div><span style="font-size:26px;line-height:1.25;font-weight:600;color:var(--destaque-texto)">Ler é uma conversa</span><span class="meta">titulo-nota · 26/600</span></div>
+    <div><span style="font-size:15px;line-height:1.6">Marginália é resposta, não anotação.</span><span class="meta">corpo · 15/1.6</span></div>
+    <div><span class="meta">7 conexões · editada em março</span><span class="meta">meta · 12.5</span></div>
+    <div><span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--texto-suave)">Grafo de fundo</span><span class="meta">secao · 11/600 caixa alta</span></div>
+    <div><span><span class="tag">#leitura</span> <span class="tag">#hábitos</span></span><span class="meta">tag · 12 (sem token no app)</span></div>
+    <div><span class="num" style="font-size:30px;font-weight:700">642</span><span class="meta">numero · 30/700 (sem token no app)</span></div>
+  </div>
+
+  <h2>Raios</h2>
+  <div class="raios">
+    <div class="raio"><i style="border-radius:var(--raio-tag)"></i>tag · 6</div>
+    <div class="raio"><i style="border-radius:var(--raio-bloco)"></i>bloco · 10</div>
+    <div class="raio"><i style="border-radius:var(--raio-card)"></i>card · 12</div>
+    <div class="raio"><i style="border-radius:var(--raio-painel)"></i>painel · 14</div>
+    <div class="raio"><i style="border-radius:var(--raio-bolha)"></i>bolha · 16</div>
+    <div class="raio"><i style="border-radius:999px"></i>pill</div>
+  </div>
+
+  <h2>Ações</h2>
+  <div class="cartao linha">
+    <button class="btn primario" type="button">Abrir Nota</button>
+    <button class="btn secundario" type="button">Descartar</button>
+    <button class="btn contorno" type="button">◈ Ver vizinhos</button>
+    <button class="btn primario" type="button" disabled>Desabilitado</button>
+  </div>
+
+  <h2>Chat, sugestão e cartão de foco</h2>
+  <div class="grade" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))">
+    <div class="cartao coluna entra">
+      <div class="bolha usuario">O que escrevi sobre leitura esta semana?</div>
+      <div class="bolha agente">Reli suas notas de "Ideias" desta semana. Três delas voltam ao mesmo ponto. Quer que eu junte isso em uma nota só?</div>
+      <div class="pensando" role="status">
+        <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true">
+          <line class="a1" x1="4" y1="14" x2="10" y2="6"/><line class="a2" x1="10" y1="6" x2="16" y2="12"/>
+          <line class="a3" x1="16" y1="12" x2="22" y2="4"/><line class="a4" x1="16" y1="12" x2="24" y2="15"/>
+          <circle class="n1" cx="4" cy="14" r="2"/><circle class="n2" cx="10" cy="6" r="2"/><circle class="n3" cx="16" cy="12" r="2"/>
+          <circle class="n4" cx="22" cy="4" r="2"/><circle class="n5" cx="24" cy="15" r="2"/>
+        </svg>
+        Buscando nas suas notas…
+      </div>
+    </div>
+    <div class="coluna">
+      <div class="sugestao entra">
+        <strong>Sugestão do Bimo</strong>
+        <p style="font-size:14px">Ligar <b>Ler é uma conversa</b> a <b>Marginália</b> — as duas falam de resposta, não de anotação.</p>
+      </div>
+      <div class="foco entra">
+        <div style="font-size:18px;font-weight:600;color:var(--destaque-texto)">Ler é uma conversa</div>
+        <p class="meta" style="margin:4px 0 12px">Leituras · 7 conexões · editada em março</p>
+        <div class="linha"><button class="btn primario" type="button">Abrir Nota</button><button class="btn secundario" type="button">Ver vizinhos</button></div>
+      </div>
+      <div class="erro" role="alert">Não consegui ler essa nota agora. Tente de novo.</div>
+      <input class="campo" type="search" placeholder="Buscar nas notas" aria-label="Buscar nas notas">
+    </div>
+  </div>
+
+  <h2>Contraste (calculado ao vivo no tema atual)</h2>
+  <table>
+    <thead><tr><th>Par</th><th>Razão</th><th>Texto normal (4.5)</th></tr></thead>
+    <tbody id="contraste"></tbody>
+  </table>
+  <p class="meta" style="margin-top:8px"><code>texto-suave</code> fica abaixo de 4.5:1 no claro por decisão do DS: só metadado e itens inativos.</p>
+</main>
+
+<script>
+const TOKENS = [
+  ["fundo", "bg"], ["painel", "superficie"], ["painel-alt", "superficie-alt"], ["borda", "borda"],
+  ["texto", "texto"], ["texto-suave", "texto-suave"], ["destaque", "azul"], ["destaque-hover", "azul-hover"],
+  ["destaque-texto", "app"], ["destaque-suave", "azul-suave"], ["destaque-suave-borda", "azul-suave-borda"],
+  ["desabilitado", "app"], ["erro", "app"], ["erro-suave", "app"], ["no-neutro", "app"], ["aresta-neutra", "app"]
+];
+const PARES = [
+  ["texto / fundo", "texto", "fundo"], ["texto / painel", "texto", "painel"],
+  ["texto-suave / fundo", "texto-suave", "fundo"], ["texto-suave / painel-alt", "texto-suave", "painel-alt"],
+  ["destaque-texto / fundo", "destaque-texto", "fundo"], ["destaque-texto / destaque-suave", "destaque-texto", "destaque-suave"],
+  ["sobre-destaque / destaque", "sobre-destaque", "destaque"], ["sobre-destaque / destaque-hover", "sobre-destaque", "destaque-hover"],
+  ["erro / fundo", "erro", "fundo"], ["erro / erro-suave", "erro", "erro-suave"]
+];
+const raiz = document.documentElement;
+const lerVar = (n) => getComputedStyle(raiz).getPropertyValue("--" + n).trim();
+
+function luminancia(hex) {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function razao(a, b) {
+  const x = luminancia(a), y = luminancia(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+function desenhar() {
+  document.getElementById("cores").innerHTML = TOKENS.map(([n, ds]) =>
+    `<div class="amostra"><div class="cor" style="background:var(--${n})"></div>
+     <div class="info"><b>--${n}</b><span class="hex">${lerVar(n)}</span><span class="meta">${ds === "app" ? "origem: app" : "DS: " + ds}</span></div></div>`).join("");
+  const nomes = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => "grafo-cor-" + i).concat("grafo-tag");
+  document.getElementById("grafo").innerHTML = nomes.map((n, i) =>
+    `<div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;background:var(--${n});display:inline-block"></span>
+     <span class="meta num">${i === 8 ? "tag" : i + 1} · ${lerVar(n)} · ${razao(lerVar(n), lerVar("fundo")).toFixed(2)}:1</span></div>`).join("");
+  document.getElementById("contraste").innerHTML = PARES.map(([rot, f, b]) => {
+    const r = razao(lerVar(f), lerVar(b));
+    const passa = r >= 4.5;
+    return `<tr><td>${rot}</td><td class="num">${r.toFixed(2)}:1</td><td class="${passa ? "ok" : "abaixo"}">${passa ? "passa" : "abaixo"}</td></tr>`;
+  }).join("");
+}
+
+const ORDEM = ["sistema", "claro", "escuro"];
+const botao = document.getElementById("tema");
+let pref = "sistema";
+try { pref = localStorage.getItem("bimo_tema") || "sistema"; } catch (_) {}
+if (!ORDEM.includes(pref)) pref = "sistema";
+const escuroDoSistema = window.matchMedia("(prefers-color-scheme: dark)");
+
+function aplicar() {
+  const escuro = pref === "escuro" || (pref === "sistema" && escuroDoSistema.matches);
+  if (escuro) raiz.setAttribute("data-tema", "escuro"); else raiz.removeAttribute("data-tema");
+  botao.textContent = "Tema: " + pref;
+  desenhar();
+}
+botao.addEventListener("click", () => {
+  pref = ORDEM[(ORDEM.indexOf(pref) + 1) % ORDEM.length];
+  try { localStorage.setItem("bimo_tema", pref); } catch (_) {}
+  aplicar();
+});
+escuroDoSistema.addEventListener("change", aplicar);
+aplicar();
+</script>
+</body>
+</html>
