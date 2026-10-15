@@ -1,0 +1,1 @@
+ALTER TABLE "fontes" ADD COLUMN "url_origem" text;

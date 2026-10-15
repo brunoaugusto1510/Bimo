@@ -6,16 +6,47 @@
  * A ideia: nenhum componente escreve uma cor literal. Todos usam estes nomes.
  * Assim, trocar o visual do app inteiro é mexer só neste arquivo — e o modo
  * escuro funciona sozinho, porque só os valores mudam lá embaixo.
+ *
+ * Os valores do modo claro vêm do artifact "Bimo — Design System"
+ * (https://claude.ai/artifact/BZGehoJQFuhgXiS9M61zfJ, `project/tokens.json`).
+ * Os nomes daqui são os do app; o equivalente no design system está ao lado.
+ * O design system só define o tema claro; o escuro é derivado aqui, na mesma
+ * família de tons, com o azul clareado onde ele vira texto para manter o
+ * contraste.
  */
 :root {
-  --fundo: #f7f7f8;
-  --painel: #ffffff;
-  --borda: #e3e3e6;
-  --texto: #1c1c1e;
-  --texto-suave: #6b6b73;
-  --destaque: #5bd088;
-  --destaque-suave: #efecfb;
-  --bolha-usuario: #6d5bd0;
+  --fonte: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Arial, sans-serif;
+
+  --fundo: #fbfaf8; /* bg */
+  --painel: #ffffff; /* superficie: cards, editor, painéis, bolha do agente */
+  --painel-alt: #f4f2ec; /* superficie-alt: barra lateral, listas, tag badge */
+  --borda: #e7e3d9; /* borda: contornos de 1px e arestas do grafo */
+  --texto: #23252b; /* texto */
+  /* texto-suave: só para meta, datas e itens inativos — 3.1:1 sobre o fundo,
+     abaixo de 4.5:1, então nunca para texto essencial (mantido como no DS). */
+  --texto-suave: #8b8f94;
+
+  /* azul: a ÚNICA cor de ação — botão primário, seleção, chip ativo, links,
+     tags, título de nota e o nó em foco no grafo. */
+  --destaque: #2574e0;
+  --destaque-hover: #1e66c4; /* azul-hover */
+  /* Texto e ícones em cima de `--destaque` (botão primário, bolha do usuário). */
+  --sobre-destaque: #ffffff;
+  /* O mesmo azul quando usado como cor de texto (links, títulos, item selecionado). */
+  --destaque-texto: #2574e0;
+  /* azul-suave / azul-suave-borda: sugestões e escritas do Bimo. */
+  --destaque-suave: #e8f1fc;
+  --destaque-suave-borda: #cfe0f8;
+
+  /* Botão desabilitado (Buttons → "Desabilitado"). */
+  --desabilitado: #eceae4;
+  --desabilitado-texto: #b3b0a8;
+
+  /* Nós e arestas neutros do BimoThinking (o pulso usa `--destaque`). */
+  --no-neutro: #c9c6bd;
+  --aresta-neutra: #d8d4c9;
+
+  --bolha-usuario: #2574e0;
   --bolha-usuario-texto: #ffffff;
   --bolha-agente: #ffffff;
   --erro: #c53030;
@@ -35,20 +66,36 @@
   --grafo-cor-6: #008300;
   --grafo-cor-7: #4a3aa7;
   --grafo-cor-8: #e34948;
+  /* Nós de tag (`showTags` no graph.json): fora da paleta para não parecerem mais um grupo de pasta. */
+  --grafo-tag: #5f8f8b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fundo: #131316;
-    --painel: #1a1a1f;
-    --borda: #2c2c33;
-    --texto: #ececee;
-    --texto-suave: #9a9aa4;
-    --destaque: #5bd088;
-    --destaque-suave: #26233a;
-    --bolha-usuario: #6d5bd0;
+    --fundo: #161513;
+    --painel: #23221e;
+    --painel-alt: #1c1b18;
+    --borda: #34312b;
+    --texto: #ecebe6;
+    --texto-suave: #9c9890;
+
+    /* Mesmo azul de ação (branco sobre ele: 4.5:1); hover escurece, como no claro. */
+    --destaque: #2574e0;
+    --destaque-hover: #1e66c4;
+    --sobre-destaque: #ffffff;
+    --destaque-texto: #6ea8f2;
+    --destaque-suave: #16263b;
+    --destaque-suave-borda: #24405f;
+
+    --desabilitado: #2a2824;
+    --desabilitado-texto: #6b675f;
+
+    --no-neutro: #5a564e;
+    --aresta-neutra: #46423b;
+
+    --bolha-usuario: #2574e0;
     --bolha-usuario-texto: #ffffff;
-    --bolha-agente: #22222a;
+    --bolha-agente: #23221e;
     --erro: #ff8080;
     --erro-suave: #3a1f1f;
 
@@ -61,6 +108,7 @@
     --grafo-cor-6: #008300;
     --grafo-cor-7: #9085e9;
     --grafo-cor-8: #e66767;
+    --grafo-tag: #7fb3ae;
   }
 }
 
@@ -71,11 +119,18 @@
 @theme inline {
   --color-fundo: var(--fundo);
   --color-painel: var(--painel);
+  --color-painel-alt: var(--painel-alt);
   --color-borda: var(--borda);
   --color-texto: var(--texto);
   --color-suave: var(--texto-suave);
   --color-destaque: var(--destaque);
+  --color-destaque-hover: var(--destaque-hover);
+  --color-sobre-destaque: var(--sobre-destaque);
+  --color-destaque-texto: var(--destaque-texto);
   --color-destaque-suave: var(--destaque-suave);
+  --color-destaque-suave-borda: var(--destaque-suave-borda);
+  --color-desabilitado: var(--desabilitado);
+  --color-desabilitado-texto: var(--desabilitado-texto);
   --color-bolha-usuario: var(--bolha-usuario);
   --color-bolha-usuario-texto: var(--bolha-usuario-texto);
   --color-bolha-agente: var(--bolha-agente);
@@ -89,12 +144,82 @@
   --color-grafo-cor-6: var(--grafo-cor-6);
   --color-grafo-cor-7: var(--grafo-cor-7);
   --color-grafo-cor-8: var(--grafo-cor-8);
-  --font-sans: var(--font-geist-sans);
+  --color-grafo-tag: var(--grafo-tag);
+  --font-sans: var(--fonte);
   --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * Escala tipográfica, raios e sombra do design system (mesmos nomes de lá):
+ * viram `text-titulo-nota`, `rounded-bolha`, `shadow-foco` etc. Rótulo de
+ * seção ainda leva `uppercase tracking-[0.08em] font-semibold text-suave`.
+ */
+@theme {
+  --text-titulo-nota: 26px;
+  --text-titulo-nota--line-height: 1.25;
+  --text-corpo: 15px;
+  --text-corpo--line-height: 1.6;
+  --text-meta: 12.5px;
+  --text-meta--line-height: 1.4;
+  --text-secao: 11px;
+  --text-secao--line-height: 1.4;
+
+  --radius-tag: 6px; /* tag badge */
+  --radius-bloco: 10px; /* botão bloco de formulário */
+  --radius-card: 12px; /* cards de nota, sugestão do Bimo */
+  --radius-painel: 14px; /* headers, painéis, modal de nota */
+  --radius-bolha: 16px; /* bolhas de chat (canto de quem fala: rounded-*-sm) */
+
+  /* A única sombra do sistema: cartão sobre o grafo (aqui, o leitor de nota). */
+  --shadow-foco: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
 body {
   background: var(--fundo);
   color: var(--texto);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--fonte);
+}
+
+/*
+ * BimoThinking (`src/components/BimoPensando.tsx`): as arestas se desenham
+ * uma a uma enquanto um pulso azul passa de nó em nó. Copiado do preview do
+ * design system, trocando as cores literais pelos tokens acima.
+ */
+.bimo-pensando line {
+  stroke: var(--aresta-neutra);
+  stroke-width: 1;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: bimo-liga 2.4s ease-in-out infinite;
+}
+.bimo-pensando .a2 { animation-delay: 0.2s; }
+.bimo-pensando .a3 { animation-delay: 0.4s; }
+.bimo-pensando .a4 { animation-delay: 0.6s; }
+.bimo-pensando .a5 { animation-delay: 0.8s; }
+.bimo-pensando circle {
+  fill: var(--no-neutro);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bimo-pulso 2.4s ease-in-out infinite;
+}
+.bimo-pensando .n2 { animation-delay: 0.3s; }
+.bimo-pensando .n3 { animation-delay: 0.6s; }
+.bimo-pensando .n4 { animation-delay: 0.9s; }
+.bimo-pensando .n5 { animation-delay: 1.2s; }
+
+@keyframes bimo-liga {
+  0% { stroke-dashoffset: 30; opacity: 1; }
+  40%, 80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes bimo-pulso {
+  0%, 40%, 100% { fill: var(--no-neutro); transform: scale(1); }
+  20% { fill: var(--destaque); transform: scale(1.4); }
+}
+
+/* Movimento reduzido: grafo parado e completo, nó central em azul. */
+@media (prefers-reduced-motion: reduce) {
+  .bimo-pensando line { animation: none; stroke-dashoffset: 0; }
+  .bimo-pensando circle { animation: none; }
+  .bimo-pensando .n3 { fill: var(--destaque); }
 }
