@@ -14,11 +14,14 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota 
   const totalDeNotas = contarNotas(itens);
 
   return (
-    <aside className="flex h-full flex-col border-r border-borda bg-painel">
+    // "Superfície Alt" do design system: a barra lateral fica um tom abaixo do painel do chat.
+    <aside className="flex h-full flex-col border-r border-borda bg-painel-alt">
       <div className="border-b border-borda px-4 py-3">
-        <h2 className="text-sm font-semibold">Seu Vault</h2>
-        <p className="mt-0.5 text-xs text-suave">
-          {totalDeNotas} notas · dados de exemplo
+        <h2 className="text-secao font-semibold tracking-[0.08em] text-suave uppercase">
+          Seu Vault
+        </h2>
+        <p className="mt-0.5 text-meta text-suave">
+          {totalDeNotas} nota{totalDeNotas === 1 ? "" : "s"}
         </p>
       </div>
 
@@ -70,8 +73,8 @@ function ItemDaArvore({
         onClick={() => onSelecionarNota({ caminho: item.caminho, nome: item.nome })}
         className={`flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-sm transition-colors ${
           selecionada
-            ? "bg-destaque-suave font-medium text-destaque"
-            : "text-suave hover:bg-destaque-suave/60 hover:text-texto"
+            ? "bg-destaque-suave font-medium text-destaque-texto"
+            : "text-suave hover:bg-painel hover:text-texto"
         }`}
       >
         <span aria-hidden className="shrink-0 opacity-70">
@@ -90,7 +93,7 @@ function ItemDaArvore({
         style={recuo}
         onClick={() => setAberta((estava) => !estava)}
         aria-expanded={aberta}
-        className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm font-medium transition-colors hover:bg-destaque-suave/60"
+        className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm font-medium transition-colors hover:bg-painel"
       >
         <span aria-hidden className="w-3 shrink-0 text-xs text-suave">
           {aberta ? "▾" : "▸"}
@@ -99,8 +102,7 @@ function ItemDaArvore({
           {aberta ? "📂" : "📁"}
         </span>
         <span className="truncate">{item.nome}</span>
-        <span 
-          className="ml-auto text-xs text-suave">
+        <span className="ml-auto text-xs font-normal text-suave">
           {totalDeNotas} nota{totalDeNotas === 1 ? "" : "s"}
         </span>
       </button>

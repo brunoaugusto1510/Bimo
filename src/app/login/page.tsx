@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import MarcaBimo from "@/components/MarcaBimo";
 
 /**
  * Tela de senha. Mobile-first: o cartão ocupa a largura toda no celular e
@@ -52,8 +53,11 @@ export default function PaginaDeLogin() {
 
   return (
     <div className="flex h-full items-center justify-center px-4">
-      <div className="w-full rounded-xl border border-borda bg-painel p-6 sm:max-w-sm">
-        <h1 className="text-center text-lg font-semibold tracking-tight">Bimo</h1>
+      <div className="w-full rounded-painel border border-borda bg-painel p-6 sm:max-w-sm">
+        <div className="flex justify-center">
+          <MarcaBimo tamanho={56} />
+        </div>
+        <h1 className="mt-3 text-center text-lg font-semibold tracking-tight">Bimo</h1>
         <p className="mt-1 text-center text-sm text-suave">
           Seu cérebro pessoal. Entre para continuar.
         </p>
@@ -74,7 +78,7 @@ export default function PaginaDeLogin() {
             required
             aria-invalid={erro !== null}
             aria-describedby={erro ? "erro-de-login" : undefined}
-            className="rounded-lg border border-borda bg-fundo px-3 py-2 text-base outline-none focus:border-destaque"
+            className="rounded-bloco border border-borda bg-fundo px-3 py-2.5 text-base outline-none focus:border-destaque"
           />
 
           {erro && (
@@ -90,7 +94,8 @@ export default function PaginaDeLogin() {
           <button
             type="submit"
             disabled={enviando || senha === ""}
-            className="mt-1 rounded-lg bg-destaque px-3 py-2 text-sm font-medium text-painel disabled:opacity-50"
+            // Botão "bloco" do design system: largura total, cantos de 10px.
+            className="mt-1 rounded-bloco bg-destaque px-5 py-3 text-sm font-semibold text-sobre-destaque transition-colors hover:bg-destaque-hover disabled:cursor-not-allowed disabled:bg-desabilitado disabled:text-desabilitado-texto"
           >
             {enviando ? "Entrando…" : "Entrar"}
           </button>

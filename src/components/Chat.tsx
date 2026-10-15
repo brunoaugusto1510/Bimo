@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Mensagem from "./Mensagem";
+import BimoPensando from "./BimoPensando";
+import MarcaBimo from "./MarcaBimo";
+import Mensagem, { AssinaturaDoBimo } from "./Mensagem";
 import type { Mensagem as TipoMensagem } from "@/lib/types";
 
 type Props = {
@@ -120,7 +122,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
             ))
           )}
 
-          {pensando && <Digitando />}
+          {pensando && <Pensando />}
 
           {/* Âncora invisível: é para cá que a rolagem automática vai. */}
           <div ref={fimDaLista} />
@@ -145,11 +147,12 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
             className="flex-1 resize-none rounded-xl border border-borda bg-fundo px-3.5 py-2.5 text-sm outline-none placeholder:text-suave focus:border-destaque"
           />
 
+          {/* Botão primário do design system: pílula roxa; desabilitado vira cinza quente. */}
           <button
             type="button"
             onClick={enviar}
             disabled={rascunho.trim() === "" || pensando}
-            className="h-10 shrink-0 rounded-xl bg-destaque px-4 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-10 shrink-0 rounded-full bg-destaque px-5 text-sm font-semibold text-sobre-destaque transition-colors hover:bg-destaque-hover disabled:cursor-not-allowed disabled:bg-desabilitado disabled:text-desabilitado-texto"
           >
             Enviar
           </button>
@@ -166,7 +169,10 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
 function EstadoVazio({ onEscolher }: { onEscolher: (texto: string) => void }) {
   return (
     <div className="mt-10 text-center">
-      <h2 className="text-lg font-semibold">Converse com as suas notas</h2>
+      <div className="flex justify-center">
+        <MarcaBimo tamanho={48} />
+      </div>
+      <h2 className="mt-3 text-lg font-semibold">Converse com as suas notas</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-suave">
         Pergunte qualquer coisa sobre o que você já estudou, ou clique numa nota
         na barra lateral para começar.
@@ -178,7 +184,7 @@ function EstadoVazio({ onEscolher }: { onEscolher: (texto: string) => void }) {
             key={sugestao}
             type="button"
             onClick={() => onEscolher(sugestao)}
-            className="w-full max-w-md rounded-xl border border-borda bg-painel px-4 py-2.5 text-left text-sm text-suave transition-colors hover:border-destaque hover:text-texto"
+            className="w-full max-w-md rounded-xl border border-borda bg-painel px-4 py-2.5 text-left text-sm text-suave transition-colors hover:border-destaque-suave-borda hover:bg-destaque-suave hover:text-texto"
           >
             {sugestao}
           </button>
@@ -188,16 +194,19 @@ function EstadoVazio({ onEscolher }: { onEscolher: (texto: string) => void }) {
   );
 }
 
-function Digitando() {
+/**
+ * Enquanto a resposta não chega: uma bolha do agente com o BimoThinking no
+ * lugar do texto — o design system pede o grafo, não um spinner.
+ */
+function Pensando() {
   return (
-    <div className="flex items-center gap-1.5 px-1 text-suave">
-      {[0, 150, 300].map((atraso) => (
-        <span
-          key={atraso}
-          className="h-1.5 w-1.5 animate-bounce rounded-full bg-current"
-          style={{ animationDelay: `${atraso}ms` }}
-        />
-      ))}
+    <div className="flex justify-start">
+      <div className="space-y-1">
+        <div className="rounded-bolha rounded-bl-sm border border-borda bg-bolha-agente px-4 py-3">
+          <BimoPensando />
+        </div>
+        <AssinaturaDoBimo />
+      </div>
     </div>
   );
 }

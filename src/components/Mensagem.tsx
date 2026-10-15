@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import MarcaBimo from "./MarcaBimo";
 import type { Mensagem as TipoMensagem, UsoDeFerramenta } from "@/lib/types";
 
 /**
@@ -15,24 +16,24 @@ export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
   return (
     <div className={`flex ${doUsuario ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[85%] space-y-1">
-        <span className="block px-1 text-xs font-medium text-suave">
-          {doUsuario ? "Você" : "Agente"}
-        </span>
+        {/* O design não rotula a bolha do usuário — o lado da tela já diz quem
+            falou. Para leitor de tela, o rótulo continua existindo. */}
+        <span className="sr-only">{doUsuario ? "Você" : "Bimo"}</span>
 
         <div
           className={
             doUsuario
-              ? "rounded-2xl rounded-br-md bg-bolha-usuario px-4 py-2.5 text-bolha-usuario-texto"
-              : "rounded-2xl rounded-bl-md border border-borda bg-bolha-agente px-4 py-2.5"
+              ? "rounded-bolha rounded-br-sm bg-bolha-usuario px-4 py-3 text-bolha-usuario-texto"
+              : "rounded-bolha rounded-bl-sm border border-borda bg-bolha-agente px-4 py-3"
           }
         >
           {doUsuario ? (
             // `whitespace-pre-wrap` preserva as quebras de linha que a pessoa digitou.
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            <p className="whitespace-pre-wrap text-sm leading-normal">
               {mensagem.conteudo}
             </p>
           ) : (
-            <div className="text-sm leading-relaxed [&_a]:text-destaque [&_a]:underline [&_code]:rounded [&_code]:bg-fundo [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+            <div className="text-sm leading-normal [&_a]:text-destaque-texto [&_a]:underline [&_code]:rounded [&_code]:bg-painel-alt [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {mensagem.conteudo}
               </ReactMarkdown>
@@ -40,11 +41,27 @@ export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
           )}
         </div>
 
+        {!doUsuario && <AssinaturaDoBimo />}
+
         {!doUsuario && mensagem.ferramentas && mensagem.ferramentas.length > 0 && (
           <UsosDeFerramentas usos={mensagem.ferramentas} />
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A linha embaixo da bolha do agente: marca do cérebro + "Bimo AI", como no
+ * ChatBubble do design system. Exportada porque a bolha de "pensando" do Chat
+ * usa a mesma linha.
+ */
+export function AssinaturaDoBimo() {
+  return (
+    <span aria-hidden className="flex items-center gap-1 px-1 text-secao text-suave">
+      <MarcaBimo />
+      Bimo AI
+    </span>
   );
 }
 
@@ -65,17 +82,21 @@ function FerramentaUsada({ uso }: { uso: UsoDeFerramenta }) {
   // mas ainda vale destacar visualmente que algo não saiu como esperado.
   const classes = uso.erro
     ? "border-erro/30 bg-erro-suave text-erro"
-    : "border-borda bg-fundo text-suave";
+    : "border-borda bg-painel-alt text-suave";
 
   // Escritas (criar_nota/editar_nota bem-sucedidas) viram link pro commit —
   // é a única ação aqui que gera uma mudança real e permanente no vault.
+  // Por isso ganham o roxo suave das "sugestões do Bimo" em vez do cinza.
   if (uso.commitUrl) {
+    const corDoLink = uso.erro
+      ? classes
+      : "border-destaque-suave-borda bg-destaque-suave text-destaque-texto";
     return (
       <a
         href={uso.commitUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`rounded-full border px-2 py-0.5 text-xs hover:underline ${classes}`}
+        className={`rounded-full border px-2 py-0.5 text-xs font-medium hover:underline ${corDoLink}`}
       >
         {uso.resumo} ↗
       </a>

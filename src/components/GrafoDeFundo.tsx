@@ -212,9 +212,9 @@ export default function GrafoDeFundo({
     if (!contexto) return;
 
     const estilo = getComputedStyle(document.documentElement);
-    const corLinha = estilo.getPropertyValue("--borda").trim() || "#e3e3e6";
-    const corDestaque = estilo.getPropertyValue("--destaque").trim() || "#5bd088";
-    const corNaoResolvida = estilo.getPropertyValue("--texto-suave").trim() || "#6b6b73";
+    const corLinha = estilo.getPropertyValue("--borda").trim() || "#e7e3d9";
+    const corDestaque = estilo.getPropertyValue("--destaque").trim() || "#2574e0";
+    const corNaoResolvida = estilo.getPropertyValue("--texto-suave").trim() || "#8b8f94";
     const corTag = estilo.getPropertyValue("--grafo-tag").trim() || "#5f8f8b";
     const paletaDeCores = Array.from({ length: NUMERO_DE_CORES_DE_GRUPO }, (_, i) =>
       estilo.getPropertyValue(`--grafo-cor-${i + 1}`).trim() || "#6b6b73",

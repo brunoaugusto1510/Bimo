@@ -5,6 +5,7 @@ import BarraLateral from "@/components/BarraLateral";
 import Chat from "@/components/Chat";
 import GrafoDeFundo from "@/components/GrafoDeFundo";
 import LeitorDeNota from "@/components/LeitorDeNota";
+import MarcaBimo from "@/components/MarcaBimo";
 import type { Grafo } from "@/lib/grafo";
 import type { ItemVault } from "@/lib/types";
 
@@ -57,12 +58,13 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
           type="button"
           onClick={() => setMenuAberto((estava) => !estava)}
           aria-label="Mostrar ou esconder o vault"
-          className="rounded-lg border border-borda px-2.5 py-1 text-sm md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-suave transition-colors hover:bg-painel-alt hover:text-texto md:hidden"
         >
           ☰
         </button>
 
-        <h1 className="flex-1 text-center text-base font-semibold tracking-tight md:text-left">
+        <h1 className="flex flex-1 items-center justify-center gap-2 text-base font-semibold tracking-tight md:justify-start">
+          <MarcaBimo tamanho={24} />
           Bimo
         </h1>
 
@@ -72,7 +74,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
           type="button"
           onClick={sair}
           aria-label="Sair"
-          className="rounded-lg border border-borda px-2.5 py-1 text-sm"
+          className="flex h-9 min-w-9 items-center justify-center rounded-full border border-borda bg-painel px-2.5 text-sm font-semibold transition-colors hover:bg-painel-alt md:px-4"
         >
           <span aria-hidden className="md:hidden">
             ⏻
@@ -82,7 +84,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
       </header>
 
       {(aviso || grafo.aviso) && (
-        <p className="shrink-0 border-b border-borda bg-destaque-suave px-4 py-1.5 text-center text-xs text-suave">
+        <p className="shrink-0 border-b border-destaque-suave-borda bg-destaque-suave px-4 py-1.5 text-center text-xs text-destaque-texto">
           {aviso ?? grafo.aviso}
         </p>
       )}
