@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { contarNotas, filtrarArvore } from "@/lib/filtro-da-arvore";
 import type { ItemVault } from "@/lib/types";
 
 type Props = {
@@ -10,31 +11,78 @@ type Props = {
   onSelecionarNota: (nota: { caminho: string; nome: string }) => void;
 };
 
+/** Recuo por nível de pasta, em pixels. */
+const RECUO_POR_NIVEL = 16;
+/** Recuos-base do design system (tela "Nota"): a nota entra mais que a pasta, para alinhar com o nome dela e não com o caret. */
+const RECUO_DA_PASTA = 4;
+const RECUO_DA_NOTA = 10;
+
+/**
+ * Estrutura das notas, como na tela "Nota" do design system: busca no topo,
+ * rótulo de seção com o total, pastas com caret e contagem, e a nota
+ * selecionada em azul.
+ */
 export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota }: Props) {
-  const totalDeNotas = contarNotas(itens);
+  const [consulta, setConsulta] = useState("");
+
+  const totalDeNotas = useMemo(() => contarNotas(itens), [itens]);
+  const itensVisiveis = useMemo(() => filtrarArvore(itens, consulta), [itens, consulta]);
+  const buscando = consulta.trim() !== "";
+  const notasEncontradas = buscando ? contarNotas(itensVisiveis) : totalDeNotas;
 
   return (
     // "Superfície Alt" do design system: a barra lateral fica um tom abaixo do painel do chat.
     <aside className="flex h-full flex-col border-r border-borda bg-painel-alt">
-      <div className="border-b border-borda px-4 py-3">
-        <h2 className="text-secao font-semibold tracking-[0.08em] text-suave uppercase">
-          Seu Vault
-        </h2>
-        <p className="mt-0.5 text-meta text-suave">
-          {totalDeNotas} nota{totalDeNotas === 1 ? "" : "s"}
-        </p>
+      <div className="px-3 pt-3">
+        <label className="relative block">
+          <span className="sr-only">Buscar nas notas</span>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm"
+          >
+            🔍
+          </span>
+          <input
+            type="search"
+            value={consulta}
+            onChange={(evento) => setConsulta(evento.target.value)}
+            placeholder="Buscar nas notas..."
+            className="w-full rounded-card border border-borda bg-painel py-2.5 pr-3 pl-9 text-[13.5px] outline-none placeholder:text-suave focus:border-destaque"
+          />
+        </label>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-2">
-        {itens.map((item) => (
-          <ItemDaArvore
-            key={chaveDoItem(item)}
-            item={item}
-            nivel={0}
-            notaSelecionada={notaSelecionada}
-            onSelecionarNota={onSelecionarNota}
-          />
-        ))}
+      <div className="flex items-center justify-between px-4 pt-4 pb-1.5">
+        <h2 className="text-secao font-semibold tracking-[0.08em] text-suave uppercase">
+          Estrutura das notas
+        </h2>
+        <span className="text-xs text-suave">
+          {buscando
+            ? `${notasEncontradas} de ${totalDeNotas} notas`
+            : `${totalDeNotas} nota${totalDeNotas === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {/* `relative`: os `sr-only` (position: absolute) das linhas precisam de um
+          ancestral posicionado aqui dentro, senão escapam do recorte do scroll e
+          alongam o documento inteiro — e o scrollIntoView do chat passa a rolar a página. */}
+      <nav aria-label="Pastas e notas" className="relative flex-1 overflow-y-auto px-2 pb-2">
+        {itensVisiveis.length === 0 ? (
+          <p className="px-2 py-4 text-sm text-suave">
+            Nenhuma nota encontrada para “{consulta.trim()}”.
+          </p>
+        ) : (
+          itensVisiveis.map((item) => (
+            <ItemDaArvore
+              key={chaveDoItem(item)}
+              item={item}
+              nivel={0}
+              forcarAberta={buscando}
+              notaSelecionada={notaSelecionada}
+              onSelecionarNota={onSelecionarNota}
+            />
+          ))
+        )}
       </nav>
     </aside>
   );
@@ -48,20 +96,23 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota 
 function ItemDaArvore({
   item,
   nivel,
+  forcarAberta,
   notaSelecionada,
   onSelecionarNota,
 }: {
   item: ItemVault;
   nivel: number;
+  /** Durante a busca todas as pastas abrem — o resultado costuma morar numa pasta fechada. */
+  forcarAberta: boolean;
   notaSelecionada: string | null;
   onSelecionarNota: Props["onSelecionarNota"];
 }) {
   // Pastas de primeiro nível começam abertas; as de dentro, fechadas.
   const [aberta, setAberta] = useState(nivel === 0);
 
-  // Cada nível entra 12px para a direita. Vai no `style` porque o Tailwind
+  // Cada nível entra 16px para a direita. Vai no `style` porque o Tailwind
   // não consegue gerar classes a partir de um valor calculado em runtime.
-  const recuo = { paddingLeft: `${nivel * 12 + 8}px` };
+  const recuoBase = nivel * RECUO_POR_NIVEL;
 
   if (item.tipo === "nota") {
     const selecionada = notaSelecionada === item.caminho;
@@ -69,15 +120,14 @@ function ItemDaArvore({
     return (
       <button
         type="button"
-        style={recuo}
+        style={{ paddingLeft: `${recuoBase + RECUO_DA_NOTA}px` }}
         onClick={() => onSelecionarNota({ caminho: item.caminho, nome: item.nome })}
-        className={`flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-sm transition-colors ${
-          selecionada
-            ? "bg-destaque-suave font-medium text-destaque-texto"
-            : "text-suave hover:bg-painel hover:text-texto"
+        aria-current={selecionada ? "true" : undefined}
+        className={`flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[13.5px] transition-colors hover:bg-painel ${
+          selecionada ? "font-semibold text-destaque-texto" : "text-texto"
         }`}
       >
-        <span aria-hidden className="shrink-0 opacity-70">
+        <span aria-hidden className="shrink-0">
           📄
         </span>
         <span className="truncate">{item.nome}</span>
@@ -85,35 +135,36 @@ function ItemDaArvore({
     );
   }
 
+  const estaAberta = forcarAberta || aberta;
   const totalDeNotas = contarNotas(item.filhos);
+
   return (
     <div>
       <button
         type="button"
-        style={recuo}
+        style={{ paddingLeft: `${recuoBase + RECUO_DA_PASTA}px` }}
         onClick={() => setAberta((estava) => !estava)}
-        aria-expanded={aberta}
-        className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm font-medium transition-colors hover:bg-painel"
+        aria-expanded={estaAberta}
+        className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-sm font-medium transition-colors hover:bg-painel"
       >
-        <span aria-hidden className="w-3 shrink-0 text-xs text-suave">
-          {aberta ? "▾" : "▸"}
-        </span>
-        <span aria-hidden className="shrink-0">
-          {aberta ? "📂" : "📁"}
+        <span aria-hidden className="w-2.5 shrink-0 text-[10px] text-suave">
+          {estaAberta ? "▾" : "▸"}
         </span>
         <span className="truncate">{item.nome}</span>
-        <span className="ml-auto text-xs font-normal text-suave">
-          {totalDeNotas} nota{totalDeNotas === 1 ? "" : "s"}
+        <span className="ml-auto shrink-0 text-xs font-normal text-suave">
+          {totalDeNotas}
+          <span className="sr-only"> nota{totalDeNotas === 1 ? "" : "s"}</span>
         </span>
       </button>
 
-      {aberta && (
+      {estaAberta && (
         <div>
           {item.filhos.map((filho) => (
             <ItemDaArvore
               key={chaveDoItem(filho)}
               item={filho}
               nivel={nivel + 1}
+              forcarAberta={forcarAberta}
               notaSelecionada={notaSelecionada}
               onSelecionarNota={onSelecionarNota}
             />
@@ -127,12 +178,4 @@ function ItemDaArvore({
 /** O React precisa de uma chave estável por item de lista. */
 function chaveDoItem(item: ItemVault): string {
   return item.tipo === "nota" ? item.caminho : `pasta:${item.nome}`;
-}
-
-function contarNotas(itens: ItemVault[]): number {
-  return itens.reduce(
-    (total, item) =>
-      total + (item.tipo === "nota" ? 1 : contarNotas(item.filhos)),
-    0,
-  );
 }

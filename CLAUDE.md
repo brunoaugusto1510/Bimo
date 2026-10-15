@@ -100,17 +100,30 @@ single callback URL breaks Vercel preview deployments, and its one real gain
 caching — the vault can change between visits). It fetches the vault tree and the
 link graph **in parallel** via `Promise.all`, and is the only place `GITHUB_TOKEN`
 is used — the token never reaches the client. It hands the result to
-`PaginaPrincipal` ("use client"), which owns all interactive state (open note, menu,
-draft text, graph "pulse" counter) and composes the rest of the UI:
+`PaginaPrincipal` ("use client"), which owns all interactive state (mode, open note,
+focused note, menu, draft text, graph "pulse" counter) and composes the rest of the UI:
 
 ```text
 page.tsx (server: fetch tree + grafo)
-  -> PaginaPrincipal (client: shared state)
-       -> BarraLateral   (folder/note tree, recursive component)
-       -> GrafoDeFundo   (canvas graph behind the chat, d3-force physics)
-       -> Chat -> Mensagem
+  -> PaginaPrincipal (client: shared state; header has the Bimo | Notas SeletorPill)
+       -> BarraLateral   (search + folder/note tree, recursive component)
+       -> GrafoDeFundo   (canvas graph, d3-force physics; background OR interactive)
+       -> Chat -> Mensagem (stays mounted, only hidden, on the Notas tab)
+       -> BarraDoGrafo + CartaoDeFoco (Notas tab overlays: counts/zoom, selected note)
        -> LeitorDeNota   (note content panel, fetches on demand)
 ```
+
+Two tabs share the **same** `GrafoDeFundo` (so switching never reshuffles the
+layout): **Bimo** is the chat with the graph as a faint, breathing background;
+**Notas** passes `interativo` — drag the background to pan, wheel/pinch to zoom,
+drag a node (neighbours follow via the physics), click a note to select it. The
+sidebar on that tab selects the node instead of opening the reader; "Abrir Nota" on
+the focus card opens it. `GrafoDeFundo` only owns the animation loop and gestures:
+physics is `lib/simulacao-do-grafo.ts`, camera math `lib/camera-do-grafo.ts`
+(pure and tested), drawing `components/desenhar-grafo.ts`. Don't put `sr-only`
+(position: absolute) inside a scroll container without a `relative` ancestor — it
+escapes the clipping and makes the document scrollable, so the chat's
+`scrollIntoView` scrolls the whole page.
 
 `src/app/api/notas/[...caminho]/route.ts` is a catch-all GET route that
 `LeitorDeNota` calls on demand to fetch one note's Markdown — this keeps the
@@ -141,6 +154,37 @@ Draft code for the next two roadmap steps (Gemini function-calling agent that re
 (`tsconfig.json` → `exclude`) and not wired into the app — treat it as a design
 reference for the agent loop and tool contracts, not working code to run as-is.
 
+### Design system
+
+The visual source of truth is the "Bimo — Design System" artifact
+(https://claude.ai/artifact/BZGehoJQFuhgXiS9M61zfJ; read `project/README.md` and
+`project/tokens.json` with the Artifact tool's `read` action). **UI work follows it
+by default** — don't invent colors, radii or components it already defines. Its
+`project/components/*/README.md` say how each piece is used.
+
+How it lands in this repo (the DS names are the artifact's, the app's are in pt-BR):
+
+- Colors: `azul` → `--destaque` (`bg-destaque`, `text-destaque-texto`), `azul-suave` →
+  `--destaque-suave`, `superficie` → `--painel`, `superficie-alt` → `--painel-alt`,
+  `bg` → `--fundo`. **Azul is the only action color** (primary button, selection,
+  links, note title, focused graph node); text on it is `text-sobre-destaque`.
+  The DS only defines a light theme — the dark values in `globals.css` are ours.
+- Type and shape: `text-titulo-nota`, `text-corpo`, `text-meta`, `text-secao`;
+  `rounded-bolha`, `rounded-painel`, `rounded-bloco`, `rounded-tag`, `shadow-foco`
+  (the DS's only shadow). Actions, chips and switches are pills (`rounded-full`).
+- Brand: `MarcaBimo` renders the official brain-graph logo (`src/assets/`, used
+  as-is, never recolored) — the DS marks "Bimo speaks" with the logo, not an emoji.
+  `BimoPensando` is the DS's "BimoThinking": use it instead of a spinner whenever
+  the agent is thinking/searching/suggesting (and only then).
+- `texto-suave` (`text-suave`) is below 4.5:1 contrast on purpose, as in the DS:
+  metadata and inactive items only, never essential text.
+- Not adopted: the graph's per-folder category palette (`--grafo-cor-*`) stays,
+  because it is validated for color-blindness; the intro `.mp4` and logo `.png`
+  files are still in the old purple.
+
+When the DS changes, re-read its `tokens.json` and update `globals.css` — that file
+is the only place values live.
+
 ### Styling convention
 
 No component uses a literal color. Every color is a CSS custom property defined
@@ -166,6 +210,14 @@ retrofitting breakpoints.
 - Errors are caught close to their source and turned into a `{ tipo: "erro",
   mensagem }`-shaped result rather than thrown across component boundaries (see
   `carregarDadosDaPagina` in `page.tsx`).
+- **Vocabulary: say "notas", never "vault", in anything a person reads** — UI copy,
+  aria-labels, warnings/errors shown in the UI, and the Gemini system prompt and tool
+  descriptions (the agent repeats them to the user). Notes are moving to Bimo's own
+  database, so "vault" (the Obsidian/GitHub repo) is leaving the product vocabulary.
+  It still survives, on purpose, only in *internal* names that the migration will
+  replace: `vault-real.ts`, `ItemVault`, `obterGrafoDoVault`, and the `VAULT_REPO` /
+  `VAULT_BRANCH` / `VAULT_SUBPATH` env vars (renaming those now would break the
+  deployed `.env`). `BarraLateral.test.tsx` fails if the word reappears in the sidebar.
 
 ## Current state / roadmap
 
@@ -182,7 +234,3 @@ etapas-futuras roadmap, not part of the original plan.
 `etapas-futuras/` itself is now stale as a design reference (the real
 implementation diverged in a few places — e.g. it used `"assistant"` where
 `types.ts`'s `Papel` uses `"agente"`) — treat `src/lib/` as the source of truth.
-
-Note: `BarraLateral.tsx`'s sidebar subtitle still says "dados de exemplo" (example
-data) even though the tree is real vault data now — leftover copy from an earlier
-stage, not a functional issue.

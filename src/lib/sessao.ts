@@ -22,7 +22,7 @@ const TAMANHO_MINIMO_DO_SEGREDO = 32;
 
 const MENSAGEM_SEM_SEGREDO =
   "SEGREDO_SESSAO não está definida ou tem menos de 32 caracteres. Sem ela o " +
-  "Bimo recusa todo acesso, para não expor o vault por descuido. Gere uma com " +
+  "Bimo recusa todo acesso, para não expor as notas por descuido. Gere uma com " +
   "npm run gerar-segredo.";
 
 export type ResultadoDaSessao =

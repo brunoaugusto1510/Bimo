@@ -12,6 +12,12 @@ type Props = {
   onRascunhoChange: (texto: string) => void;
   /** Chamado toda vez que uma resposta do agente chega — o grafo de fundo usa isso para "reagir". */
   onRespostaAgente?: () => void;
+  /**
+   * Falso quando o chat está montado mas escondido (aba Notas). Escondido, o
+   * navegador não faz layout dele: rolar não faz nada e o `scrollHeight` do
+   * campo vem 0 — então rolagem e altura esperam o chat voltar a aparecer.
+   */
+  ativo?: boolean;
 };
 
 const SUGESTOES = [
@@ -21,7 +27,7 @@ const SUGESTOES = [
   "Aonde paramos sobre aquele assunto de ontem?",
 ];
 
-export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: Props) {
+export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true }: Props) {
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -29,18 +35,21 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
   const fimDaLista = useRef<HTMLDivElement>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
 
-  // Rolar para o fim sempre que chegar mensagem nova ou o "..." aparecer.
+  // Rolar para o fim sempre que chegar mensagem nova ou o "..." aparecer — e
+  // ao voltar de escondido, quando o que chegou nesse meio-tempo ficou fora da vista.
   useEffect(() => {
-    fimDaLista.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mensagens, pensando]);
+    if (!ativo) return;
+    // `nearest`: rola só a lista do chat, nunca a página inteira.
+    fimDaLista.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [mensagens, pensando, ativo]);
 
   // O textarea cresce junto com o texto, até um limite.
   useEffect(() => {
     const elemento = campo.current;
-    if (!elemento) return;
+    if (!ativo || !elemento) return;
     elemento.style.height = "auto";
     elemento.style.height = `${Math.min(elemento.scrollHeight, 160)}px`;
-  }, [rascunho]);
+  }, [rascunho, ativo]);
 
   async function enviar() {
     const texto = rascunho.trim();
@@ -112,7 +121,9 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente }: P
     // das mensagens. As bolhas de mensagem continuam opacas — só o "vazio"
     // ao redor delas mostra o grafo.
     <section className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      {/* `relative`: o rótulo `sr-only` de cada mensagem é absoluto — sem um ancestral
+          posicionado aqui, ele escapa do recorte do scroll e alonga o documento. */}
+      <div className="relative flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-5">
           {mensagens.length === 0 ? (
             <EstadoVazio onEscolher={onRascunhoChange} />

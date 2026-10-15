@@ -26,13 +26,13 @@ const MAX_VOLTAS = 5;
 const MODELO = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 const INSTRUCAO_DO_SISTEMA = `
-Você é o assistente pessoal de estudos do Bruno. Você tem acesso ao vault de
-notas do Obsidian dele (guardado num repositório do GitHub) através de ferramentas.
+Você é o assistente pessoal de estudos do Bruno. Você tem acesso às notas dele
+(escritas no Obsidian e guardadas num repositório do GitHub) através de ferramentas.
 
 Como trabalhar:
 - Responda SEMPRE em português do Brasil.
 - Antes de responder qualquer coisa sobre o que o Bruno estudou, anotou ou aprendeu,
-  consulte o vault com as ferramentas. Nunca invente o conteúdo de uma nota.
+  consulte as notas com as ferramentas. Nunca invente o conteúdo de uma nota.
 - Comece pela busca (buscar_notas). Se os trechos não bastarem, leia a nota inteira
   (ler_nota) antes de responder.
 - Se a primeira busca não achar nada, tente sinônimos ou termos mais gerais antes de
@@ -40,7 +40,7 @@ Como trabalhar:
 - Cite as notas que usou pelo caminho, ex: "segundo Estudos/Redes/TCP.md".
 - Deixe claro quando algo vem do conhecimento geral e não das notas do Bruno.
 
-Sobre escrever no vault:
+Sobre escrever notas:
 - Só crie ou edite notas quando o Bruno pedir. Cada escrita vira um commit real no
   repositório dele.
 - Ao criar uma nota, siga a organização de pastas que já existe (use listar_notas
@@ -146,7 +146,7 @@ export async function responder(
 
   return {
     resposta:
-      "Consultei o vault várias vezes seguidas e não cheguei a uma resposta final. " +
+      "Consultei as notas várias vezes seguidas e não cheguei a uma resposta final. " +
       "Tente reformular a pergunta de forma mais específica.",
     ferramentas: ferramentasUsadas,
   };

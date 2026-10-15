@@ -406,7 +406,7 @@ export async function buscarNotas(
   const aviso = c.truncado
     ? avisoTruncamento()
     : c.notas.length > MAX_NOTAS_INDEXADAS
-      ? `O vault tem ${c.notas.length} notas; a busca por conteúdo cobriu as primeiras ${MAX_NOTAS_INDEXADAS}.`
+      ? `Há ${c.notas.length} notas; a busca por conteúdo cobriu as primeiras ${MAX_NOTAS_INDEXADAS}.`
       : undefined;
 
   return { resultados: resultados.slice(0, limite), aviso };

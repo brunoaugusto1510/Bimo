@@ -333,7 +333,7 @@ export async function obterGrafoDoVault(): Promise<Grafo> {
 
   const avisoDeCorte =
     notas.length > MAX_NOTAS_NO_GRAFO
-      ? `O vault tem ${notas.length} notas; os links foram lidos só nas primeiras ${MAX_NOTAS_NO_GRAFO}.`
+      ? `Há ${notas.length} notas; os links foram lidos só nas primeiras ${MAX_NOTAS_NO_GRAFO}.`
       : undefined;
 
   const grafo: Grafo = {

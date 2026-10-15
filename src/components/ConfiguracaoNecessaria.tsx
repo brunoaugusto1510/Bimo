@@ -9,7 +9,7 @@ export default function ConfiguracaoNecessaria({ mensagem }: { mensagem: string 
   return (
     <div className="flex h-full items-center justify-center px-4">
       <div className="max-w-md rounded-painel border border-borda bg-painel p-6 text-center">
-        <h1 className="text-base font-semibold">Não consegui ler o seu vault</h1>
+        <h1 className="text-base font-semibold">Não consegui ler as suas notas</h1>
         <p className="mt-2 text-sm text-suave">{mensagem}</p>
 
         <div className="mt-4 rounded-lg bg-painel-alt p-3 text-left text-xs text-suave">

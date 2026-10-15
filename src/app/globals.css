@@ -15,6 +15,9 @@
  * contraste.
  */
 :root {
+  /* Faz o navegador pintar scrollbars e campos nativos no tema certo (sem isso a scrollbar fica branca no escuro). */
+  color-scheme: light dark;
+
   --fonte: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Arial, sans-serif;
 
   --fundo: #fbfaf8; /* bg */

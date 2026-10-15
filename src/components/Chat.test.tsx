@@ -126,4 +126,30 @@ describe("Chat", () => {
     );
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  describe("escondido (aba Notas)", () => {
+    it("não rola a lista enquanto está escondido, e rola ao voltar a aparecer", () => {
+      const rolar = vi.spyOn(Element.prototype, "scrollIntoView");
+      const props = { rascunho: "", onRascunhoChange: () => {} };
+
+      const { rerender } = render(<Chat {...props} ativo={false} />);
+      expect(rolar).not.toHaveBeenCalled();
+
+      rerender(<Chat {...props} ativo />);
+
+      // `nearest`: só a lista do chat rola, nunca a página.
+      expect(rolar).toHaveBeenCalledWith({ behavior: "smooth", block: "nearest" });
+    });
+
+    it("não mede o campo enquanto está escondido: o scrollHeight de um elemento sem layout é 0", () => {
+      const props = { onRascunhoChange: () => {} };
+      const { rerender } = render(<Chat {...props} rascunho="" ativo={false} />);
+      const campo = screen.getByPlaceholderText("Digite sua mensagem...");
+
+      rerender(<Chat {...props} rascunho="texto escrito com o chat escondido" ativo={false} />);
+
+      // Medir agora fixaria `height: 0px` e o campo sumiria ao voltar.
+      expect(campo.style.height).toBe("");
+    });
+  });
 });

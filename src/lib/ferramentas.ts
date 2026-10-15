@@ -22,7 +22,7 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "buscar_notas",
     description:
-      "Busca notas do vault por palavras-chave, procurando no título, no caminho e no conteúdo. " +
+      "Busca notas por palavras-chave, procurando no título, no caminho e no conteúdo. " +
       "Use esta ferramenta PRIMEIRO, quase sempre, quando a pergunta for sobre o que o usuário estudou ou anotou. " +
       "Devolve trechos, não a nota inteira — se um resultado parecer relevante, chame ler_nota para ver tudo.",
     parametersJsonSchema: {
@@ -44,15 +44,15 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "listar_notas",
     description:
-      "Lista os caminhos das notas do vault, opcionalmente filtrando por pasta. " +
-      "Use quando o usuário perguntar o que existe no vault ou quiser navegar pela estrutura.",
+      "Lista os caminhos de todas as notas, opcionalmente filtrando por pasta. " +
+      "Use quando o usuário perguntar quais notas existem ou quiser navegar pela estrutura.",
     parametersJsonSchema: {
       type: "object",
       properties: {
         pasta: {
           type: "string",
           description:
-            "Pasta para filtrar, ex: 'Estudos/Redes'. Omita para listar o vault inteiro.",
+            "Pasta para filtrar, ex: 'Estudos/Redes'. Omita para listar todas as notas.",
         },
       },
       required: [],
@@ -78,7 +78,7 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "criar_nota",
     description:
-      "Cria uma nota NOVA no vault (gera um commit no repositório do GitHub). " +
+      "Cria uma nota NOVA (gera um commit no repositório do GitHub). " +
       "Falha se já existir uma nota nesse caminho — nesse caso use editar_nota. " +
       "Escreva o conteúdo em Markdown, no estilo do Obsidian: um título '# ' no topo e " +
       "links internos no formato [[Nome da Nota]] quando fizer sentido conectar com outras notas.",
@@ -88,7 +88,7 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
         caminho: {
           type: "string",
           description:
-            "Caminho completo com pasta, ex: 'Estudos/Redes/DNS.md'. Prefira pastas que já existem no vault.",
+            "Caminho completo com pasta, ex: 'Estudos/Redes/DNS.md'. Prefira pastas que já existem.",
         },
         conteudo: {
           type: "string",

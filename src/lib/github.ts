@@ -27,7 +27,7 @@ export function getGitHubConfig(): GitHubConfig {
 
   if (!repo) {
     throw new Error(
-      "VAULT_REPO não está definido. Adicione no .env.local, ex: VAULT_REPO=seu-usuario/seu-vault",
+      "VAULT_REPO não está definido. Adicione no .env.local, ex: VAULT_REPO=seu-usuario/seu-repositorio",
     );
   }
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) {
