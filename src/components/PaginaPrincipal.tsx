@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import AlternadorDeTema from "@/components/AlternadorDeTema";
 import BarraDoGrafo from "@/components/BarraDoGrafo";
 import BarraLateral from "@/components/BarraLateral";
 import CartaoDeFoco from "@/components/CartaoDeFoco";
@@ -113,7 +114,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
             type="button"
             onClick={() => setMenuAberto((estava) => !estava)}
             aria-label="Mostrar ou esconder as notas"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-suave transition-colors hover:bg-painel-alt hover:text-texto md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-suave transition-[color,background-color,transform] hover:bg-painel-alt hover:text-texto motion-safe:active:scale-[0.96] md:hidden"
           >
             ☰
           </button>
@@ -131,17 +132,20 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
           onChange={mudarModo}
         />
 
-        <button
-          type="button"
-          onClick={sair}
-          aria-label="Sair"
-          className="flex h-9 min-w-9 items-center justify-center justify-self-end rounded-full border border-borda bg-painel px-2.5 text-sm font-semibold transition-colors hover:bg-painel-alt md:px-4"
-        >
-          <span aria-hidden className="md:hidden">
-            ⏻
-          </span>
-          <span className="hidden md:inline">Sair</span>
-        </button>
+        <div className="flex items-center gap-2 justify-self-end">
+          <AlternadorDeTema />
+          <button
+            type="button"
+            onClick={sair}
+            aria-label="Sair"
+            className="flex h-10 min-w-10 items-center justify-center rounded-full border border-borda bg-painel px-2.5 text-sm font-semibold transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96] md:px-4"
+          >
+            <span aria-hidden className="md:hidden">
+              ⏻
+            </span>
+            <span className="hidden md:inline">Sair</span>
+          </button>
+        </div>
       </header>
 
       {(aviso || grafo.aviso) && (

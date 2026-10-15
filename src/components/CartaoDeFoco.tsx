@@ -35,7 +35,7 @@ export default function CartaoDeFoco({
   return (
     <section
       aria-label="Nota selecionada"
-      className="pointer-events-auto w-full max-w-md rounded-card border border-borda bg-painel p-4 shadow-foco"
+      className="pointer-events-auto w-full max-w-md rounded-card border border-borda bg-painel p-4 shadow-foco motion-safe:animate-entrada"
     >
       <div className="flex items-start gap-2">
         <h2 className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold">
@@ -46,13 +46,14 @@ export default function CartaoDeFoco({
           type="button"
           onClick={onFechar}
           aria-label="Fechar"
-          className="-mt-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-suave transition-colors hover:bg-painel-alt hover:text-texto"
+          // O `after` leva a área de toque a 40px sem aumentar o botão visível (28px).
+          className="relative -mt-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-suave transition-[color,background-color,transform] after:absolute after:-inset-1.5 after:content-[''] hover:bg-painel-alt hover:text-texto motion-safe:active:scale-[0.96]"
         >
           ✕
         </button>
       </div>
 
-      <p className="mt-1 text-xs text-suave">
+      <p className="mt-1 text-xs text-suave tabular-nums">
         {pasta} · {descreverConexoes(conexoes)}
       </p>
 
@@ -60,21 +61,21 @@ export default function CartaoDeFoco({
         <button
           type="button"
           onClick={onAbrir}
-          className="rounded-full bg-destaque px-3.5 py-2 text-[13px] font-semibold text-sobre-destaque transition-colors hover:bg-destaque-hover"
+          className="min-h-10 rounded-full bg-destaque px-3.5 text-[13px] font-semibold text-sobre-destaque transition-[background-color,transform] hover:bg-destaque-hover motion-safe:active:scale-[0.96]"
         >
           Abrir Nota
         </button>
         <button
           type="button"
           onClick={onVizinhos}
-          className="rounded-full border border-borda px-3.5 py-2 text-[13px] font-semibold transition-colors hover:bg-painel-alt"
+          className="min-h-10 rounded-full border border-borda px-3.5 text-[13px] font-semibold transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]"
         >
           Ver vizinhos
         </button>
         <button
           type="button"
           onClick={onPerguntar}
-          className="flex items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 py-2 text-[13px] font-semibold text-destaque-texto transition-colors hover:bg-destaque-suave"
+          className="flex min-h-10 items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 text-[13px] font-semibold text-destaque-texto transition-[background-color,transform] hover:bg-destaque-suave motion-safe:active:scale-[0.96]"
         >
           <MarcaBimo tamanho={14} />
           Perguntar ao Bimo

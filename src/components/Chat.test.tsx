@@ -127,6 +127,41 @@ describe("Chat", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  describe("altura do campo de texto", () => {
+    /** O jsdom não faz layout (tudo é 0): o teste dita as medidas que o navegador daria. */
+    function medidas({ conteudo, borda }: { conteudo: number; borda: number }) {
+      vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(conteudo);
+      vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(conteudo + borda);
+      vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(conteudo);
+    }
+    const campo = () => screen.getByPlaceholderText("Digite sua mensagem...");
+
+    it("soma a borda ao conteúdo, para o campo não nascer menor que o texto (e com barra de rolagem)", () => {
+      medidas({ conteudo: 40, borda: 2 });
+
+      render(<ChatControlado />);
+
+      expect(campo().style.height).toBe("42px");
+    });
+
+    it("não mostra barra de rolagem enquanto o texto cabe", () => {
+      medidas({ conteudo: 40, borda: 2 });
+
+      render(<ChatControlado />);
+
+      expect(campo().style.overflowY).toBe("hidden");
+    });
+
+    it("para de crescer em 160px e só então passa a rolar por dentro", () => {
+      medidas({ conteudo: 400, borda: 2 });
+
+      render(<ChatControlado />);
+
+      expect(campo().style.height).toBe("160px");
+      expect(campo().style.overflowY).toBe("auto");
+    });
+  });
+
   describe("escondido (aba Notas)", () => {
     it("não rola a lista enquanto está escondido, e rola ao voltar a aparecer", () => {
       const rolar = vi.spyOn(Element.prototype, "scrollIntoView");

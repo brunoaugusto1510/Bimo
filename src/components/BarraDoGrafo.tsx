@@ -21,7 +21,8 @@ function contar(quantidade: number, singular: string, plural: string): string {
 export default function BarraDoGrafo({ nos, conexoes, onAproximar, onAfastar, onEnquadrar }: Props) {
   return (
     <div className="pointer-events-none flex items-start justify-between gap-2 p-3 md:p-4">
-      <p className="pointer-events-auto rounded-full border border-borda bg-painel/90 px-3 py-1.5 text-meta text-suave backdrop-blur-sm">
+      {/* tabular-nums: as contagens mudam quando as notas mudam, e os dígitos não devem fazer a pílula "tremer". */}
+      <p className="pointer-events-auto rounded-full border border-borda bg-painel/90 px-3 py-1.5 text-meta text-suave tabular-nums backdrop-blur-sm">
         {contar(nos, "nó", "nós")} · {contar(conexoes, "conexão", "conexões")}
       </p>
 
@@ -54,7 +55,7 @@ function BotaoDeControle({
       type="button"
       onClick={onClick}
       aria-label={rotulo}
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-borda bg-painel text-base text-suave transition-colors hover:text-texto"
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-borda bg-painel text-base text-suave transition-[color,transform] hover:text-texto motion-safe:active:scale-[0.96]"
     >
       <span aria-hidden>{children}</span>
     </button>

@@ -16,7 +16,7 @@
  */
 :root {
   /* Faz o navegador pintar scrollbars e campos nativos no tema certo (sem isso a scrollbar fica branca no escuro). */
-  color-scheme: light dark;
+  color-scheme: light;
 
   --fonte: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Arial, sans-serif;
 
@@ -73,46 +73,52 @@
   --grafo-tag: #5f8f8b;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fundo: #161513;
-    --painel: #23221e;
-    --painel-alt: #1c1b18;
-    --borda: #34312b;
-    --texto: #ecebe6;
-    --texto-suave: #9c9890;
+/*
+ * Tema escuro. O atributo `data-tema` do <html> é escrito por JS (ver
+ * `src/lib/tema.ts`), sempre — também no modo automático, onde ele reflete o
+ * tema do computador. Por isso não há `@media (prefers-color-scheme)` aqui: um
+ * bloco só serve aos dois caminhos. Sem JS o atributo não existe e vale o claro.
+ */
+:root[data-tema="escuro"] {
+  color-scheme: dark;
 
-    /* Mesmo azul de ação (branco sobre ele: 4.5:1); hover escurece, como no claro. */
-    --destaque: #2574e0;
-    --destaque-hover: #1e66c4;
-    --sobre-destaque: #ffffff;
-    --destaque-texto: #6ea8f2;
-    --destaque-suave: #16263b;
-    --destaque-suave-borda: #24405f;
+  --fundo: #161513;
+  --painel: #23221e;
+  --painel-alt: #1c1b18;
+  --borda: #34312b;
+  --texto: #ecebe6;
+  --texto-suave: #9c9890;
 
-    --desabilitado: #2a2824;
-    --desabilitado-texto: #6b675f;
+  /* Mesmo azul de ação (branco sobre ele: 4.5:1); hover escurece, como no claro. */
+  --destaque: #2574e0;
+  --destaque-hover: #1e66c4;
+  --sobre-destaque: #ffffff;
+  --destaque-texto: #6ea8f2;
+  --destaque-suave: #16263b;
+  --destaque-suave-borda: #24405f;
 
-    --no-neutro: #5a564e;
-    --aresta-neutra: #46423b;
+  --desabilitado: #2a2824;
+  --desabilitado-texto: #6b675f;
 
-    --bolha-usuario: #2574e0;
-    --bolha-usuario-texto: #ffffff;
-    --bolha-agente: #23221e;
-    --erro: #ff8080;
-    --erro-suave: #3a1f1f;
+  --no-neutro: #5a564e;
+  --aresta-neutra: #46423b;
 
-    /* Mesmos 8 grupos, com os tons já ajustados para o fundo escuro. */
-    --grafo-cor-1: #3987e5;
-    --grafo-cor-2: #d95926;
-    --grafo-cor-3: #199e70;
-    --grafo-cor-4: #c98500;
-    --grafo-cor-5: #d55181;
-    --grafo-cor-6: #008300;
-    --grafo-cor-7: #9085e9;
-    --grafo-cor-8: #e66767;
-    --grafo-tag: #7fb3ae;
-  }
+  --bolha-usuario: #2574e0;
+  --bolha-usuario-texto: #ffffff;
+  --bolha-agente: #23221e;
+  --erro: #ff8080;
+  --erro-suave: #3a1f1f;
+
+  /* Mesmos 8 grupos, com os tons já ajustados para o fundo escuro. */
+  --grafo-cor-1: #3987e5;
+  --grafo-cor-2: #d95926;
+  --grafo-cor-3: #199e70;
+  --grafo-cor-4: #c98500;
+  --grafo-cor-5: #d55181;
+  --grafo-cor-6: #008300;
+  --grafo-cor-7: #9085e9;
+  --grafo-cor-8: #e66767;
+  --grafo-tag: #7fb3ae;
 }
 
 /*
@@ -175,6 +181,24 @@
 
   /* A única sombra do sistema: cartão sobre o grafo (aqui, o leitor de nota). */
   --shadow-foco: 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  /*
+   * Entrada de cartões e mensagens: some-e-sobe de 4px, curta. Só aparece, não
+   * anima a saída (some seca, que é o jeito discreto). Sempre com
+   * `motion-safe:` — quem pede menos movimento não vê nada disso.
+   */
+  --animate-entrada: entrada 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes entrada {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
 body {

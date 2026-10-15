@@ -56,7 +56,7 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota 
         <h2 className="text-secao font-semibold tracking-[0.08em] text-suave uppercase">
           Estrutura das notas
         </h2>
-        <span className="text-xs text-suave">
+        <span className="text-xs text-suave tabular-nums">
           {buscando
             ? `${notasEncontradas} de ${totalDeNotas} notas`
             : `${totalDeNotas} nota${totalDeNotas === 1 ? "" : "s"}`}
@@ -123,7 +123,8 @@ function ItemDaArvore({
         style={{ paddingLeft: `${recuoBase + RECUO_DA_NOTA}px` }}
         onClick={() => onSelecionarNota({ caminho: item.caminho, nome: item.nome })}
         aria-current={selecionada ? "true" : undefined}
-        className={`flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[13.5px] transition-colors hover:bg-painel ${
+        // Linhas mais altas no celular (dedo) e compactas no desktop (cursor).
+        className={`flex w-full items-center gap-2 rounded-md py-2.5 pr-2 text-left text-[13.5px] transition-colors hover:bg-painel md:py-1.5 ${
           selecionada ? "font-semibold text-destaque-texto" : "text-texto"
         }`}
       >
@@ -145,13 +146,13 @@ function ItemDaArvore({
         style={{ paddingLeft: `${recuoBase + RECUO_DA_PASTA}px` }}
         onClick={() => setAberta((estava) => !estava)}
         aria-expanded={estaAberta}
-        className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-sm font-medium transition-colors hover:bg-painel"
+        className="flex w-full items-center gap-2 rounded-md py-2.5 pr-2 text-left text-sm font-medium transition-colors hover:bg-painel md:py-1.5"
       >
         <span aria-hidden className="w-2.5 shrink-0 text-[10px] text-suave">
           {estaAberta ? "▾" : "▸"}
         </span>
         <span className="truncate">{item.nome}</span>
-        <span className="ml-auto shrink-0 text-xs font-normal text-suave">
+        <span className="ml-auto shrink-0 text-xs font-normal text-suave tabular-nums">
           {totalDeNotas}
           <span className="sr-only"> nota{totalDeNotas === 1 ? "" : "s"}</span>
         </span>

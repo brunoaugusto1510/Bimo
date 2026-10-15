@@ -68,7 +68,7 @@ export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) 
       onClick={onFechar}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-painel border border-borda bg-painel shadow-foco"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-painel border border-borda bg-painel shadow-foco motion-safe:animate-entrada"
         onClick={(evento) => evento.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-borda px-4 py-3">
@@ -77,7 +77,7 @@ export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) 
           <button
             type="button"
             onClick={() => onPerguntar(caminho)}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 py-1.5 text-xs font-semibold text-destaque-texto transition-colors hover:bg-destaque-suave"
+            className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 text-xs font-semibold text-destaque-texto transition-[background-color,transform] hover:bg-destaque-suave motion-safe:active:scale-[0.96]"
           >
             <MarcaBimo tamanho={14} /> Perguntar sobre esta nota
           </button>
@@ -85,14 +85,14 @@ export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) 
             type="button"
             onClick={onFechar}
             aria-label="Fechar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-suave transition-colors hover:bg-painel-alt hover:text-texto"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-suave transition-[color,background-color,transform] hover:bg-painel-alt hover:text-texto motion-safe:active:scale-[0.96]"
           >
             ✕
           </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-5 md:px-7">
-          <h2 className="mb-4 text-titulo-nota font-semibold break-words text-destaque-texto">
+          <h2 className="mb-4 text-titulo-nota font-semibold break-words text-balance text-destaque-texto">
             {titulo}
           </h2>
 

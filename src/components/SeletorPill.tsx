@@ -34,7 +34,9 @@ export default function SeletorPill<V extends string>({ opcoes, valor, onChange,
             onClick={() => {
               if (!ativa) onChange(opcao.valor);
             }}
-            className={`rounded-full px-4 py-1.5 text-[13.5px] font-semibold transition-colors md:px-[18px] md:py-[7px] ${
+            // O `after` alarga a área de toque para ~41px de altura sem engordar a pílula (o
+            // design pede ~33px); só na vertical, para não invadir a opção vizinha.
+            className={`relative rounded-full px-4 py-1.5 text-[13.5px] font-semibold transition-[color,background-color,transform] after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] motion-safe:active:scale-[0.96] md:px-[18px] md:py-[7px] ${
               ativa ? "bg-destaque text-sobre-destaque" : "text-suave hover:text-texto"
             }`}
           >

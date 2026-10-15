@@ -20,6 +20,9 @@ type Props = {
   ativo?: boolean;
 };
 
+/** Até aqui o campo cresce com o texto; depois disso ele rola por dentro. */
+const ALTURA_MAXIMA_DO_CAMPO = 160;
+
 const SUGESTOES = [
   "O que eu sei sobre normalização de banco de dados?",
   "Resuma minhas anotações de redes",
@@ -48,7 +51,13 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     const elemento = campo.current;
     if (!ativo || !elemento) return;
     elemento.style.height = "auto";
-    elemento.style.height = `${Math.min(elemento.scrollHeight, 160)}px`;
+    // `scrollHeight` não conta a borda, mas o campo é `border-box`: sem somá-la ele
+    // fica 2px menor que o texto e o navegador mostra uma barra de rolagem à toa.
+    const bordas = elemento.offsetHeight - elemento.clientHeight;
+    const altura = elemento.scrollHeight + bordas;
+    elemento.style.height = `${Math.min(altura, ALTURA_MAXIMA_DO_CAMPO)}px`;
+    // A barra só aparece quando o texto realmente passa do limite.
+    elemento.style.overflowY = altura > ALTURA_MAXIMA_DO_CAMPO ? "auto" : "hidden";
   }, [rascunho, ativo]);
 
   async function enviar() {
@@ -163,7 +172,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
             type="button"
             onClick={enviar}
             disabled={rascunho.trim() === "" || pensando}
-            className="h-10 shrink-0 rounded-full bg-destaque px-5 text-sm font-semibold text-sobre-destaque transition-colors hover:bg-destaque-hover disabled:cursor-not-allowed disabled:bg-desabilitado disabled:text-desabilitado-texto"
+            className="h-10 shrink-0 rounded-full bg-destaque px-5 text-sm font-semibold text-sobre-destaque transition-[background-color,transform] hover:bg-destaque-hover disabled:cursor-not-allowed disabled:bg-desabilitado disabled:text-desabilitado-texto motion-safe:enabled:active:scale-[0.96]"
           >
             Enviar
           </button>
@@ -183,8 +192,8 @@ function EstadoVazio({ onEscolher }: { onEscolher: (texto: string) => void }) {
       <div className="flex justify-center">
         <MarcaBimo tamanho={48} />
       </div>
-      <h2 className="mt-3 text-lg font-semibold">Converse com as suas notas</h2>
-      <p className="mx-auto mt-1 max-w-md text-sm text-suave">
+      <h2 className="mt-3 text-lg font-semibold text-balance">Converse com as suas notas</h2>
+      <p className="mx-auto mt-1 max-w-md text-sm text-pretty text-suave">
         Pergunte qualquer coisa sobre o que você já estudou, ou clique numa nota
         na barra lateral para começar.
       </p>
@@ -195,7 +204,7 @@ function EstadoVazio({ onEscolher }: { onEscolher: (texto: string) => void }) {
             key={sugestao}
             type="button"
             onClick={() => onEscolher(sugestao)}
-            className="w-full max-w-md rounded-xl border border-borda bg-painel px-4 py-2.5 text-left text-sm text-suave transition-colors hover:border-destaque-suave-borda hover:bg-destaque-suave hover:text-texto"
+            className="w-full max-w-md rounded-xl border border-borda bg-painel px-4 py-2.5 text-left text-sm text-pretty text-suave transition-[color,background-color,border-color,transform] hover:border-destaque-suave-borda hover:bg-destaque-suave hover:text-texto motion-safe:active:scale-[0.98]"
           >
             {sugestao}
           </button>

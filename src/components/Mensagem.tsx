@@ -15,7 +15,7 @@ export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
 
   return (
     <div className={`flex ${doUsuario ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[85%] space-y-1">
+      <div className="max-w-[85%] space-y-1 motion-safe:animate-entrada">
         {/* O design não rotula a bolha do usuário — o lado da tela já diz quem
             falou. Para leitor de tela, o rótulo continua existindo. */}
         <span className="sr-only">{doUsuario ? "Você" : "Bimo"}</span>
@@ -29,7 +29,7 @@ export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
         >
           {doUsuario ? (
             // `whitespace-pre-wrap` preserva as quebras de linha que a pessoa digitou.
-            <p className="whitespace-pre-wrap text-sm leading-normal">
+            <p className="text-sm leading-normal whitespace-pre-wrap text-pretty">
               {mensagem.conteudo}
             </p>
           ) : (

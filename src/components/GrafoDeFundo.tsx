@@ -18,6 +18,7 @@ import {
   type Ponto,
 } from "@/lib/camera-do-grafo";
 import { criarMapaDeCoresPorGrupo, NUMERO_DE_CORES_DE_GRUPO } from "@/lib/cores-grupo";
+import { ATRIBUTO_DO_TEMA } from "@/lib/tema";
 import {
   RAIO_MAXIMO_DO_NO,
   calcularGraus,
@@ -241,14 +242,17 @@ export default function GrafoDeFundo({
     const contexto = canvas.getContext("2d");
     if (!contexto) return;
 
-    // `let`: o tema do sistema pode mudar com a página aberta, e o canvas não
-    // enxerga o CSS sozinho — as cores são relidas quando isso acontece.
+    // `let`: o tema pode mudar com a página aberta (o botão do header, ou o
+    // sistema no modo automático), e o canvas não enxerga o CSS sozinho — as
+    // cores são relidas quando o atributo `data-tema` do <html> muda.
     let cores = lerCores(NUMERO_DE_CORES_DE_GRUPO);
-    const temaEscuro = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const aoMudarOTema = () => {
+    const observadorDoTema = new MutationObserver(() => {
       cores = lerCores(NUMERO_DE_CORES_DE_GRUPO);
-    };
-    temaEscuro?.addEventListener("change", aoMudarOTema);
+    });
+    observadorDoTema.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: [ATRIBUTO_DO_TEMA],
+    });
 
     const corDoNo = (no: NoVisual): string => {
       if (no.tipo === "nota") return cores.paleta[mapaDeCores.get(no.grupo) ?? 0];
@@ -610,7 +614,7 @@ export default function GrafoDeFundo({
       animando = false;
       cancelAnimationFrame(idDoQuadro);
       observador.disconnect();
-      temaEscuro?.removeEventListener("change", aoMudarOTema);
+      observadorDoTema.disconnect();
       canvas.removeEventListener("pointerdown", aoPressionar);
       canvas.removeEventListener("pointermove", aoMover);
       canvas.removeEventListener("pointerup", aoSoltar);

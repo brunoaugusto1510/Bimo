@@ -169,6 +169,12 @@ How it lands in this repo (the DS names are the artifact's, the app's are in pt-
   `bg` → `--fundo`. **Azul is the only action color** (primary button, selection,
   links, note title, focused graph node); text on it is `text-sobre-destaque`.
   The DS only defines a light theme — the dark values in `globals.css` are ours.
+  **Theme switching**: the dark values live in a single `:root[data-tema="escuro"]`
+  block — never a `@media (prefers-color-scheme)`. `data-tema` is always written by JS
+  (`src/lib/tema.ts`): an inline script in `layout.tsx`'s `<head>` sets it before first
+  paint from `localStorage["bimo_tema"]` (`sistema` | `claro` | `escuro`), and the
+  header's `AlternadorDeTema` cycles the preference. Anything that reads colors outside
+  CSS (the graph canvas) must re-read them when `data-tema` changes.
 - Type and shape: `text-titulo-nota`, `text-corpo`, `text-meta`, `text-secao`;
   `rounded-bolha`, `rounded-painel`, `rounded-bloco`, `rounded-tag`, `shadow-foco`
   (the DS's only shadow). Actions, chips and switches are pills (`rounded-full`).
@@ -192,6 +198,14 @@ once in `src/app/globals.css` (`:root` for light, overridden inside
 `@media (prefers-color-scheme: dark)`), then exposed to Tailwind via `@theme
 inline` as classes like `bg-painel`, `text-suave`, `border-borda`, `bg-destaque`.
 Add new colors there, never as arbitrary Tailwind values or inline hex.
+
+**Interaction polish** (apply to new buttons/lists): touch targets ≥ 40px (`h-10`/`min-h-10`,
+or an `after:-inset-*` pseudo-element when the visible control must stay smaller — as in
+`SeletorPill`/`CartaoDeFoco`'s ✕); press feedback `motion-safe:active:scale-[0.96]`
+with an explicit `transition-[…]` list (never `transition-all`); `tabular-nums` on any
+number that changes (counts); `text-balance` on short headings, `text-pretty` on short
+copy; entrances use `motion-safe:animate-entrada` (defined in `globals.css`), exits are
+instant. The design system has no shadows besides `shadow-foco`, so don't add any.
 
 **Frontend work must be mobile-first**: write the unprefixed Tailwind classes for
 the mobile/base layout, then layer `md:`/`lg:` overrides for larger screens —
