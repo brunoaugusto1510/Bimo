@@ -1,61 +1,87 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 208 184">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 -3 198 183">
 <g fill="none" stroke="#2574e0" stroke-linecap="round" stroke-linejoin="round">
-<line x1="22" y1="56" x2="48" y2="76" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="16" y1="84" x2="48" y2="76" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="42" y1="34" x2="80" y2="48" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="70" y1="20" x2="80" y2="48" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="102" y1="16" x2="118" y2="50" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="132" y1="22" x2="118" y2="50" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="158" y1="38" x2="150" y2="68" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="176" y1="62" x2="150" y2="68" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="180" y1="90" x2="136" y2="100" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="48" y1="76" x2="80" y2="48" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="80" y1="48" x2="118" y2="50" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="118" y1="50" x2="150" y2="68" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="48" y1="76" x2="68" y2="104" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="80" y1="48" x2="100" y2="86" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="118" y1="50" x2="100" y2="86" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="150" y1="68" x2="136" y2="100" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="100" y1="86" x2="136" y2="100" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="100" y1="86" x2="68" y2="104" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="68" y1="104" x2="80" y2="124" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="68" y1="104" x2="50" y2="122" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="136" y1="100" x2="118" y2="126" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="136" y1="100" x2="166" y2="112" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="166" y1="112" x2="154" y2="130" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="154" y1="130" x2="178" y2="132" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="154" y1="130" x2="158" y2="148" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="154" y1="130" x2="132" y2="144" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="104" y1="128" x2="100" y2="148" stroke-width="2.6" stroke-opacity="0.5"></line>
-<line x1="100" y1="148" x2="98" y2="164" stroke-width="2.6" stroke-opacity="0.5"></line>
-<path d="M30,110 Q15.7,100.9 16,84 Q11.2,68.3 22,56 Q25.4,39.0 42,34 Q51.8,18.6 70,20 Q84.8,8.4 102,16 Q118.8,10.0 132,22 Q149.8,22.2 158,38 Q174.2,44.6 176,62 Q186.4,74.8 180,90 Q179.6,105.2 166,112 Q179.0,117.8 178,132 Q172.8,146.0 158,148 Q144.0,152.5 132,144 Q124.1,135.7 118,126 Q111.0,127.0 104,128 Q91.6,128.4 80,124 Q64.8,126.6 50,122 Q38.2,119.0 30,110" stroke-width="3.9000000000000004"></path>
+<g stroke-width="2.2" stroke-opacity="0.45">
+<line x1="12" y1="82" x2="54" y2="58"></line>
+<line x1="22" y1="44" x2="54" y2="58"></line>
+<line x1="52" y1="16" x2="54" y2="58"></line>
+<line x1="28" y1="100" x2="54" y2="58"></line>
+<line x1="58" y1="94" x2="54" y2="58"></line>
+<line x1="54" y1="58" x2="96" y2="38"></line>
+<line x1="54" y1="58" x2="88" y2="84"></line>
+<line x1="52" y1="16" x2="96" y2="38"></line>
+<line x1="134" y1="8" x2="96" y2="38"></line>
+<line x1="134" y1="8" x2="142" y2="42"></line>
+<line x1="170" y1="26" x2="142" y2="42"></line>
+<line x1="96" y1="38" x2="142" y2="42"></line>
+<line x1="192" y1="58" x2="142" y2="42"></line>
+<line x1="142" y1="42" x2="162" y2="76"></line>
+<line x1="192" y1="58" x2="162" y2="76"></line>
+<line x1="192" y1="92" x2="162" y2="76"></line>
+<line x1="126" y1="62" x2="96" y2="38"></line>
+<line x1="126" y1="62" x2="142" y2="42"></line>
+<line x1="126" y1="62" x2="124" y2="92"></line>
+<line x1="126" y1="62" x2="88" y2="84"></line>
+<line x1="126" y1="62" x2="162" y2="76"></line>
+<line x1="162" y1="76" x2="176" y2="110"></line>
+<line x1="162" y1="76" x2="152" y2="118"></line>
+<line x1="124" y1="92" x2="152" y2="118"></line>
+<line x1="124" y1="92" x2="162" y2="76"></line>
+<line x1="58" y1="94" x2="92" y2="112"></line>
+<line x1="48" y1="108" x2="92" y2="112"></line>
+<line x1="88" y1="84" x2="92" y2="112"></line>
+<line x1="124" y1="92" x2="92" y2="112"></line>
+<line x1="80" y1="132" x2="92" y2="112"></line>
+<line x1="116" y1="138" x2="92" y2="112"></line>
+<line x1="116" y1="138" x2="124" y2="92"></line>
+<line x1="124" y1="92" x2="138" y2="142"></line>
+<line x1="138" y1="142" x2="116" y2="138"></line>
+<line x1="152" y1="118" x2="166" y2="132"></line>
+<line x1="176" y1="110" x2="166" y2="132"></line>
+<line x1="186" y1="128" x2="166" y2="132"></line>
+<line x1="164" y1="148" x2="166" y2="132"></line>
+<line x1="138" y1="142" x2="166" y2="132"></line>
 </g>
-<circle cx="30" cy="110" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="16" cy="84" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="22" cy="56" r="3.4" fill="#2574e0"></circle>
-<circle cx="42" cy="34" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="70" cy="20" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="102" cy="16" r="5.6" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="132" cy="22" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="158" cy="38" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="176" cy="62" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="180" cy="90" r="3.4" fill="#2574e0"></circle>
-<circle cx="166" cy="112" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="178" cy="132" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="158" cy="148" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="132" cy="144" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="118" cy="126" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="104" cy="128" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="100" cy="148" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="98" cy="164" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="80" cy="124" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="50" cy="122" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="48" cy="76" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="80" cy="48" r="5.6" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="118" cy="50" r="3.4" fill="#2574e0"></circle>
-<circle cx="150" cy="68" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="100" cy="86" r="5.6" fill="#2574e0"></circle>
-<circle cx="136" cy="100" r="5.6" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="68" cy="104" r="3.4" fill="#fff" stroke="#2574e0" stroke-width="2.6"></circle>
-<circle cx="154" cy="130" r="3.4" fill="#2574e0"></circle>
+<g stroke-width="3.2">
+<line x1="58" y1="94" x2="88" y2="84"></line>
+<line x1="88" y1="84" x2="124" y2="92"></line>
+<line x1="92" y1="5" x2="96" y2="38"></line>
+<line x1="96" y1="38" x2="88" y2="84"></line>
+<line x1="176" y1="110" x2="152" y2="118"></line>
+<line x1="152" y1="118" x2="138" y2="142"></line>
+</g>
+<path d="M12,82 L22,44 L52,16 L92,5 L134,8 L170,26 L192,58 L192,92 L176,110 L186,128 L164,148 L138,142 L134,172 L118,172 L116,138 L80,132 L48,108 L58,94 L28,100 Z" stroke-width="3.9"></path>
+</g>
+<g fill="#fff" stroke="#2574e0" stroke-width="2.6">
+<circle cx="12" cy="82" r="3.4"></circle>
+<circle cx="52" cy="16" r="3.4"></circle>
+<circle cx="92" cy="5" r="3.4"></circle>
+<circle cx="134" cy="8" r="3.4"></circle>
+<circle cx="170" cy="26" r="3.4"></circle>
+<circle cx="192" cy="58" r="3.4"></circle>
+<circle cx="176" cy="110" r="3.4"></circle>
+<circle cx="186" cy="128" r="3.4"></circle>
+<circle cx="164" cy="148" r="3.4"></circle>
+<circle cx="138" cy="142" r="3.4"></circle>
+<circle cx="134" cy="172" r="3.4"></circle>
+<circle cx="118" cy="172" r="3.4"></circle>
+<circle cx="116" cy="138" r="3.4"></circle>
+<circle cx="80" cy="132" r="3.4"></circle>
+<circle cx="48" cy="108" r="3.4"></circle>
+<circle cx="58" cy="94" r="3.4"></circle>
+<circle cx="28" cy="100" r="3.4"></circle>
+<circle cx="54" cy="58" r="3.4"></circle>
+<circle cx="162" cy="76" r="3.4"></circle>
+<circle cx="92" cy="112" r="3.4"></circle>
+<circle cx="96" cy="38" r="5.6"></circle>
+<circle cx="126" cy="62" r="5.6"></circle>
+<circle cx="124" cy="92" r="5.6"></circle>
+</g>
+<g fill="#2574e0">
+<circle cx="22" cy="44" r="3.4"></circle>
+<circle cx="192" cy="92" r="3.4"></circle>
+<circle cx="142" cy="42" r="3.4"></circle>
+<circle cx="152" cy="118" r="3.4"></circle>
+<circle cx="166" cy="132" r="3.4"></circle>
+<circle cx="88" cy="84" r="5.6"></circle>
+</g>
 </svg>

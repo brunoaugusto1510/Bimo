@@ -122,7 +122,7 @@ Claro é o do DS; escuro é derivado no app. O atributo `data-tema` do `<html>` 
 
 ## 7. Marca
 
-`MarcaBimo` renderiza o grafo em forma de cérebro (`src/assets/bimo-marca.svg` a partir de 48px, `bimo-marca-pequena.svg` de 16 a 40px). Usar como está, sobre fundo claro, nunca recolorir. "Bimo fala" = marca do cérebro, não emoji. Não há biblioteca de ícones.
+`MarcaBimo` renderiza o cérebro de perfil em grafo low-poly — lobos, sulcos, cerebelo e tronco (`src/assets/bimo-marca.svg` a partir de 48px, `bimo-marca-pequena.svg` de 16 a 40px). Usar como está, sobre fundo claro, nunca recolorir; redesenho passa pelo design system. As proporções do viewBox estão fixas no componente e `MarcaBimo.test.tsx` confere contra os arquivos. "Bimo fala" = marca do cérebro, não emoji. Não há biblioteca de ícones.
 
 ## 8. Auditoria rápida (estado atual do código)
 
