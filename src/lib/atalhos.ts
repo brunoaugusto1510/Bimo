@@ -7,10 +7,18 @@
  */
 
 /** O que importa do `KeyboardEvent` — assim dá para testar sem o DOM. */
-export type EventoDeTecla = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing">;
+export type EventoDeTecla = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing">;
+
+/** `n` -> `KeyN`, `1` -> `Digit1`; as demais teclas (Enter, Escape…) não têm tecla física de letra. */
+function teclaFisicaDe(tecla: string): string | null {
+  if (/^[a-z]$/.test(tecla)) return `Key${tecla.toUpperCase()}`;
+  if (/^\d$/.test(tecla)) return `Digit${tecla}`;
+  return null;
+}
 
 export function combinaAtalho(evento: EventoDeTecla, atalho: string): boolean {
-  if (evento.isComposing) return false;
+  // O Chrome dispara `keydown` sem `key` ao preencher um campo automaticamente.
+  if (evento.isComposing || typeof evento.key !== "string") return false;
 
   const partes = atalho.toLowerCase().split("+");
   const tecla = partes[partes.length - 1];
@@ -19,8 +27,12 @@ export function combinaAtalho(evento: EventoDeTecla, atalho: string): boolean {
   // `mod` é Ctrl ou Cmd, mas só um dos dois: Ctrl+Cmd+O não é Ctrl+O.
   const mod = evento.ctrlKey !== evento.metaKey;
 
+  // No Mac, Option+N produz "˜" em vez de "n": com Alt, vale também a tecla física.
+  const teclaCasa =
+    evento.key.toLowerCase() === tecla || (evento.altKey && teclaFisicaDe(tecla) !== null && evento.code === teclaFisicaDe(tecla));
+
   return (
-    evento.key.toLowerCase() === tecla &&
+    teclaCasa &&
     mod === modificadores.has("mod") &&
     evento.altKey === modificadores.has("alt") &&
     evento.shiftKey === modificadores.has("shift")

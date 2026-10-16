@@ -61,6 +61,8 @@ export function extrairLigacoes(conteudo: string): Ligacao[] {
     if (!partes) continue;
 
     const inicio = combinou.index;
+    // `\[[Nota]]`: a barra invertida desliga a ligação, como em Markdown.
+    if (inicio > 0 && mascarado[inicio - 1] === "\\") continue;
     ligacoes.push({
       ...partes,
       anexo: REGEX_DE_ANEXO.test(partes.alvo),

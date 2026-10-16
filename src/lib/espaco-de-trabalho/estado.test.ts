@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ABA_DO_GRAFICO,
   ESTADO_INICIAL,
+  LIMITE_DO_HISTORICO,
   abaAtiva,
   idAtual,
   reduzir,
@@ -100,6 +101,16 @@ describe("abrir-nota", () => {
     expect(abasDeNota(estado)[0].historico).toEqual({ pilha: ["1", "9"], indice: 1 });
   });
 
+  it("limita o histórico de uma aba, descartando as notas mais antigas e mantendo a atual", () => {
+    const acoes: Acao[] = Array.from({ length: LIMITE_DO_HISTORICO + 30 }, (_, i): Acao => ({ tipo: "abrir-nota", id: String(i) }));
+
+    const aba = abasDeNota(aplicar(acoes))[0];
+
+    expect(aba.historico.pilha).toHaveLength(LIMITE_DO_HISTORICO);
+    expect(idAtual(aba)).toBe(String(LIMITE_DO_HISTORICO + 29));
+    expect(aba.historico.indice).toBe(LIMITE_DO_HISTORICO - 1);
+  });
+
   it("guarda as recentes, sem repetir, com a última primeiro e no máximo 20", () => {
     const acoes: Acao[] = Array.from({ length: 25 }, (_, i): Acao => ({ tipo: "abrir-nota", id: String(i), novaAba: true }));
     const estado = aplicar([...acoes, { tipo: "abrir-nota", id: "5", novaAba: true }]);
@@ -139,6 +150,21 @@ describe("voltar e avançar", () => {
 
     const noFim = aplicar([{ tipo: "avancar" }], tres());
     expect(idAtual(abasDeNota(noFim)[0])).toBe("3");
+  });
+
+  it("voltar para uma nota que já está aberta em outra aba ativa essa aba, em vez de duplicá-la", () => {
+    let estado = aplicar([
+      { tipo: "abrir-nota", id: "X" },
+      { tipo: "abrir-nota", id: "Y" },
+      { tipo: "abrir-nota", id: "Z", novaAba: true },
+      { tipo: "abrir-nota", id: "X" },
+    ]);
+    estado = reduzir(estado, { tipo: "ativar-aba", chave: estado.abas[0].chave });
+    // A segunda aba já mostra X; voltar na primeira (X -> Y) não chega a repetir nada.
+    estado = reduzir(estado, { tipo: "voltar" });
+
+    const mostradas = abasDeNota(estado).map(idAtual);
+    expect(new Set(mostradas).size).toBe(mostradas.length);
   });
 
   it("não fazem nada no gráfico", () => {
@@ -286,6 +312,52 @@ describe("descartar-inexistentes", () => {
     expect(abasDeNota(depois)[0].historico).toEqual({ pilha: ["1"], indice: 0 });
   });
 
+  it("a aba ativa que some passa para a vizinha na ordem original, mesmo depois de várias saírem", () => {
+    let estado = aplicar([
+      { tipo: "abrir-nota", id: "1" },
+      { tipo: "abrir-nota", id: "2", novaAba: true },
+      { tipo: "abrir-nota", id: "3", novaAba: true },
+    ]);
+    estado = reduzir(estado, { tipo: "ativar-aba", chave: estado.abas[2].chave });
+
+    const depois = reduzir(estado, { tipo: "descartar-inexistentes", existentes: new Set(["1"]) });
+
+    expect(depois.ativa).toBe(depois.abas[0].chave);
+    expect(abasDeNota(depois).map(idAtual)).toEqual(["1"]);
+  });
+
+  it("prefere a vizinha da direita que sobrou à da esquerda", () => {
+    let estado = aplicar([
+      { tipo: "abrir-nota", id: "1" },
+      { tipo: "abrir-nota", id: "2", novaAba: true },
+      { tipo: "abrir-nota", id: "3", novaAba: true },
+      { tipo: "abrir-nota", id: "4", novaAba: true },
+    ]);
+    estado = reduzir(estado, { tipo: "ativar-aba", chave: estado.abas[1].chave });
+
+    const depois = reduzir(estado, { tipo: "descartar-inexistentes", existentes: new Set(["1", "4"]) });
+
+    expect(idAtual(abaAtiva(depois) as AbaDeNota)).toBe("4");
+  });
+
+  it("junta repetidos que ficaram lado a lado no histórico, para 'voltar' não parecer parado", () => {
+    const estado = aplicar([
+      { tipo: "abrir-nota", id: "A" },
+      { tipo: "abrir-nota", id: "B" },
+      { tipo: "abrir-nota", id: "A" },
+    ]);
+
+    const depois = reduzir(estado, { tipo: "descartar-inexistentes", existentes: new Set(["A"]) });
+
+    expect(abasDeNota(depois)[0].historico).toEqual({ pilha: ["A"], indice: 0 });
+  });
+
+  it("com a lista de notas vazia, não faz nada: uma lista que ainda não carregou não pode apagar as abas", () => {
+    const estado = aplicar([{ tipo: "abrir-nota", id: "1" }]);
+
+    expect(reduzir(estado, { tipo: "descartar-inexistentes", existentes: new Set() })).toBe(estado);
+  });
+
   it("devolve o mesmo estado quando nada some", () => {
     const estado = aplicar([{ tipo: "abrir-nota", id: "1" }]);
 
@@ -294,6 +366,27 @@ describe("descartar-inexistentes", () => {
 });
 
 describe("restaurar", () => {
+  it("normaliza uma aba ativa que não existe: vira o gráfico", () => {
+    const estado = reduzir(ESTADO_INICIAL, { tipo: "restaurar", estado: { ...ESTADO_INICIAL, ativa: "zzz" } });
+
+    expect(estado.ativa).toBe(ABA_DO_GRAFICO);
+  });
+
+  it("uma chave absurdamente grande não faz o contador perder a precisão nem repetir chaves", () => {
+    const salvo: EstadoDoEspaco = {
+      ...ESTADO_INICIAL,
+      abas: [{ tipo: "vazia", chave: "aba-99999999999999999999999" }],
+      ativa: "aba-99999999999999999999999",
+    };
+
+    let estado = reduzir(ESTADO_INICIAL, { tipo: "restaurar", estado: salvo });
+    estado = reduzir(estado, { tipo: "abrir-nota", id: "1", novaAba: true });
+    estado = reduzir(estado, { tipo: "abrir-nota", id: "2", novaAba: true });
+
+    const chaves = estado.abas.map((aba) => aba.chave);
+    expect(new Set(chaves).size).toBe(chaves.length);
+  });
+
   it("troca o estado pelo restaurado e continua numerando as chaves sem colidir", () => {
     const salvo = aplicar([
       { tipo: "abrir-nota", id: "1" },

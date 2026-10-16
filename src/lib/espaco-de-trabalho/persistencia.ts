@@ -9,6 +9,7 @@ import type { IdDeNota } from "../types";
 import {
   ABA_DO_GRAFICO,
   LIMITE_DE_RECENTES,
+  LIMITE_DO_HISTORICO,
   calcularProximaChave,
   type Aba,
   type EstadoDoEspaco,
@@ -18,7 +19,9 @@ import {
 export const CHAVE_DO_ESPACO = "bimo_espaco";
 const VERSAO = 1;
 const MAXIMO_DE_ABAS = 50;
-const MAXIMO_DO_HISTORICO = 100;
+const TAMANHO_MAXIMO_DO_ID = 1500;
+/** O formato de chave que nós mesmos geramos (`aba-7`). A do gráfico, `grafico`, nunca passa por aqui. */
+const REGEX_DE_CHAVE = /^aba-\d{1,9}$/;
 
 /** O pedaço de `Storage` que usamos — facilita trocá-lo por um falso nos testes. */
 export type Armazenamento = Pick<Storage, "getItem" | "setItem">;
@@ -28,16 +31,18 @@ export function serializarEstado(estado: EstadoDoEspaco): string {
     versao: VERSAO,
     abas: estado.abas,
     ativa: estado.ativa,
+    proximaChave: estado.proximaChave,
     recentes: estado.recentes,
   });
 }
 
-const ehTexto = (valor: unknown): valor is string => typeof valor === "string" && valor !== "";
+const ehId = (valor: unknown): valor is IdDeNota =>
+  typeof valor === "string" && valor !== "" && valor.length <= TAMANHO_MAXIMO_DO_ID;
 
 function lerAba(bruta: unknown): Aba | null {
   if (typeof bruta !== "object" || bruta === null) return null;
   const aba = bruta as Record<string, unknown>;
-  if (!ehTexto(aba.chave)) return null;
+  if (typeof aba.chave !== "string" || !REGEX_DE_CHAVE.test(aba.chave)) return null;
 
   if (aba.tipo === "vazia") return { tipo: "vazia", chave: aba.chave };
   if (aba.tipo !== "nota") return null;
@@ -45,8 +50,8 @@ function lerAba(bruta: unknown): Aba | null {
   const historico = aba.historico as { pilha?: unknown; indice?: unknown } | null | undefined;
   const pilha = historico?.pilha;
   const indice = historico?.indice;
-  if (!Array.isArray(pilha) || pilha.length === 0 || pilha.length > MAXIMO_DO_HISTORICO) return null;
-  if (!pilha.every(ehTexto)) return null;
+  if (!Array.isArray(pilha) || pilha.length === 0 || pilha.length > LIMITE_DO_HISTORICO) return null;
+  if (!pilha.every(ehId)) return null;
   if (typeof indice !== "number" || !Number.isInteger(indice) || indice < 0 || indice >= pilha.length) return null;
   if (aba.modo !== "leitura" && aba.modo !== "edicao") return null;
 
@@ -68,21 +73,37 @@ export function lerEstado(texto: string | null): EstadoDoEspaco | null {
   const dados = bruto as Record<string, unknown>;
   if (dados.versao !== VERSAO || !Array.isArray(dados.abas)) return null;
 
+  // O espaço de trabalho pressupõe uma aba vazia no máximo, e uma nota aberta em uma aba só.
   const chavesVistas = new Set<string>();
+  const notasVistas = new Set<IdDeNota>();
+  let temVazia = false;
   const abas: Aba[] = [];
   for (const candidata of dados.abas.slice(0, MAXIMO_DE_ABAS * 2)) {
     const aba = lerAba(candidata);
     if (!aba || chavesVistas.has(aba.chave)) continue;
+
+    if (aba.tipo === "vazia") {
+      if (temVazia) continue;
+      temVazia = true;
+    } else {
+      const atual = aba.historico.pilha[aba.historico.indice];
+      if (notasVistas.has(atual)) continue;
+      notasVistas.add(atual);
+    }
+
     chavesVistas.add(aba.chave);
     abas.push(aba);
     if (abas.length === MAXIMO_DE_ABAS) break;
   }
 
-  const recentes = Array.isArray(dados.recentes) ? dados.recentes.filter(ehTexto).slice(0, LIMITE_DE_RECENTES) : [];
-  const ativa = ehTexto(dados.ativa) && abas.some((aba) => aba.chave === dados.ativa) ? dados.ativa : ABA_DO_GRAFICO;
+  const recentes = Array.isArray(dados.recentes)
+    ? [...new Set(dados.recentes.filter(ehId))].slice(0, LIMITE_DE_RECENTES)
+    : [];
+  const ativa = typeof dados.ativa === "string" && abas.some((aba) => aba.chave === dados.ativa) ? dados.ativa : ABA_DO_GRAFICO;
 
-  // `proximaChave` não é guardada: sai das chaves que existem.
-  return { abas, ativa, proximaChave: calcularProximaChave(abas), recentes };
+  // O contador guardado impede que a chave de uma aba fechada volte a existir; só vale se for um número seguro.
+  const guardada = typeof dados.proximaChave === "number" && Number.isSafeInteger(dados.proximaChave) && dados.proximaChave < 1e9 ? dados.proximaChave : 1;
+  return { abas, ativa, proximaChave: Math.max(guardada, calcularProximaChave(abas)), recentes };
 }
 
 function armazenamentoDoNavegador(): Armazenamento | null {

@@ -47,6 +47,8 @@ export type Acao =
   | { tipo: "restaurar"; estado: EstadoDoEspaco };
 
 export const LIMITE_DE_RECENTES = 20;
+/** Quantas notas o histórico de uma aba lembra; ao passar disso, as mais antigas saem. */
+export const LIMITE_DO_HISTORICO = 100;
 
 export const ESTADO_INICIAL: EstadoDoEspaco = { abas: [], ativa: ABA_DO_GRAFICO, proximaChave: 1, recentes: [] };
 
@@ -56,6 +58,7 @@ export function idAtual(aba: AbaDeNota): IdDeNota {
 
 /** A aba ativa, ou `null` quando é o gráfico. */
 export function abaAtiva(estado: EstadoDoEspaco): Aba | null {
+  if (estado.ativa === ABA_DO_GRAFICO) return null;
   return estado.abas.find((aba) => aba.chave === estado.ativa) ?? null;
 }
 
@@ -78,10 +81,8 @@ function abrirNota(estado: EstadoDoEspaco, id: IdDeNota, novaAba: boolean): Esta
   if (ativa && !novaAba) {
     if (ativa.tipo === "nota") {
       const { pilha, indice } = ativa.historico;
-      const navegada: AbaDeNota = {
-        ...ativa,
-        historico: { pilha: [...pilha.slice(0, indice + 1), id], indice: indice + 1 },
-      };
+      const novaPilha = [...pilha.slice(0, indice + 1), id].slice(-LIMITE_DO_HISTORICO);
+      const navegada: AbaDeNota = { ...ativa, historico: { pilha: novaPilha, indice: novaPilha.length - 1 } };
       return { ...estado, abas: estado.abas.map((aba) => (aba === ativa ? navegada : aba)), recentes };
     }
     // Uma aba vazia existe para ser preenchida: a nota toma o lugar dela.
@@ -118,22 +119,39 @@ function andarNoHistorico(estado: EstadoDoEspaco, passo: -1 | 1): EstadoDoEspaco
   const indice = ativa.historico.indice + passo;
   if (indice < 0 || indice >= ativa.historico.pilha.length) return estado;
 
+  // Uma nota fica aberta em uma aba só: se o destino já é a nota de outra aba, é lá que se vai.
+  const destino = ativa.historico.pilha[indice];
+  const jaAberta = estado.abas.find((aba) => aba !== ativa && aba.tipo === "nota" && idAtual(aba) === destino);
+  if (jaAberta) return { ...estado, ativa: jaAberta.chave };
+
   const andada: AbaDeNota = { ...ativa, historico: { ...ativa.historico, indice } };
   return { ...estado, abas: estado.abas.map((aba) => (aba === ativa ? andada : aba)) };
 }
 
-/** Tira do histórico as notas que não existem mais; devolve a mesma aba se nada saiu, ou `null` se não sobrou nenhuma. */
+/**
+ * Tira do histórico as notas que não existem mais (e junta repetidas que ficaram lado a lado,
+ * senão "voltar" pareceria parado). Devolve a mesma aba se nada mudou, ou `null` se não sobrou nenhuma.
+ */
 function limparAba(aba: AbaDeNota, existentes: ReadonlySet<IdDeNota>): AbaDeNota | null {
   const { pilha, indice } = aba.historico;
-  const mantidas = pilha.filter((id) => existentes.has(id));
-  if (mantidas.length === pilha.length) return aba;
-  if (mantidas.length === 0) return null;
 
-  const mantidasAteAtual = pilha.slice(0, indice + 1).filter((id) => existentes.has(id)).length;
-  return { ...aba, historico: { pilha: mantidas, indice: Math.max(mantidasAteAtual - 1, 0) } };
+  const nova: IdDeNota[] = [];
+  /** Onde, na pilha nova, cada posição da antiga foi parar (as que saíram apontam para a vizinha anterior). */
+  const destinoDe: number[] = [];
+  for (const id of pilha) {
+    if (existentes.has(id) && nova[nova.length - 1] !== id) nova.push(id);
+    destinoDe.push(nova.length - 1);
+  }
+
+  if (nova.length === pilha.length) return aba;
+  if (nova.length === 0) return null;
+  return { ...aba, historico: { pilha: nova, indice: Math.max(destinoDe[indice], 0) } };
 }
 
 function descartarInexistentes(estado: EstadoDoEspaco, existentes: ReadonlySet<IdDeNota>): EstadoDoEspaco {
+  // Uma lista vazia quase sempre é "ainda não carregou" ou "falhou ao carregar", não "todas as notas sumiram".
+  if (existentes.size === 0) return estado;
+
   const recentes = estado.recentes.filter((id) => existentes.has(id));
 
   let mudou = recentes.length !== estado.recentes.length;
@@ -146,13 +164,18 @@ function descartarInexistentes(estado: EstadoDoEspaco, existentes: ReadonlySet<I
   if (!mudou) return estado;
 
   const ativaSobrou = estado.ativa === ABA_DO_GRAFICO || abas.some((aba) => aba.chave === estado.ativa);
+  if (ativaSobrou) return { ...estado, abas, recentes };
+
+  // O lugar da aba que saiu, medido na lista nova: quantas das que vinham antes dela ainda existem.
   const posicaoAntiga = estado.abas.findIndex((aba) => aba.chave === estado.ativa);
-  return { ...estado, abas, recentes, ativa: ativaSobrou ? estado.ativa : vizinhaDe(abas, Math.max(posicaoAntiga, 0)) };
+  const posicaoNova = estado.abas.slice(0, Math.max(posicaoAntiga, 0)).filter((aba) => abas.some((nova) => nova.chave === aba.chave)).length;
+  return { ...estado, abas, recentes, ativa: vizinhaDe(abas, posicaoNova) };
 }
 
 /** A primeira chave numerada que nenhuma das abas usa. */
 export function calcularProximaChave(abas: readonly Aba[]): number {
-  return 1 + abas.reduce((maior, aba) => Math.max(maior, Number(/^aba-(\d+)$/.exec(aba.chave)?.[1] ?? 0)), 0);
+  // Só até 9 dígitos: acima disso o número perde a precisão e a "próxima" chave repetiria a atual.
+  return 1 + abas.reduce((maior, aba) => Math.max(maior, Number(/^aba-(\d{1,9})$/.exec(aba.chave)?.[1] ?? 0)), 0);
 }
 
 export function reduzir(estado: EstadoDoEspaco, acao: Acao): EstadoDoEspaco {
@@ -195,10 +218,13 @@ export function reduzir(estado: EstadoDoEspaco, acao: Acao): EstadoDoEspaco {
     case "descartar-inexistentes":
       return descartarInexistentes(estado, acao.existentes);
 
-    case "restaurar":
+    case "restaurar": {
+      const { abas, ativa, proximaChave } = acao.estado;
       return {
         ...acao.estado,
-        proximaChave: Math.max(acao.estado.proximaChave, calcularProximaChave(acao.estado.abas)),
+        ativa: ativa === ABA_DO_GRAFICO || abas.some((aba) => aba.chave === ativa) ? ativa : ABA_DO_GRAFICO,
+        proximaChave: Math.max(proximaChave, calcularProximaChave(abas)),
       };
+    }
   }
 }

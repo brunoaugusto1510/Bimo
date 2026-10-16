@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { combinaAtalho, type EventoDeTecla } from "./atalhos";
 
 function tecla(key: string, extras: Partial<EventoDeTecla> = {}): EventoDeTecla {
-  return { key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, isComposing: false, ...extras };
+  return { key, code: "", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, isComposing: false, ...extras };
 }
 
 describe("combinaAtalho", () => {
@@ -35,6 +35,21 @@ describe("combinaAtalho", () => {
   it("entende teclas pelo nome, sem diferenciar a caixa", () => {
     expect(combinaAtalho(tecla("Enter"), "enter")).toBe(true);
     expect(combinaAtalho(tecla("Escape"), "escape")).toBe(true);
+  });
+
+  it("não quebra com um evento sem tecla (o autofill do Chrome dispara keydown assim)", () => {
+    const semTecla = { ...tecla("o", { ctrlKey: true }), key: undefined } as unknown as EventoDeTecla;
+
+    expect(combinaAtalho(semTecla, "mod+o")).toBe(false);
+  });
+
+  it("no Mac, Option+N produz outro caractere: vale a tecla física", () => {
+    const optionNoMac = tecla("˜", { altKey: true, code: "KeyN" });
+
+    expect(combinaAtalho(optionNoMac, "alt+n")).toBe(true);
+    expect(combinaAtalho(tecla("˜", { altKey: true, code: "KeyM" }), "alt+n")).toBe(false);
+    // Sem Alt, a tecla física não vale: em outros teclados ela é outra letra.
+    expect(combinaAtalho(tecla("x", { ctrlKey: true, code: "KeyO" }), "mod+o")).toBe(false);
   });
 
   it("ignora o que acontece durante a composição de texto (acentos, teclado de celular)", () => {

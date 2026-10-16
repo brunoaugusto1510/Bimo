@@ -55,6 +55,74 @@ describe("serializarEstado e lerEstado", () => {
     expect(lerEstado(texto)?.abas).toEqual(bom.abas);
   });
 
+  it("só aceita chaves no formato que nós mesmos geramos, e nunca a do gráfico", () => {
+    const base = JSON.parse(serializarEstado(estadoComDuasNotas()));
+    const aba = base.abas[0];
+    const texto = JSON.stringify({
+      ...base,
+      abas: [
+        aba,
+        { ...aba, chave: "grafico" },
+        { ...aba, chave: "aba-9007199254740992" },
+        { ...aba, chave: "aba-" + "9".repeat(310) },
+        { ...aba, chave: "qualquer-coisa" },
+      ],
+      ativa: "grafico",
+    });
+
+    const lido = lerEstado(texto);
+
+    expect(lido?.abas.map((a) => a.chave)).toEqual([aba.chave]);
+    expect(lido?.ativa).toBe(ABA_DO_GRAFICO);
+  });
+
+  it("não deixa entrar duas abas vazias, duas abas da mesma nota nem recentes repetidas", () => {
+    const base = JSON.parse(serializarEstado(estadoComDuasNotas()));
+    const nota = base.abas[0];
+    const texto = JSON.stringify({
+      ...base,
+      abas: [
+        nota,
+        { ...nota, chave: "aba-50" },
+        { tipo: "vazia", chave: "aba-51" },
+        { tipo: "vazia", chave: "aba-52" },
+      ],
+      recentes: ["A", "A", "B"],
+    });
+
+    const lido = lerEstado(texto);
+
+    expect(lido?.abas.map((aba) => aba.chave)).toEqual([nota.chave, "aba-51"]);
+    expect(lido?.recentes).toEqual(["A", "B"]);
+  });
+
+  it("guarda o contador de chaves: uma aba fechada não tem a chave reaproveitada depois de recarregar", () => {
+    let estado = reduzir(ESTADO_INICIAL, { tipo: "abrir-nota", id: "1" });
+    estado = reduzir(estado, { tipo: "abrir-nota", id: "2", novaAba: true });
+    estado = reduzir(estado, { tipo: "fechar-aba", chave: estado.abas[1].chave });
+
+    const lido = lerEstado(serializarEstado(estado));
+    const depois = reduzir(lido!, { tipo: "abrir-nota", id: "3", novaAba: true });
+
+    expect(depois.abas.map((aba) => aba.chave)).not.toContain("aba-2");
+  });
+
+  it("recusa textos de tamanho absurdo dentro de cada campo", () => {
+    const base = JSON.parse(serializarEstado(estadoComDuasNotas()));
+    const texto = JSON.stringify({ ...base, recentes: ["x".repeat(10_000), "ok"] });
+
+    expect(lerEstado(texto)?.recentes).toEqual(["ok"]);
+  });
+
+  it("um histórico legítimo, no limite, sobrevive ao recarregar", () => {
+    let estado = ESTADO_INICIAL;
+    for (let i = 0; i < 150; i++) estado = reduzir(estado, { tipo: "abrir-nota", id: String(i) });
+
+    const lido = lerEstado(serializarEstado(estado));
+
+    expect(lido?.abas).toEqual(estado.abas);
+  });
+
   it("uma aba ativa que não existe mais vira o gráfico", () => {
     const estado = estadoComDuasNotas();
     const texto = JSON.stringify({ ...JSON.parse(serializarEstado(estado)), ativa: "sumiu" });

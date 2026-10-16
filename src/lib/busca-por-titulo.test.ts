@@ -72,6 +72,21 @@ describe("buscarPorTitulo", () => {
       expect(resultado.intervalos).toEqual([[0, 1], [2, 4]]);
     });
 
+    const marcados = (titulo: string, consulta: string) => {
+      const [resultado] = buscarPorTitulo([nota("a", titulo)], consulta);
+      return resultado.intervalos.map(([inicio, fim]) => titulo.slice(inicio, fim));
+    };
+
+    it("marcam um emoji inteiro, nunca metade dele", () => {
+      expect(marcados("🎉 festa", "🎉")).toEqual(["🎉"]);
+      expect(marcados("Lista 📚", "📚")).toEqual(["📚"]);
+      expect(marcados("x😀yz", "😀z")).toEqual(["😀", "z"]);
+    });
+
+    it("marcam a letra junto com o acento solto que vem depois dela (texto decomposto)", () => {
+      expect(marcados("Café com leite", "cafe")).toEqual(["Café"]);
+    });
+
     it("não marcam nada quando o acerto foi só no caminho da pasta", () => {
       const [resultado] = buscarPorTitulo(NOTAS, "diario/reler");
 

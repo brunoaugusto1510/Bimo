@@ -41,6 +41,10 @@ describe("extrairLigacoes", () => {
     expect(extrairLigacoes(texto).map((l) => l.alvo)).toEqual(["valida"]);
   });
 
+  it("uma ligação escapada com barra invertida é texto, não ligação", () => {
+    expect(extrairLigacoes("\\[[A]] e [[B]]").map((l) => l.alvo)).toEqual(["B"]);
+  });
+
   it("marca anexos embutidos e arquivos que não são notas", () => {
     const [imagem, pdf, nota] = extrairLigacoes("![[foto.png]] [[relatorio.PDF]] ![[Outra nota]]");
 
