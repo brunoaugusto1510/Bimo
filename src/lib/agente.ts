@@ -9,7 +9,7 @@
  *   4. volta pro passo 1
  *
  * Ou seja: o modelo decide *o quê* fazer, o nosso código decide *como* e
- * mantém o controle sobre tudo que toca o vault de verdade.
+ * mantém o controle sobre tudo que toca as notas de verdade.
  */
 
 import {
@@ -18,40 +18,14 @@ import {
   type Part,
 } from "@google/genai";
 import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
-import type { Mensagem, UsoDeFerramenta } from "./types";
+import { gerarInstrucaoDoSistema } from "./instrucao-do-agente";
+import { lerConfiguracaoDeNotas } from "./repositorio-de-notas/config";
+import type { IdDeNota, Mensagem, UsoDeFerramenta } from "./types";
 
 /** Trava de segurança: sem isso um modelo confuso pediria ferramentas para sempre. */
 const MAX_VOLTAS = 5;
 
 const MODELO = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-
-const INSTRUCAO_DO_SISTEMA = `
-Você é o assistente pessoal de estudos do Bruno. Você tem acesso às notas dele
-(escritas no Obsidian e guardadas num repositório do GitHub) através de ferramentas.
-
-Como trabalhar:
-- Responda SEMPRE em português do Brasil.
-- Antes de responder qualquer coisa sobre o que o Bruno estudou, anotou ou aprendeu,
-  consulte as notas com as ferramentas. Nunca invente o conteúdo de uma nota.
-- Comece pela busca (buscar_notas). Se os trechos não bastarem, leia a nota inteira
-  (ler_nota) antes de responder.
-- Se a primeira busca não achar nada, tente sinônimos ou termos mais gerais antes de
-  desistir. Só então diga que não encontrou.
-- Cite as notas que usou pelo caminho, ex: "segundo Estudos/Redes/TCP.md".
-- Deixe claro quando algo vem do conhecimento geral e não das notas do Bruno.
-
-Sobre escrever notas:
-- Só crie ou edite notas quando o Bruno pedir. Cada escrita vira um commit real no
-  repositório dele.
-- Ao criar uma nota, siga a organização de pastas que já existe (use listar_notas
-  para conferir) e escreva em Markdown do Obsidian: título com "# " no topo e links
-  internos [[Assim]] para conectar com notas relacionadas.
-- Ao editar, prefira o modo "acrescentar". Só use "substituir" se o Bruno pedir para
-  reescrever, e leia a nota antes.
-- Depois de escrever, diga em uma linha o que mudou e em qual caminho.
-
-Tom: direto e didático. O Bruno está aprendendo — explique o que for útil, sem enrolar.
-`.trim();
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -81,15 +55,17 @@ export async function responder(
   mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>,
 ): Promise<ResultadoAgente> {
   const ai = getClient();
+  const instrucao = gerarInstrucaoDoSistema(lerConfiguracaoDeNotas().fonte);
   const contents = paraContents(mensagens);
   const ferramentasUsadas: UsoDeFerramenta[] = [];
+  const leituras = new Map<IdDeNota, number>();
 
   for (let volta = 0; volta < MAX_VOLTAS; volta++) {
     const resposta = await ai.models.generateContent({
       model: MODELO,
       contents,
       config: {
-        systemInstruction: INSTRUCAO_DO_SISTEMA,
+        systemInstruction: instrucao,
         tools: [{ functionDeclarations: declaracoesDeFerramentas }],
         // Nós mesmos executamos as ferramentas, no laço abaixo.
         automaticFunctionCalling: { disable: true },
@@ -118,13 +94,14 @@ export async function responder(
       if (!chamada.name) continue;
 
       const argumentos = chamada.args ?? {};
-      const saida = await executarFerramenta(chamada.name, argumentos);
+      const saida = await executarFerramenta(chamada.name, argumentos, { leituras });
 
       ferramentasUsadas.push({
         nome: chamada.name,
         argumentos,
         resumo: saida.resumo,
         erro: saida.erro,
+        ...(saida.notaId ? { notaId: saida.notaId } : {}),
         // As ferramentas de escrita devolvem o commit em `resposta.commit`
         // (ver ferramentas.ts); as demais simplesmente não têm essa chave.
         commitUrl:

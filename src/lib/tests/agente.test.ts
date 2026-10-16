@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateContentMock = vi.fn();
 
@@ -46,7 +46,23 @@ beforeEach(() => {
   process.env.GEMINI_API_KEY = "chave-fake-de-teste";
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("responder", () => {
+  it("envia o prompt da fonte configurada e passa notaId sem inventar um commit", async () => {
+    vi.stubEnv("NOTAS_FONTE", "memoria");
+    generateContentMock
+      .mockResolvedValueOnce(turnoComChamada("criar_nota", { caminho: "Nova.md", conteudo: "# Nova" }))
+      .mockResolvedValueOnce(turnoDeTexto("Criei Nova.md."));
+    vi.mocked(executarFerramenta).mockResolvedValue({
+      resposta: { sucesso: true, caminho: "Nova.md" }, resumo: 'Criou a nota "Nova.md"', notaId: "nota-7",
+    });
+    const resultado = await responder([{ papel: "usuario", conteudo: "crie uma nota" }]);
+    expect(resultado.ferramentas[0]).toMatchObject({ notaId: "nota-7" });
+    expect(resultado.ferramentas[0].commitUrl).toBeUndefined();
+    expect(generateContentMock.mock.calls[0][0].config.systemInstruction).toMatch(/guardadas no Bimo/);
+    expect(generateContentMock.mock.calls[0][0].config.systemInstruction).not.toMatch(/commit|GitHub|vault/i);
+  });
   it("lança um erro claro se GEMINI_API_KEY não estiver definida", async () => {
     delete process.env.GEMINI_API_KEY;
 
@@ -90,7 +106,7 @@ describe("responder", () => {
 
     const resultado = await responder([{ papel: "usuario", conteudo: "o que é TCP?" }]);
 
-    expect(executarFerramenta).toHaveBeenCalledWith("buscar_notas", { consulta: "TCP" });
+    expect(executarFerramenta).toHaveBeenCalledWith("buscar_notas", { consulta: "TCP" }, { leituras: expect.any(Map) });
     expect(generateContentMock).toHaveBeenCalledTimes(2);
     expect(resultado.resposta).toBe("Resposta final, citando a nota.");
     expect(resultado.ferramentas).toEqual([
@@ -155,4 +171,20 @@ describe("responder", () => {
     expect(resultado.resposta).toMatch(/não cheguei a uma resposta final/);
     expect(resultado.ferramentas).toHaveLength(5);
   });
+});
+
+it("compartilha leituras no laço e isola chamadas de responder", async () => {
+  vi.stubEnv("NOTAS_FONTE", "memoria");
+  generateContentMock.mockResolvedValueOnce(turnoComChamada("ler_nota", { caminho: "TCP" }))
+    .mockResolvedValueOnce(turnoComChamada("editar_nota", { caminho: "TCP" }))
+    .mockResolvedValueOnce(turnoDeTexto("ok"))
+    .mockResolvedValueOnce(turnoComChamada("ler_nota", { caminho: "TCP" }))
+    .mockResolvedValueOnce(turnoDeTexto("ok"));
+  vi.mocked(executarFerramenta).mockResolvedValue({ resposta: {}, resumo: "ok" });
+  await responder([{ papel: "usuario", conteudo: "edite" }]);
+  await responder([{ papel: "usuario", conteudo: "leia" }]);
+  const chamadas = vi.mocked(executarFerramenta).mock.calls;
+  expect(chamadas[0][2]?.leituras).toBeInstanceOf(Map);
+  expect(chamadas[0][2]?.leituras).toBe(chamadas[1][2]?.leituras);
+  expect(chamadas[0][2]?.leituras).not.toBe(chamadas[2][2]?.leituras);
 });

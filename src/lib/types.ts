@@ -51,4 +51,6 @@ export type UsoDeFerramenta = {
   erro?: boolean;
   /** Presente só nas ferramentas de escrita bem-sucedidas (criar_nota/editar_nota). */
   commitUrl?: string;
+  /** Nota gravada; permite abri-la mesmo quando a escrita não gera commit. */
+  notaId?: IdDeNota;
 };

@@ -1,27 +1,33 @@
+import { ErroDeFerramenta } from "./erro-de-ferramenta";
+import { ErroDeConfiguracao } from "./repositorio-de-notas/config";
+import type { IdDeNota } from "./types";
+import type { LeiturasDoAgente } from "./porta-de-escrita-do-agente";
 /**
- * As "ferramentas" que o Gemini pode chamar para consultar e alterar o vault.
+ * Ferramentas do Gemini para consultar e alterar as notas na fonte configurada.
  *
  * Isso é o coração do function calling: cada ferramenta tem uma *declaração*
  * (o que o modelo lê para decidir se e como usá-la) e uma *execução* (o código
  * que roda de verdade quando ele decide chamar). O modelo nunca toca no
  * GitHub — ele só pede, e este arquivo decide o que acontece.
  *
- * As de escrita (`criar_nota`/`editar_nota`) geram commits reais no repositório
- * do vault — por isso ficam por último no `switch` abaixo. Cada uma invalida o
- * cache de `vault-real.ts`, e é isso que renova a árvore e o grafo da interface
- * (o serviço de notas guarda os dele por uma marca que muda junto com esse cache).
+ * Escritas passam pela porta do repositório, com histórico e revisão otimista.
+ * Durante a transição, a porta temporária mantém os commits da fonte GitHub.
  *
  * As descrições abaixo são prompt: quanto mais claras, menos o modelo erra.
  */
 
 import type { FunctionDeclaration } from "@google/genai";
-import { buscarNotas, criarNota, editarNota, lerNota, listarNotas, tituloDoCaminho } from "./vault-real";
+import { normalizarPasta, normalizarTexto } from "./caminho-da-nota";
+import { obterRepositorio } from "./repositorio-de-notas";
+import type { RepositorioDeNotas } from "./repositorio-de-notas/tipos";
+import { caminhoDaNota, resolverNotaDoAgente } from "./resolver-nota-do-agente";
+import { escolherPortaDeEscrita, type LegadoDeEscrita } from "./porta-de-escrita-do-agente";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "buscar_notas",
     description:
-      "Busca notas por palavras-chave, procurando no título, no caminho e no conteúdo. " +
+      "Busca notas por palavras-chave no título e no conteúdo, também nas tags no banco e no caminho no GitHub. " +
       "Use esta ferramenta PRIMEIRO, quase sempre, quando a pergunta for sobre o que o usuário estudou ou anotou. " +
       "Devolve trechos, não a nota inteira — se um resultado parecer relevante, chame ler_nota para ver tudo.",
     parametersJsonSchema: {
@@ -77,7 +83,7 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "criar_nota",
     description:
-      "Cria uma nota NOVA (gera um commit no repositório do GitHub). " +
+      "Cria uma nota NOVA e registra a escrita no histórico. " +
       "Falha se já existir uma nota nesse caminho — nesse caso use editar_nota. " +
       "Escreva o conteúdo em Markdown, no estilo do Obsidian: um título '# ' no topo e " +
       "links internos no formato [[Nome da Nota]] quando fizer sentido conectar com outras notas.",
@@ -100,7 +106,7 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "editar_nota",
     description:
-      "Altera uma nota que já existe (gera um commit no repositório do GitHub). " +
+      "Altera uma nota que já existe e registra a escrita no histórico. " +
       "Use modo 'acrescentar' para adicionar conteúdo ao final, preservando o que já estava lá — " +
       "é o modo mais seguro. Use 'substituir' apenas quando o usuário pedir para reescrever a nota, " +
       "e nesse caso leia a nota antes para não perder informação sem querer.",
@@ -134,6 +140,7 @@ export type SaidaFerramenta = {
   /** Vai para a interface, para o usuário ver o que aconteceu */
   resumo: string;
   erro?: boolean;
+  notaId?: IdDeNota;
 };
 
 type Args = Record<string, unknown>;
@@ -148,19 +155,21 @@ type Args = Record<string, unknown>;
 export async function executarFerramenta(
   nome: string,
   args: Args,
+  opcoes: { repositorio?: RepositorioDeNotas; legado?: LegadoDeEscrita; leituras?: LeiturasDoAgente } = {},
 ): Promise<SaidaFerramenta> {
   try {
+    const repositorio = opcoes.repositorio ?? await obterRepositorio();
     switch (nome) {
       case "buscar_notas":
-        return await execBuscar(args);
+        return await execBuscar(args, repositorio);
       case "listar_notas":
-        return await execListar(args);
+        return await execListar(args, repositorio);
       case "ler_nota":
-        return await execLer(args);
+        return await execLer(args, repositorio, opcoes.leituras);
       case "criar_nota":
-        return await execCriar(args);
+        return await execCriar(args, repositorio, opcoes.legado);
       case "editar_nota":
-        return await execEditar(args);
+        return await execEditar(args, repositorio, opcoes.legado, opcoes.leituras);
       default:
         return {
           resposta: { erro: `Ferramenta desconhecida: ${nome}` },
@@ -169,7 +178,9 @@ export async function executarFerramenta(
         };
     }
   } catch (error) {
-    const mensagem = error instanceof Error ? error.message : String(error);
+    const esperado = error instanceof ErroDeFerramenta || error instanceof ErroDeConfiguracao;
+    if (!esperado) console.error(`[ferramenta:${nome}]`, error);
+    const mensagem = esperado ? error.message : "Falha interna ao acessar as notas. Tente novamente.";
     return {
       resposta: { erro: mensagem },
       resumo: mensagem,
@@ -178,18 +189,19 @@ export async function executarFerramenta(
   }
 }
 
-async function execBuscar(args: Args): Promise<SaidaFerramenta> {
+async function execBuscar(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
   const consulta = texto(args.consulta, "consulta");
-  const limite = Math.min(Math.max(numero(args.limite) ?? 8, 1), 20);
+  const limite = Math.min(Math.max(Math.floor(numero(args.limite) ?? 8), 1), 20);
 
-  const { resultados, aviso } = await buscarNotas(consulta, limite);
+  const resultados = await repositorio.buscarPorConteudo(consulta, limite);
+  const aviso = await repositorio.obterAviso();
 
   return {
     resposta: {
       encontradas: resultados.length,
       ...(aviso ? { aviso } : {}),
       notas: resultados.map((r) => ({
-        caminho: r.caminho,
+        caminho: caminhoDaNota(r),
         titulo: r.titulo,
         trecho: r.trecho,
       })),
@@ -201,9 +213,11 @@ async function execBuscar(args: Args): Promise<SaidaFerramenta> {
   };
 }
 
-async function execListar(args: Args): Promise<SaidaFerramenta> {
+async function execListar(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
   const pasta = args.pasta ? texto(args.pasta, "pasta") : undefined;
-  const notas = await listarNotas(pasta);
+  const prefixo = normalizarTexto(normalizarPasta(pasta) ?? "");
+  const notas = (await repositorio.listarResumos()).filter((nota) => normalizarTexto(nota.pasta ?? "").startsWith(prefixo));
+  const aviso = await repositorio.obterAviso();
 
   // Não devolvemos milhares de caminhos para o modelo: gasta contexto à toa.
   const LIMITE = 200;
@@ -211,20 +225,19 @@ async function execListar(args: Args): Promise<SaidaFerramenta> {
   return {
     resposta: {
       total: notas.length,
-      ...(notas.length > LIMITE
-        ? { aviso: `Mostrando os primeiros ${LIMITE} de ${notas.length}. Use buscar_notas para filtrar.` }
-        : {}),
-      caminhos: notas.slice(0, LIMITE).map((n) => n.caminho),
+      ...((aviso || notas.length > LIMITE) ? {
+        aviso: [aviso, notas.length > LIMITE ? `Mostrando os primeiros ${LIMITE} de ${notas.length}. Use buscar_notas para filtrar.` : undefined].filter(Boolean).join(" "),
+      } : {}),
+      caminhos: notas.slice(0, LIMITE).map(caminhoDaNota),
     },
     resumo: `Listou ${notas.length} nota(s)${pasta ? ` em "${pasta}"` : ""}`,
   };
 }
 
-async function execLer(args: Args): Promise<SaidaFerramenta> {
+async function execLer(args: Args, repositorio: RepositorioDeNotas, leituras?: LeiturasDoAgente): Promise<SaidaFerramenta> {
   const caminho = texto(args.caminho, "caminho");
-  const resultado = await lerNota(caminho);
-
-  if (!resultado) {
+  const resumo = resolverNotaDoAgente(caminho, await repositorio.listarResumos());
+  if (!resumo) {
     return {
       resposta: {
         erro: `Nota "${caminho}" não encontrada. Use buscar_notas ou listar_notas para descobrir o caminho correto.`,
@@ -234,47 +247,53 @@ async function execLer(args: Args): Promise<SaidaFerramenta> {
     };
   }
 
+  const resultado = await repositorio.obterNota(resumo.id);
+  if (!resultado) throw new ErroDeFerramenta(`A nota "${caminhoDaNota(resumo)}" sumiu entre a listagem e a leitura. Use listar_notas novamente.`);
+  leituras?.set(resultado.id, resultado.revisao);
+
   return {
     resposta: {
-      caminho: resultado.nota.caminho,
-      titulo: tituloDoCaminho(resultado.nota.caminho),
+      caminho: caminhoDaNota(resultado),
+      titulo: resultado.titulo,
       conteudo: resultado.conteudo,
     },
-    resumo: `Leu "${resultado.nota.caminho}"`,
+    resumo: `Leu "${caminhoDaNota(resultado)}"`,
   };
 }
 
-async function execCriar(args: Args): Promise<SaidaFerramenta> {
+async function execCriar(args: Args, repositorio: RepositorioDeNotas, legado?: LegadoDeEscrita): Promise<SaidaFerramenta> {
   const caminho = texto(args.caminho, "caminho");
   const conteudo = texto(args.conteudo, "conteudo");
 
-  const resultado = await criarNota(caminho, conteudo);
+  const resultado = await escolherPortaDeEscrita(repositorio, legado).criar(caminho, conteudo);
 
   return {
     resposta: {
       sucesso: true,
       caminho: resultado.caminho,
-      commit: resultado.commitUrl,
+      ...(resultado.commitUrl ? { commit: resultado.commitUrl } : {}),
     },
     resumo: `Criou a nota "${resultado.caminho}"`,
+    notaId: resultado.notaId,
   };
 }
 
-async function execEditar(args: Args): Promise<SaidaFerramenta> {
+async function execEditar(args: Args, repositorio: RepositorioDeNotas, legado?: LegadoDeEscrita, leituras?: LeiturasDoAgente): Promise<SaidaFerramenta> {
   const caminho = texto(args.caminho, "caminho");
   const conteudo = texto(args.conteudo, "conteudo");
   const modo = args.modo === "substituir" ? "substituir" : "acrescentar";
 
-  const resultado = await editarNota(caminho, conteudo, modo);
+  const resultado = await escolherPortaDeEscrita(repositorio, legado).editar(caminho, conteudo, modo, leituras);
 
   return {
     resposta: {
       sucesso: true,
       caminho: resultado.caminho,
       modo,
-      commit: resultado.commitUrl,
+      ...(resultado.commitUrl ? { commit: resultado.commitUrl } : {}),
     },
     resumo: `${modo === "substituir" ? "Reescreveu" : "Complementou"} a nota "${resultado.caminho}"`,
+    notaId: resultado.notaId,
   };
 }
 
@@ -284,7 +303,7 @@ async function execEditar(args: Args): Promise<SaidaFerramenta> {
 function texto(valor: unknown, campo: string): string {
   if (typeof valor === "string" && valor.trim() !== "") return valor;
   if (typeof valor === "number") return String(valor);
-  throw new Error(`O parâmetro "${campo}" é obrigatório e deve ser um texto.`);
+  throw new ErroDeFerramenta(`O parâmetro "${campo}" é obrigatório e deve ser um texto.`);
 }
 
 function numero(valor: unknown): number | undefined {

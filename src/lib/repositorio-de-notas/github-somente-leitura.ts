@@ -99,6 +99,7 @@ async function baixarConteudos(notas: NotaPlana[]): Promise<{ conteudos: Map<str
 export function criarRepositorioDoGithub(): RepositorioDeNotas {
   /** Quantas notas a última leitura completa não conseguiu trazer. */
   let notasNaoLidas = 0;
+  let avisoDaUltimaBusca: string | undefined;
 
   return {
     capacidades: { escrita: false, datas: false },
@@ -109,6 +110,7 @@ export function criarRepositorioDoGithub(): RepositorioDeNotas {
       const { notas, aviso } = await obterNotasPlanas();
       const avisos = [
         aviso,
+        avisoDaUltimaBusca,
         notas.length > MAX_NOTAS_COM_CONTEUDO
           ? `Há ${notas.length} notas; os links foram lidos só nas primeiras ${MAX_NOTAS_COM_CONTEUDO}.`
           : undefined,
@@ -150,7 +152,8 @@ export function criarRepositorioDoGithub(): RepositorioDeNotas {
     },
 
     async buscarPorConteudo(consulta, limite) {
-      const { resultados } = await buscarNotas(consulta, limite);
+      const { resultados, aviso } = await buscarNotas(consulta, limite);
+      avisoDaUltimaBusca = aviso;
       return resultados.map((resultado) => ({
         id: codificarIdDoGithub(resultado.caminho),
         titulo: resultado.titulo,

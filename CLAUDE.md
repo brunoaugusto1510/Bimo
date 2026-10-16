@@ -170,6 +170,22 @@ without `DATABASE_URL`, so the DB must only be `await import()`ed after the conf
 passes, or the fail-soft page breaks. Any writable repository must pass
 `suite-de-contrato.ts`.
 
+`ferramentas.ts` resolves the configured repository once per tool call (or accepts
+an injected repository for tests). Reads and searches use its contract;
+`resolver-nota-do-agente.ts` translates approximate paths to opaque ids, refusing
+ambiguous titles with up to ten full-path options. Exact paths take precedence
+over accent/case normalization; writes never match a title by substring.
+`porta-de-escrita-do-agente.ts` selects
+writes by capability: writable repositories record agent authorship, closed version
+checkpoints and optimistic revisions. Replacing requires `ler_nota` in the same
+`responder` call and uses that read revision, without retry on conflict (also
+required on GitHub, whose legacy write behavior remains). Only appending retries
+one conflict with the latest content, separating text with a blank line and
+preserving CRLF. Unexpected tool errors are logged on the server and return a
+generic message without SQL or note contents.
+Its temporary GitHub adapter keeps the legacy commits until the Phase 10 cutover.
+`instrucao-do-agente.ts` generates the system prompt for the configured source.
+
 ### Data layer (`src/lib/`)
 
 Layered, each file only knows about the layer below it:
@@ -179,7 +195,7 @@ Layered, each file only knows about the layer below it:
 - `vault-real.ts` — lists the GitHub notes (non-`.md` files and Obsidian internals —
   `.obsidian`, `.trash`, `.git` — filtered out), reads, searches and writes them (each
   write is a commit). Owns a module-level, process-lifetime 5-minute cache
-  (`obterNotasPlanas`) that the GitHub repository and the agent's tools build on.
+  (`obterNotasPlanas`) that the GitHub repository and temporary write adapter build on.
 
 The cache is plain in-memory module state — it resets on restart/redeploy and isn't
 shared across serverless instances. Every write through `vault-real.ts` invalidates
@@ -277,9 +293,12 @@ retrofitting breakpoints.
 The `etapas-futuras/` roadmap (Gemini function calling, then write access) is
 implemented. `Chat.tsx` calls `/api/chat`, which runs `src/lib/agente.ts`'s
 function-calling loop against `src/lib/ferramentas.ts`'s tools: `buscar_notas`,
-`listar_notas`, `ler_nota` (read) and `criar_nota`, `editar_nota` (write — each
-a real commit via `src/lib/github.ts`'s `putFile`). `Mensagem.tsx` renders a
-pill per tool used in a turn, linking to the commit when one was made. The
+`listar_notas`, `ler_nota` (read) and `criar_nota`, `editar_nota` (write), all using
+the configured `RepositorioDeNotas`. Bank/memory writes carry agent authorship,
+revision checks and note version history; only the temporary GitHub write adapter
+still creates commits. The model keeps addressing notes by paths, while successful
+writes also pass the opaque `notaId` to the UI. `Mensagem.tsx` renders a pill per
+tool used in a turn, linking to the commit only when one was made. The
 whole app sits behind a password-protected session (`src/proxy.ts` +
 `src/lib/sessao.ts`/`autenticacao.ts`) — this was added independently of the
 etapas-futuras roadmap, not part of the original plan.

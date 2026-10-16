@@ -194,3 +194,14 @@ describe("repositório do GitHub (somente leitura)", () => {
     });
   });
 });
+
+it.each(["Busca parcial em repositório grande.", "A consulta não tinha nenhuma palavra pesquisável."])("preserva e limpa aviso da última busca: %s", async (aviso) => {
+  const repo = criarRepositorioDoGithub();
+  vi.mocked(obterNotasPlanas).mockResolvedValue({ notas: PLANAS, aviso: "Listagem parcial." });
+  vi.mocked(buscarNotas).mockResolvedValueOnce({ resultados: [], aviso }).mockResolvedValueOnce({ resultados: [] });
+  await repo.buscarPorConteudo("x", 8);
+  expect(await repo.obterAviso()).toContain(aviso);
+  expect(await repo.obterAviso()).toContain("Listagem parcial.");
+  await repo.buscarPorConteudo("TCP", 8);
+  expect(await repo.obterAviso()).toBe("Listagem parcial.");
+});

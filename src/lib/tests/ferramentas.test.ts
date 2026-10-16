@@ -1,212 +1,158 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { codificarIdDoGithub } from "../repositorio-de-notas/github-somente-leitura";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { declaracoesDeFerramentas, executarFerramenta } from "../ferramentas";
+import { criarRepositorioEmMemoria } from "../repositorio-de-notas/memoria";
+import type { RepositorioDeNotas } from "../repositorio-de-notas/tipos";
 
-/**
- * Mocka a camada de dados (`vault-real.ts`) inteira: o que importa aqui é o
- * despacho de `executarFerramenta` e a normalização de argumentos, não a
- * lógica de busca em si (isso já está coberto em `vault-real.test.ts`).
- */
-vi.mock("../vault-real", () => ({
-  buscarNotas: vi.fn(),
-  lerNota: vi.fn(),
-  listarNotas: vi.fn(),
-  criarNota: vi.fn(),
-  editarNota: vi.fn(),
-  tituloDoCaminho: (caminho: string) => caminho.split("/").pop()!.replace(/\.md$/i, ""),
-}));
+const semear = () => criarRepositorioEmMemoria([
+  { titulo: "Álgebra", pasta: "Estudos/Matemática", conteudo: "Vetores e matrizes\n\n" },
+  { titulo: "TCP", pasta: "Estudos/Redes", conteudo: "Protocolo confiável" },
+]);
+const executar = (repositorio: RepositorioDeNotas, nome: string, args: Record<string, unknown>) =>
+  executarFerramenta(nome, args, { repositorio });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
-import { buscarNotas, criarNota, editarNota, lerNota, listarNotas } from "../vault-real";
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-describe("executarFerramenta — buscar_notas", () => {
-  it("repassa consulta e limite para buscarNotas e resume o resultado", async () => {
-    vi.mocked(buscarNotas).mockResolvedValue({
-      resultados: [
-        { caminho: "Estudos/TCP.md", sha: "s1", tamanho: 10, titulo: "TCP", trecho: "...", score: 30 },
-      ],
-    });
-
-    const saida = await executarFerramenta("buscar_notas", { consulta: "TCP", limite: 5 });
-
-    expect(buscarNotas).toHaveBeenCalledWith("TCP", 5);
-    expect(saida.erro).toBeUndefined();
-    expect(saida.resumo).toContain("1 nota(s)");
-    expect(saida.resposta.encontradas).toBe(1);
+describe("ferramentas com repositório de notas", () => {
+  it("busca e devolve caminho, título e trecho", async () => {
+    const saida = await executar(semear(), "buscar_notas", { consulta: "matrizes" });
+    expect(saida.resposta).toMatchObject({ encontradas: 1, notas: [{ caminho: "Estudos/Matemática/Álgebra.md", titulo: "Álgebra", trecho: expect.stringContaining("matrizes") }] });
   });
-
-  it("usa limite padrão 8 quando não informado, e não deixa passar de 20", async () => {
-    vi.mocked(buscarNotas).mockResolvedValue({ resultados: [] });
-
-    await executarFerramenta("buscar_notas", { consulta: "x" });
-    expect(buscarNotas).toHaveBeenCalledWith("x", 8);
-
-    await executarFerramenta("buscar_notas", { consulta: "x", limite: 999 });
-    expect(buscarNotas).toHaveBeenCalledWith("x", 20);
+  it("preserva o destaque do banco e limita os resultados", async () => {
+    const repo = semear();
+    const buscarPorConteudo = vi.fn(async () => [{ id: "1", titulo: "TCP", pasta: null, trecho: "**TCP**" }]);
+    const repositorio = { ...repo, buscarPorConteudo };
+    for (const [limite, esperado] of [[undefined, 8], [999, 20], [-1, 1], ["3", 3]] as const) {
+      const saida = await executar(repositorio, "buscar_notas", { consulta: "TCP", limite });
+      expect(buscarPorConteudo).toHaveBeenLastCalledWith("TCP", esperado);
+      expect(saida.resposta.notas).toMatchObject([{ trecho: "**TCP**" }]);
+    }
   });
-
-  it("falha com erro claro quando 'consulta' está faltando", async () => {
-    const saida = await executarFerramenta("buscar_notas", {});
+  it("lista com filtro sem acentos nem distinção de caixa", async () => {
+    expect((await executar(semear(), "listar_notas", { pasta: "/ESTUDOS/matematica/" })).resposta)
+      .toMatchObject({ total: 1, caminhos: ["Estudos/Matemática/Álgebra.md"] });
+  });
+  it("limita a listagem a 200 e avisa sobre o total", async () => {
+    const repo = criarRepositorioEmMemoria(Array.from({ length: 201 }, (_, i) => ({ titulo: `Nota ${i}` })));
+    const saida = await executar(repo, "listar_notas", {});
+    expect(saida.resposta.total).toBe(201);
+    expect(saida.resposta.caminhos).toHaveLength(200);
+    expect(saida.resposta.aviso).toContain("201");
+  });
+  it.each(["algebra", "matematica/algebra", "/estudos/matematica/algebra.MD", "lgebr"])("lê por caminho aproximado %s", async (caminho) => {
+    expect((await executar(semear(), "ler_nota", { caminho })).resposta)
+      .toMatchObject({ caminho: "Estudos/Matemática/Álgebra.md", conteudo: "Vetores e matrizes\n\n" });
+  });
+  it("recusa título ambíguo com as opções", async () => {
+    const repo = criarRepositorioEmMemoria([{ titulo: "TCP", pasta: "A" }, { titulo: "TCP", pasta: "B" }]);
+    const saida = await executar(repo, "ler_nota", { caminho: "tcp" });
     expect(saida.erro).toBe(true);
-    expect(saida.resumo).toMatch(/consulta/);
+    expect(saida.resumo).toMatch(/caminho completo/);
+    expect(saida.resumo).toContain("A/TCP.md");
+    expect(saida.resumo).toContain("B/TCP.md");
   });
-});
-
-describe("executarFerramenta — listar_notas", () => {
-  it("lista sem pasta quando o argumento não é passado", async () => {
-    vi.mocked(listarNotas).mockResolvedValue([{ caminho: "A.md", sha: "s", tamanho: 1 }]);
-
-    const saida = await executarFerramenta("listar_notas", {});
-    expect(listarNotas).toHaveBeenCalledWith(undefined);
-    expect(saida.resposta.total).toBe(1);
+  it("cria com autoria e devolve id sem commit", async () => {
+    const repo = semear();
+    const criarNota = vi.fn(repo.criarNota);
+    const saida = await executar({ ...repo, criarNota }, "criar_nota", { caminho: "Estudos/DNS.md", conteudo: "# DNS" });
+    expect(criarNota).toHaveBeenCalledWith({ pasta: "Estudos", titulo: "DNS", conteudo: "# DNS" }, { criadoPor: "agente", ferramenta: "criar_nota" });
+    expect(saida.resposta).toEqual({ sucesso: true, caminho: "Estudos/DNS.md" });
+    expect(await repo.obterNota(saida.notaId!)).toMatchObject({ titulo: "DNS" });
   });
-
-  it("filtra por pasta quando informada", async () => {
-    vi.mocked(listarNotas).mockResolvedValue([]);
-
-    await executarFerramenta("listar_notas", { pasta: "Estudos/Redes" });
-    expect(listarNotas).toHaveBeenCalledWith("Estudos/Redes");
-  });
-});
-
-describe("executarFerramenta — ler_nota", () => {
-  it("devolve o conteúdo quando a nota existe", async () => {
-    vi.mocked(lerNota).mockResolvedValue({
-      nota: { caminho: "Estudos/TCP.md", sha: "s1", tamanho: 10 },
-      conteudo: "# TCP\nConteúdo.",
-    });
-
-    const saida = await executarFerramenta("ler_nota", { caminho: "TCP" });
-    expect(saida.erro).toBeUndefined();
-    expect(saida.resposta.conteudo).toBe("# TCP\nConteúdo.");
-    expect(saida.resposta.titulo).toBe("TCP");
-  });
-
-  it("devolve erro (sem lançar exceção) quando a nota não existe", async () => {
-    vi.mocked(lerNota).mockResolvedValue(null);
-
-    const saida = await executarFerramenta("ler_nota", { caminho: "Nao/Existe.md" });
+  it("título em uso indica editar_nota e caminho existente", async () => {
+    const saida = await executar(semear(), "criar_nota", { caminho: "Estudos/Redes/tcp.md", conteudo: "x" });
     expect(saida.erro).toBe(true);
-    expect(saida.resumo).toMatch(/não encontrada/);
+    expect(saida.resumo).toMatch(/editar_nota.*Estudos\/Redes\/TCP.md/);
   });
-});
-
-describe("executarFerramenta — criar_nota", () => {
-  it("cria a nota e devolve o link do commit", async () => {
-    vi.mocked(criarNota).mockResolvedValue({
-      caminho: "Estudos/DNS.md",
-      criada: true,
-      commitUrl: "https://github.com/usuario/vault/commit/abc",
-    });
-
-    const saida = await executarFerramenta("criar_nota", {
-      caminho: "Estudos/DNS.md",
-      conteudo: "# DNS",
-    });
-
-    expect(criarNota).toHaveBeenCalledWith("Estudos/DNS.md", "# DNS");
-    expect(saida.erro).toBeUndefined();
-    expect(saida.resposta).toEqual({
-      sucesso: true,
-      caminho: "Estudos/DNS.md",
-      commit: "https://github.com/usuario/vault/commit/abc",
-    });
-    expect(saida.resumo).toMatch(/Criou/);
-  });
-
-  it("devolve erro (sem lançar exceção) quando a nota já existe", async () => {
-    vi.mocked(criarNota).mockRejectedValue(new Error('A nota "Estudos/TCP.md" já existe.'));
-
-    const saida = await executarFerramenta("criar_nota", {
-      caminho: "Estudos/TCP.md",
-      conteudo: "x",
-    });
-
+  it("valida título com motivo antes de escrever", async () => {
+    const repo = semear();
+    const criarNota = vi.fn(repo.criarNota);
+    const saida = await executar({ ...repo, criarNota }, "criar_nota", { caminho: "Ruim#.md", conteudo: "x" });
     expect(saida.erro).toBe(true);
-    expect(saida.resumo).toMatch(/já existe/);
-  });
-
-  it("falha com erro claro quando 'conteudo' está faltando", async () => {
-    const saida = await executarFerramenta("criar_nota", { caminho: "Estudos/DNS.md" });
-    expect(saida.erro).toBe(true);
-    expect(saida.resumo).toMatch(/conteudo/);
+    expect(saida.resumo).toMatch(/título não pode/);
     expect(criarNota).not.toHaveBeenCalled();
   });
-});
-
-describe("executarFerramenta — editar_nota", () => {
-  it("edita no modo pedido", async () => {
-    vi.mocked(editarNota).mockResolvedValue({
-      caminho: "Estudos/TCP.md",
-      criada: false,
-      commitUrl: "https://github.com/usuario/vault/commit/def",
-    });
-
-    const saida = await executarFerramenta("editar_nota", {
-      caminho: "TCP",
-      conteudo: "Parágrafo novo.",
-      modo: "acrescentar",
-    });
-
-    expect(editarNota).toHaveBeenCalledWith("TCP", "Parágrafo novo.", "acrescentar");
-    expect(saida.resposta.modo).toBe("acrescentar");
-    expect(saida.resumo).toMatch(/Complementou/);
-  });
-
-  it("usa 'acrescentar' como padrão quando 'modo' vem inválido ou ausente", async () => {
-    vi.mocked(editarNota).mockResolvedValue({
-      caminho: "Estudos/TCP.md",
-      criada: false,
-      commitUrl: "url",
-    });
-
-    await executarFerramenta("editar_nota", { caminho: "TCP", conteudo: "x" });
-    expect(editarNota).toHaveBeenCalledWith("TCP", "x", "acrescentar");
-
-    await executarFerramenta("editar_nota", { caminho: "TCP", conteudo: "x", modo: "apagar_tudo" });
-    expect(editarNota).toHaveBeenLastCalledWith("TCP", "x", "acrescentar");
-  });
-
-  it("devolve erro (sem lançar exceção) quando a nota não é encontrada", async () => {
-    vi.mocked(editarNota).mockRejectedValue(new Error("Não encontrei a nota."));
-
-    const saida = await executarFerramenta("editar_nota", {
-      caminho: "Nao Existe",
-      conteudo: "x",
-      modo: "acrescentar",
-    });
-
+  it.each(["criar_nota", "editar_nota"])("explica somente-leitura em %s", async (nome) => {
+    const repo = semear();
+    const repositorio: RepositorioDeNotas = { ...repo, criarNota: async () => ({ tipo: "somente-leitura" }), atualizarNota: async () => ({ tipo: "somente-leitura" }) };
+    const saida = await executar(repositorio, nome, { caminho: "Estudos/Redes/TCP.md", conteudo: "x" });
     expect(saida.erro).toBe(true);
+    expect(saida.resumo).toMatch(/modo leitura/);
   });
-});
-
-describe("declaracoesDeFerramentas", () => {
-  it("declara as cinco ferramentas (leitura e escrita)", () => {
-    const nomes = declaracoesDeFerramentas.map((d) => d.name);
-    expect(nomes).toEqual([
-      "buscar_notas",
-      "listar_notas",
-      "ler_nota",
-      "criar_nota",
-      "editar_nota",
-    ]);
+  it.each(["acrescentar", "substituir", undefined, "invalido"])("edita no modo %s com checkpoint e revisão lida", async (modo) => {
+    const repo = semear();
+    const atualizarNota = vi.fn(repo.atualizarNota);
+    const leituras = new Map<string, number>();
+    await executarFerramenta("ler_nota", { caminho: "algebra" }, { repositorio: repo, leituras });
+    const saida = await executarFerramenta("editar_nota", { caminho: "algebra", conteudo: "\n\nNovo", modo }, { repositorio: { ...repo, atualizarNota }, leituras });
+    const esperado = modo === "substituir" ? "\n\nNovo" : "Vetores e matrizes\n\nNovo\n";
+    expect(atualizarNota).toHaveBeenCalledWith(expect.any(String), { conteudo: esperado }, { revisaoBase: 1, autor: { criadoPor: "agente", ferramenta: "editar_nota" }, checkpoint: true });
+    expect((await repo.obterNota(saida.notaId!))?.conteudo).toBe(esperado);
+    expect(saida.resposta).not.toHaveProperty("commit");
   });
-});
-
-describe("executarFerramenta — despacho geral", () => {
-  it("devolve erro para uma ferramenta desconhecida, sem lançar exceção", async () => {
-    const saida = await executarFerramenta("ferramenta_que_nao_existe", {});
+  it.each(["Texto\r\n\r\n", "Texto\n\n", ""])("acréscimo une as bordas sem duplicar quebras: %j", async (conteudo) => {
+    const repo = criarRepositorioEmMemoria([{ titulo: "Nota", conteudo }]);
+    const saida = await executar(repo, "editar_nota", { caminho: "Nota", conteudo: "\r\n\r\nNovo", modo: "acrescentar" });
+    expect(saida.erro).toBeUndefined();
+    expect((await repo.obterNota(saida.notaId!))?.conteudo).toBe(conteudo.includes("\r\n") ? "Texto\r\n\r\nNovo\r\n" : conteudo ? "Texto\n\nNovo\n" : "Novo\n");
+  });
+  it.each([false, true])("tenta só uma vez após conflito (persistente: %s)", async (persistente) => {
+    const repo = semear();
+    let chamadas = 0;
+    const atualizarNota: RepositorioDeNotas["atualizarNota"] = vi.fn(async (id, mudancas, opcoes) => {
+      chamadas++;
+      if (chamadas === 1 || persistente) {
+        await repo.atualizarNota(id, { conteudo: `Concorrente ${chamadas}\n` }, opcoes);
+      }
+      return repo.atualizarNota(id, mudancas, opcoes);
+    });
+    const saida = await executar({ ...repo, atualizarNota }, "editar_nota", { caminho: "TCP", conteudo: "Novo", modo: "acrescentar" });
+    expect(chamadas).toBe(2);
+    if (persistente) {
+      expect(saida.erro).toBe(true);
+      expect(saida.resumo).toMatch(/mudou durante a edição/);
+    } else {
+      expect(saida.erro).toBeUndefined();
+      expect((await repo.obterNota(saida.notaId!))?.conteudo).toBe("Concorrente 1\n\nNovo\n");
+    }
+  });
+  it.each(["criar_nota", "editar_nota"])("porta temporária chama legado só sem capacidade de escrita: %s", async (nome) => {
+    const repo = semear();
+    const criarNota = vi.fn(async () => ({ caminho: "Estudos/Redes/TCP.md", commitUrl: "https://github.com/teste/notas/commit/abc" }));
+    const editarNota = vi.fn(criarNota);
+    const legado = { criarNota, editarNota };
+    const args = { caminho: "Estudos/Redes/TCP.md", conteudo: "Novo", modo: "substituir" };
+    const notas = await repo.listarResumos();
+    const repositorio = { ...repo, listarResumos: async () => notas.map((n) => ({ ...n, id: codificarIdDoGithub(`${n.pasta}/${n.titulo}.md`) })), capacidades: { escrita: false, datas: false } };
+    const leituras = new Map<string, number>([[codificarIdDoGithub(args.caminho), 1]]);
+    const saida = await executarFerramenta(nome, args, { repositorio, legado, leituras });
+    expect(nome === "criar_nota" ? criarNota : editarNota).toHaveBeenCalledWith(...(nome === "criar_nota" ? [args.caminho, "Novo"] : [args.caminho, "Novo", "substituir"]));
+    expect(saida.resposta.commit).toContain("/commit/abc");
+    expect(saida.notaId).toBe(codificarIdDoGithub(args.caminho));
+    vi.clearAllMocks();
+    await executarFerramenta(nome, { ...args, caminho: nome === "criar_nota" ? "Nova.md" : "TCP" }, { repositorio: repo, legado });
+    expect(criarNota).not.toHaveBeenCalled();
+    expect(editarNota).not.toHaveBeenCalled();
+  });
+  it("erro de configuração vira resultado normal", async () => {
+    vi.stubEnv("NOTAS_FONTE", "inexistente");
+    const saida = await executarFerramenta("listar_notas", {});
     expect(saida.erro).toBe(true);
-    expect(saida.resumo).toMatch(/desconhecida/);
+    expect(saida.resumo).toContain("NOTAS_FONTE");
   });
-
-  it("captura exceções da camada de dados e devolve como erro normal", async () => {
-    vi.mocked(buscarNotas).mockRejectedValue(new Error("GitHub caiu"));
-
-    const saida = await executarFerramenta("buscar_notas", { consulta: "TCP" });
-    expect(saida.erro).toBe(true);
-    expect(saida.resumo).toBe("GitHub caiu");
+  it.each(["ler_nota", "editar_nota"])("nota ausente em %s", async (nome) => {
+    expect((await executar(semear(), nome, { caminho: "Ausente", conteudo: "x" })).erro).toBe(true);
+  });
+  it.each([["buscar_notas", {}], ["criar_nota", { caminho: "Nova" }]])("valida argumentos de %s", async (nome, args) => {
+    expect((await executar(semear(), nome as string, args)).erro).toBe(true);
+  });
+  it("recusa ferramenta desconhecida", async () => {
+    expect((await executar(semear(), "desconhecida", {})).resumo).toMatch(/desconhecida/);
+  });
+  it("declara os contratos sem armazenamento fixo", () => {
+    expect(declaracoesDeFerramentas.map((d) => d.name)).toEqual(["buscar_notas", "listar_notas", "ler_nota", "criar_nota", "editar_nota"]);
+    expect(JSON.stringify(declaracoesDeFerramentas)).not.toMatch(/vault|commit/i);
+    expect(declaracoesDeFerramentas[0].description).toContain("título e no conteúdo");
+    expect(declaracoesDeFerramentas[0].description).toContain("tags no banco");
+    expect(declaracoesDeFerramentas[0].description).toContain("caminho no GitHub");
   });
 });
