@@ -55,6 +55,18 @@ export function construirArvore(notas: readonly NotaParaArvore[]): ItemDeNotas[]
   return paraItens(raiz);
 }
 
+/** Achata a árvore num mapa por id: título e pasta de qualquer nota, em qualquer profundidade. */
+export function indexarNotas(
+  itens: readonly ItemDeNotas[],
+  mapa: Map<IdDeNota, NotaParaArvore> = new Map(),
+): Map<IdDeNota, NotaParaArvore> {
+  for (const item of itens) {
+    if (item.tipo === "nota") mapa.set(item.id, { id: item.id, titulo: item.nome, pasta: item.pasta });
+    else indexarNotas(item.filhos, mapa);
+  }
+  return mapa;
+}
+
 /** Quantas notas há na árvore, em qualquer profundidade. */
 export function contarNotas(itens: readonly ItemDeNotas[]): number {
   return itens.reduce((total, item) => total + (item.tipo === "nota" ? 1 : contarNotas(item.filhos)), 0);

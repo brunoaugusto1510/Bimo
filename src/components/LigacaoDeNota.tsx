@@ -108,6 +108,7 @@ export default function LigacaoDeNota({ alvo, resolucao, podeCriar, aoAbrir, aoC
       onKeyDown={(evento) => evento.key === "Escape" && fechar()}
     >
       <a
+        data-ligacao
         href={`${PREFIXO_DE_NOTA}${encodeURIComponent(alvo)}`}
         onClick={abrir}
         onAuxClick={(evento) => {

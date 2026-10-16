@@ -63,6 +63,11 @@ type Props = {
    * embaralha o layout.
    */
   interativo?: boolean;
+  /**
+   * Está coberto por outra coisa (uma nota aberta numa aba): o laço segue vivo, mas não
+   * simula nem desenha. Ao descobrir de novo, continua de onde parou, sem embaralhar.
+   */
+  pausado?: boolean;
   /** Nota selecionada no modo interativo (controlada por quem usa o componente). */
   selecionado?: string | null;
   onSelecionar?: (caminho: string | null) => void;
@@ -146,6 +151,7 @@ export default function GrafoDeFundo({
   pulso,
   onAbrirNota,
   interativo = false,
+  pausado = false,
   selecionado = null,
   onSelecionar,
   focoPedido = 0,
@@ -171,6 +177,7 @@ export default function GrafoDeFundo({
   const onAbrirNotaRef = useRef(onAbrirNota);
   const onSelecionarRef = useRef(onSelecionar);
   const interativoRef = useRef(interativo);
+  const pausadoRef = useRef(pausado);
   const selecionadoRef = useRef(selecionado);
   const notaAbertaRef = useRef(notaAberta);
 
@@ -186,6 +193,7 @@ export default function GrafoDeFundo({
     onAbrirNotaRef.current = onAbrirNota;
     onSelecionarRef.current = onSelecionar;
     interativoRef.current = interativo;
+    pausadoRef.current = pausado;
     selecionadoRef.current = selecionado;
     notaAbertaRef.current = notaAberta;
   });
@@ -393,6 +401,12 @@ export default function GrafoDeFundo({
 
     const quadro = (tempoMs: number) => {
       if (!animando) return;
+
+      // Coberto por uma nota aberta: não há o que simular nem desenhar, só esperar.
+      if (pausadoRef.current) {
+        idDoQuadro = requestAnimationFrame(quadro);
+        return;
+      }
       const { largura, altura } = tamanho();
 
       // Painel escondido (aba trocada, menu aberto no celular) tem tamanho 0: não há o que desenhar.

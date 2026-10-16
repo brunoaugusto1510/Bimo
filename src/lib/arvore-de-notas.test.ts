@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { construirArvore, contarNotas, filtrarArvore, type NotaParaArvore } from "./arvore-de-notas";
+import { construirArvore, contarNotas, filtrarArvore, indexarNotas, type NotaParaArvore } from "./arvore-de-notas";
 import type { ItemDeNotas } from "./types";
 
 function nota(id: string, titulo: string, pasta: string | null = null): NotaParaArvore {
@@ -47,6 +47,20 @@ describe("construirArvore", () => {
 });
 
 const ARVORE: ItemDeNotas[] = construirArvore(NOTAS);
+
+describe("indexarNotas", () => {
+  it("achata a árvore num mapa por id, com título e pasta de cada nota", () => {
+    const mapa = indexarNotas(ARVORE);
+
+    expect(mapa.size).toBe(5);
+    expect(mapa.get("1")).toEqual({ id: "1", titulo: "TCP", pasta: "Estudos/Redes" });
+    expect(mapa.get("5")).toEqual({ id: "5", titulo: "Inbox", pasta: null });
+  });
+
+  it("uma árvore vazia dá um mapa vazio", () => {
+    expect(indexarNotas([]).size).toBe(0);
+  });
+});
 
 describe("contarNotas", () => {
   it("conta as notas de toda a árvore, em qualquer profundidade", () => {
