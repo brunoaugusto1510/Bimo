@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
+import { notas, versoesNota } from "../db/schema";
 
 /** Mesmo padrão de `entidades.test.ts`. */
 
@@ -19,8 +22,8 @@ const txInsertMock = vi.fn(() => ({ values: txValuesMock }));
 
 const txReturningMock = vi.fn();
 const txWhereMock = vi.fn(() => ({ returning: txReturningMock }));
-const txSetMock = vi.fn(() => ({ where: txWhereMock }));
-const txUpdateMock = vi.fn(() => ({ set: txSetMock }));
+const txSetMock = vi.fn((valores: Record<string, unknown>) => { void valores; return { where: txWhereMock }; });
+const txUpdateMock = vi.fn((tabela: unknown) => { void tabela; return { set: txSetMock }; });
 
 type TxFake = { insert: typeof txInsertMock; update: typeof txUpdateMock };
 const tx: TxFake = { insert: txInsertMock, update: txUpdateMock };
@@ -54,6 +57,15 @@ beforeEach(() => {
 });
 
 describe("criarNota", () => {
+  it("traduz somente a violação do índice de títulos para erro de domínio", async () => {
+    const erro = new Error("SQL", { cause: { code: "23505", constraint_name: "notas_usuario_pasta_titulo_unico" } });
+    transactionMock.mockRejectedValueOnce(erro as never);
+    await expect(criarNota({ userId: "user-1", titulo: "A", conteudo: "", criadoPor: "usuario" }))
+      .rejects.toThrow(/Já existe uma nota com este título nesta pasta/);
+    const outro = new Error("outra chave", { cause: { code: "23505", constraint_name: "nos_pkey" } });
+    transactionMock.mockRejectedValueOnce(outro as never);
+    await expect(criarNota({ userId: "user-1", titulo: "A", conteudo: "", criadoPor: "usuario" })).rejects.toBe(outro);
+  });
   it("insere em nos, notas e versoes_nota dentro de uma transação", async () => {
     txValuesMock
       .mockImplementationOnce(() => resultadoDeInsert([{ id: 7 }])) // nos
@@ -94,6 +106,11 @@ describe("atualizarNota", () => {
     const valoresVersao = txValuesMock.mock.calls[0][0];
     expect(valoresVersao.criadoPor).toBe("agente");
     expect(valoresVersao.conteudo).toBe("Conteúdo revisado.");
+    const valoresNota = txSetMock.mock.calls[0][0];
+    expect(new PgDialect().sqlToQuery(valoresNota.revisao as SQL).sql).toBe('"notas"."revisao" + 1');
+    expect(txUpdateMock.mock.calls.map(([tabela]) => tabela)).toEqual([notas, versoesNota]);
+    expect(txSetMock.mock.calls[1][0]).toEqual({ sessaoAberta: false });
+    expect(txUpdateMock.mock.invocationCallOrder[1]).toBeLessThan(txInsertMock.mock.invocationCallOrder[0]);
   });
 
   it("lança erro quando a nota não existe (ou não é do usuário)", async () => {

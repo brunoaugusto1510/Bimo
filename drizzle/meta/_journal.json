@@ -43,6 +43,13 @@
       "when": 1788391545193,
       "tag": "0005_busca_textual_colunas",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792177298398,
+      "tag": "0006_nostalgic_stepford_cuckoos",
+      "breakpoints": true
     }
   ]
 }

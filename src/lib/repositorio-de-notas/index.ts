@@ -7,7 +7,7 @@
  * nova a cada chamada o inutilizaria.
  */
 
-import { ErroDeConfiguracao, lerConfiguracaoDeNotas, type ConfiguracaoDeNotas } from "./config";
+import { lerConfiguracaoDeNotas, type ConfiguracaoDeNotas } from "./config";
 import { criarRepositorioDoGithub } from "./github-somente-leitura";
 import { obterRepositorioEmMemoriaCompartilhado } from "./memoria";
 import type { RepositorioDeNotas } from "./tipos";
@@ -27,11 +27,10 @@ async function criar(config: ConfiguracaoDeNotas): Promise<RepositorioDeNotas> {
       return criarRepositorioDoGithub();
     case "memoria":
       return obterRepositorioEmMemoriaCompartilhado();
-    case "banco":
-      throw new ErroDeConfiguracao(
-        "Guardar as notas no banco ainda não está disponível nesta versão. Use NOTAS_FONTE=github por enquanto.",
-        ["NOTAS_FONTE"],
-      );
+    case "banco": {
+      const { criarRepositorioDoBanco } = await import("./banco");
+      return criarRepositorioDoBanco(config.userId);
+    }
   }
 }
 

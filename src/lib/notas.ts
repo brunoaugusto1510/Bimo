@@ -12,7 +12,8 @@
  * ferramentas do agente, não para esta camada de dados.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { db } from "./db/cliente";
 import { nos, notas, versoesNota } from "./db/schema";
 
@@ -26,6 +27,7 @@ export type Nota = Omit<typeof notas.$inferSelect, "vetorBusca">;
 
 const colunasDaNota = {
   id: notas.id,
+  revisao: notas.revisao,
   userId: notas.userId,
   titulo: notas.titulo,
   conteudo: notas.conteudo,
@@ -93,7 +95,19 @@ export async function criarNota(nova: NovaNota): Promise<Nota> {
     });
 
     return linha;
+  }).catch((erro: unknown) => {
+    if (eColisaoDeTitulo(erro)) {
+      throw new Error("Já existe uma nota com este título nesta pasta.", { cause: erro });
+    }
+    throw erro;
   });
+}
+
+function eColisaoDeTitulo(erro: unknown): boolean {
+  if (!erro || typeof erro !== "object") return false;
+  if ("code" in erro && erro.code === "23505" && "constraint_name" in erro &&
+    erro.constraint_name === "notas_usuario_pasta_titulo_unico") return true;
+  return "cause" in erro && eColisaoDeTitulo(erro.cause);
 }
 
 /** Atualiza a Nota e registra o novo estado inteiro em `versoes_nota`. */
@@ -103,9 +117,12 @@ export async function atualizarNota(
   mudancas: AtualizacaoNota,
 ): Promise<Nota> {
   return db.transaction(async (tx) => {
-    const valores: Partial<typeof notas.$inferInsert> = { atualizadoEm: new Date() };
+    const valores: PgUpdateSetSource<typeof notas> = { atualizadoEm: new Date() };
     if (mudancas.titulo !== undefined) valores.titulo = mudancas.titulo;
-    if (mudancas.conteudo !== undefined) valores.conteudo = mudancas.conteudo;
+    if (mudancas.conteudo !== undefined) {
+      valores.conteudo = mudancas.conteudo;
+      valores.revisao = sql`${notas.revisao} + 1`;
+    }
     if (mudancas.pasta !== undefined) valores.pasta = mudancas.pasta;
     if (mudancas.tags !== undefined) valores.tags = mudancas.tags;
 
@@ -117,6 +134,12 @@ export async function atualizarNota(
 
     if (!linha) {
       throw new Error(`Nota ${id} não encontrada para este usuário.`);
+    }
+
+    if (mudancas.conteudo !== undefined) {
+      await tx.update(versoesNota).set({ sessaoAberta: false }).where(and(
+        eq(versoesNota.userId, userId), eq(versoesNota.notaId, id), eq(versoesNota.sessaoAberta, true),
+      ));
     }
 
     await tx.insert(versoesNota).values({

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, index, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, integer, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { usuariosAuth } from "./auth";
 import { criadoPorEnum } from "./enums";
 import { nos } from "./nos";
@@ -22,6 +22,7 @@ export const notas = pgTable(
       .notNull()
       .references(() => usuariosAuth.id, { onDelete: "cascade" }),
     titulo: text("titulo").notNull(),
+    revisao: integer("revisao").notNull().default(1),
     conteudo: text("conteudo").notNull(),
     /**
      * Caminho completo da pasta (ex.: "Projetos/Bimo/Ideias"), sem o nome do
@@ -51,6 +52,7 @@ export const notas = pgTable(
   },
   (tabela) => [
     index("notas_user_id_idx").on(tabela.userId),
+    uniqueIndex("notas_usuario_pasta_titulo_unico").on(tabela.userId, sql`coalesce(${tabela.pasta}, '')`, sql`lower(${tabela.titulo})`),
     index("notas_vetor_busca_idx").using("gin", tabela.vetorBusca),
     pgPolicy("notas_dono_policy", {
       for: "all",

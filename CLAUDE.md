@@ -19,8 +19,19 @@ npm run dev       # start dev server at http://localhost:3000
 npm run build     # production build (next build)
 npm run start     # run the production build
 npm run lint      # eslint (eslint.config.mjs, flat config, next/core-web-vitals + next/typescript)
+npm run importar-notas -- --limite 3 # simula importação do GitHub para o banco
 ```
 
+O importador usa `dotenv/config` e exige `VAULT_REPO`, `GITHUB_TOKEN`,
+`DATABASE_URL` e `USER_ID_PADRAO` já existentes na configuração. Por padrão,
+é simulação: lê GitHub e banco para comparar, mas não grava. Flags:
+`--executar` habilita gravações; `--pasta <caminho>` restringe uma subpasta;
+`--limite <n>` limita as notas após o filtro; `--sobrescrever` permite substituir
+conteúdo divergente com revisão otimista e checkpoint. Sem essa última flag,
+divergências são preservadas. Listagem truncada impede `--executar` sem `--pasta`.
+Novas notas recebem datas da importação. Falhas ou colisões retornam código 1.
+O comando passa `--conditions=react-server` ao `tsx` para carregar `server-only`
+fora do Next; imports relativos e o alias `@/` usam `tsconfig.json`.
 Tests run on **Vitest** (`vitest.config.mts`, jsdom environment, `@/*` alias via
 `vite-tsconfig-paths`): `npm test`, `npm run test:watch`, `npm run test:coverage`.
 Test files sit next to the code they cover (`src/lib/sessao.test.ts`,
@@ -49,7 +60,7 @@ the README mentioning one — check with the user before assuming its shape):
 - `NOTAS_FONTE` — optional, where the notes come from: `github` (default; the new UI is
   read-only), `memoria` (sample notes in server memory, dev/tests only — refused in
   production) or `banco` (Postgres via Drizzle: needs `DATABASE_URL` + `USER_ID_PADRAO`;
-  not wired yet, planned for the migration). See `src/lib/repositorio-de-notas/config.ts`.
+  supports reads, writes and version history). See `src/lib/repositorio-de-notas/config.ts`.
 
 Missing/invalid *vault* env vars don't crash the app — `src/lib/github.ts`'s
 `getGitHubConfig()` throws a descriptive error that `src/app/page.tsx` catches and
@@ -152,8 +163,9 @@ links to whom — **derived from the text on read, never mirrored into `relacoes
 `grafo-de-notas.ts`, `arvore-de-notas.ts`.
 
 `repositorio-de-notas/` is the storage contract (`tipos.ts`) with `memoria.ts`,
-`github-somente-leitura.ts` (wraps `vault-real.ts`; ids are the path in base64url) and,
-later, `banco.ts`. `config.ts` never imports the DB: `db/cliente.ts` throws on import
+`github-somente-leitura.ts` (wraps `vault-real.ts`; ids are the path in base64url) and
+`banco.ts` (Postgres, scoped by user, optimistic revisions and version history).
+`config.ts` never imports the DB: `db/cliente.ts` throws on import
 without `DATABASE_URL`, so the DB must only be `await import()`ed after the config
 passes, or the fail-soft page breaks. Any writable repository must pass
 `suite-de-contrato.ts`.

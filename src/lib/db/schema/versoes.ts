@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   index,
   numeric,
   pgPolicy,
@@ -58,6 +59,7 @@ export const versoesNota = pgTable(
     notaId: bigint("nota_id", { mode: "number" })
       .notNull()
       .references(() => notas.id, { onDelete: "cascade" }),
+    sessaoAberta: boolean("sessao_aberta").notNull().default(false),
     userId: uuid("user_id")
       .notNull()
       .references(() => usuariosAuth.id, { onDelete: "cascade" }),

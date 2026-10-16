@@ -25,7 +25,7 @@ export class ErroDeConfiguracao extends Error {
 }
 
 const FONTES = ["github", "banco", "memoria"] as const;
-const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * `NOTAS_FONTE` escolhe a fonte; ausente, vale `github` (o app como era antes

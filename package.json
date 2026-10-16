@@ -14,7 +14,8 @@
     "gerar-segredo": "node scripts/gerar-segredo.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "importar-notas": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/importar-notas.ts"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",
@@ -29,6 +30,7 @@
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "server-only": "0.0.1",
     "unpdf": "^1.8.1",
     "zod": "4.4.3"
   },
@@ -52,6 +54,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "tsx": "^4.23.12"
   }
 }
