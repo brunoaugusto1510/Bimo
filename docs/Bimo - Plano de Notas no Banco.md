@@ -28,7 +28,7 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 | 5 | Importador `npm run importar-notas` | Feita (importação real executada: 383 notas) |
 | 6 | Agente (Gemini) lendo e escrevendo pelo repositório configurado | Feita |
 | 7 | Espaço de trabalho de leitura: abas, navegação, Ctrl+O, painel lateral, prévia de ligação | Feita |
-| 8a | Edição com salvamento automático | Em andamento (Codex) |
+| 8a | Edição com salvamento automático | Feita |
 | 8b | Nota nova: Alt+N, "Criar nota" pela paleta (Ctrl+Enter), criar pela ligação `[[x]]` | A fazer |
 | 9 | Extras do editor: autocompletar `[[` e `#`, menu `/`, rascunho do Bimo; editar título (renomear), pasta e tags | A fazer |
 | 10 | Corte para o banco e limpeza | A fazer |
