@@ -356,6 +356,48 @@ describe("PaginaPrincipal — abas e paleta", () => {
     expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("Ctrl+G e Ctrl+J fecham o menu de notas do celular em vez de deixar o destino escondido", async () => {
+    const usuario = renderizar();
+
+    await usuario.click(screen.getByRole("button", { name: "Mostrar ou esconder as notas" }));
+    expect(screen.getByTestId("grafo").closest(".hidden")).not.toBeNull();
+
+    await usuario.keyboard("{Control>}g{/Control}");
+
+    expect(screen.getByTestId("grafo").closest(".hidden")).toBeNull();
+  });
+
+  it("com a paleta aberta, os outros atalhos ficam parados: o diálogo é modal", async () => {
+    const usuario = renderizar();
+    await usuario.keyboard("{Control>}o{/Control}");
+    await screen.findByRole("dialog", { name: "Ir para nota" });
+
+    await usuario.keyboard("{Control>}g{/Control}");
+    await usuario.keyboard("{Control>}j{/Control}");
+
+    expect(screen.getByRole("dialog", { name: "Ir para nota" })).toBeInTheDocument();
+    expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
+    expect(abaNotas()).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("'Perguntar ao Bimo' não apaga o que a pessoa já tinha digitado no chat", async () => {
+    const usuario = renderizar();
+    await usuario.type(campoDoChat(), "uma ideia pela metade");
+    await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
+    await screen.findByText("texto da nota");
+
+    await usuario.click(screen.getByRole("button", { name: "Mais opções" }));
+    await usuario.click(screen.getByRole("menuitem", { name: "Perguntar ao Bimo" }));
+
+    expect(campoDoChat()).toHaveValue('uma ideia pela metade\nO que eu anotei em "Ler"?');
+  });
+
+  it("a área de conteúdo é o landmark principal da página", () => {
+    renderizar();
+
+    expect(screen.getByRole("main")).toBeInTheDocument();
+  });
+
   it("'Perguntar ao Bimo' numa nota aberta leva ao chat com a pergunta escrita", async () => {
     const usuario = renderizar();
     await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));

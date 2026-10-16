@@ -46,8 +46,8 @@ function pedido<T>(extras: Partial<PedidoDeNota<T>>): PedidoDeNota<T> {
   return { estado: "carregando", recarregar, ...extras };
 }
 
-function montar(aba: EstadoDaAba = ABA) {
-  const acoes = {
+function acoesFalsas() {
+  return {
     aoVoltar: vi.fn(),
     aoAvancar: vi.fn(),
     aoAlternarModo: vi.fn(),
@@ -55,6 +55,10 @@ function montar(aba: EstadoDaAba = ABA) {
     aoCriarNota: vi.fn(),
     aoPerguntarAoBimo: vi.fn(),
   };
+}
+
+function montar(aba: EstadoDaAba = ABA) {
+  const acoes = acoesFalsas();
   render(<AbaDeNota aba={aba} notas={NOTAS} {...acoes} />);
   return { ...acoes, usuario: userEvent.setup() };
 }
@@ -72,7 +76,7 @@ describe("AbaDeNota", () => {
 
     expect(screen.getAllByRole("heading", { level: 1, name: "Ler é uma conversa" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("navigation", { name: "Caminho da nota" })).toHaveTextContent("Leituras");
-    expect(screen.getByRole("status")).toHaveTextContent("Somente leitura");
+    expect(screen.getByText("Somente leitura")).toBeInTheDocument();
     expect(screen.getByText(/\d+ palavras/)).toBeInTheDocument();
     expect(screen.getByText("1 conexão")).toBeInTheDocument();
   });
@@ -114,8 +118,9 @@ describe("AbaDeNota", () => {
     it("voltar começa desabilitado e avançar também, num histórico de uma nota só", () => {
       montar();
 
-      expect(screen.getByRole("button", { name: "Voltar" })).toBeDisabled();
-      expect(screen.getByRole("button", { name: "Avançar" })).toBeDisabled();
+      // `aria-disabled`, e não `disabled`: assim o botão não some do teclado quando o foco está nele.
+      expect(screen.getByRole("button", { name: "Voltar" })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("button", { name: "Avançar" })).toHaveAttribute("aria-disabled", "true");
     });
 
     it("com histórico, voltar e avançar chamam as ações", async () => {
@@ -155,6 +160,69 @@ describe("AbaDeNota", () => {
 
       expect(screen.queryByText(/conexã/)).not.toBeInTheDocument();
     });
+  });
+
+  describe("foco, leitor de tela e teclado", () => {
+    it("a nota fica numa região que se alcança por teclado, para as setas e o PageDown rolarem", () => {
+      montar();
+
+      const regiao = screen.getByRole("region", { name: "Conteúdo da nota" });
+      expect(regiao).toHaveAttribute("tabindex", "0");
+    });
+
+    it("anuncia a nota aberta e põe o título na aba do navegador", () => {
+      const { unmount } = render(
+        <AbaDeNota aba={ABA} notas={NOTAS} {...acoesFalsas()} />,
+      );
+
+      expect(screen.getByText("Nota aberta: Ler é uma conversa")).toBeInTheDocument();
+      expect(document.title).toBe("Ler é uma conversa · Bimo");
+
+      unmount();
+      expect(document.title).not.toContain("Ler é uma conversa");
+    });
+
+    it("rolar até um título da estrutura leva o foco a ele, não só o scroll", async () => {
+      const { usuario } = montar();
+      const estrutura = screen.getByRole("region", { name: "Estrutura" });
+
+      await usuario.click(within(estrutura).getByRole("button", { name: "O hábito" }));
+
+      expect(screen.getByRole("heading", { name: "O hábito" })).toHaveFocus();
+    });
+
+    it("as sugestões descartadas valem só para a nota atual: noutra nota elas voltam", async () => {
+      hooks.ligacoes.mockReturnValue(
+        pedido({
+          estado: "pronto",
+          dados: { ...LIGACOES, mencoesSemLigacao: [{ id: "3", titulo: "Zettelkasten", pasta: null, ocorrencias: 2 }] },
+        }),
+      );
+      const usuario = userEvent.setup();
+      const acoes = acoesFalsas();
+      const { rerender } = render(<AbaDeNota aba={ABA} notas={NOTAS} {...acoes} />);
+
+      await usuario.click(screen.getByRole("button", { name: "Descartar" }));
+      expect(screen.queryByRole("button", { name: "Descartar" })).not.toBeInTheDocument();
+
+      rerender(<AbaDeNota aba={{ ...ABA, historico: { pilha: ["1", "2"], indice: 1 } }} notas={NOTAS} {...acoes} />);
+
+      expect(screen.getByRole("button", { name: "Descartar" })).toBeInTheDocument();
+    });
+  });
+
+  it("copiar a ligação avisa que copiou, e avisa quando não consegue", async () => {
+    const { usuario } = montar();
+    const escrever = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValueOnce(undefined);
+
+    await usuario.click(screen.getByRole("button", { name: "Mais opções" }));
+    await usuario.click(screen.getByRole("menuitem", { name: "Copiar ligação" }));
+    expect(await screen.findByText("Ligação copiada")).toBeInTheDocument();
+
+    escrever.mockRejectedValueOnce(new Error("negado"));
+    await usuario.click(screen.getByRole("button", { name: "Mais opções" }));
+    await usuario.click(screen.getByRole("menuitem", { name: "Copiar ligação" }));
+    expect(await screen.findByText("Não consegui copiar a ligação")).toBeInTheDocument();
   });
 
   it("copiar a ligação da nota põe o [[Título]] na área de transferência (ou o caminho, se o título se repete)", async () => {

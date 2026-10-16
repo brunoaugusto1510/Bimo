@@ -100,6 +100,56 @@ describe("RenderizadorDeMarkdown", () => {
     });
   });
 
+  describe("estabilidade", () => {
+    it("um novo render do pai, com callbacks novos, não remonta os links nem os títulos", () => {
+      const { rerender } = montar("## Título\n\nVeja [[Notas atômicas]].");
+      const link = screen.getByRole("link", { name: "Notas atômicas" });
+      const titulo = screen.getByRole("heading", { name: "Título" });
+
+      rerender(
+        <RenderizadorDeMarkdown
+          conteudo={"## Título\n\nVeja [[Notas atômicas]]."}
+          resolver={RESOLVER}
+          pastaDeOrigem={null}
+          podeCriar
+          aoAbrirNota={vi.fn()}
+          aoCriarNota={vi.fn()}
+          carregarPrevia={vi.fn().mockResolvedValue(null)}
+        />,
+      );
+
+      // Remontar descartaria a prévia aberta, a seleção de texto e o foco de quem navega por teclado.
+      expect(link.isConnected).toBe(true);
+      expect(titulo.isConnected).toBe(true);
+    });
+
+    it("o clique usa o callback mais recente, não o do primeiro render", async () => {
+      const antigo = vi.fn();
+      const novo = vi.fn();
+      const usuario = userEvent.setup();
+      const props = {
+        conteudo: "[[Notas atômicas]]",
+        resolver: RESOLVER,
+        pastaDeOrigem: null,
+        podeCriar: true,
+        aoCriarNota: vi.fn(),
+        carregarPrevia: vi.fn().mockResolvedValue(null),
+      };
+      const { rerender } = render(<RenderizadorDeMarkdown {...props} aoAbrirNota={antigo} />);
+      rerender(<RenderizadorDeMarkdown {...props} aoAbrirNota={novo} />);
+
+      await usuario.click(screen.getByRole("link", { name: "Notas atômicas" }));
+
+      expect(novo).toHaveBeenCalledOnce();
+      expect(antigo).not.toHaveBeenCalled();
+    });
+  });
+
+  it("um link escrito à mão com porcentagem inválida não derruba a página", () => {
+    expect(() => montar("[estranho](#nota:%E0%A4%A)")).not.toThrow();
+    expect(screen.getByText("estranho")).toBeInTheDocument();
+  });
+
   describe("segurança", () => {
     it("um link comum para fora abre em outra aba, sem passar o controle da página", () => {
       montar("[o site](https://exemplo.com)");

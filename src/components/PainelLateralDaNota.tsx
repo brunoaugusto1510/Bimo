@@ -28,7 +28,7 @@ export default function PainelLateralDaNota(props: Props) {
   const resolvidas = props.saidas.filter((saida) => saida.tipo === "nota");
   const pendentes = props.saidas.filter((saida) => saida.tipo === "nao-resolvida");
   return (
-    <aside aria-label="Painel lateral" className="flex w-full flex-col gap-6 border-l border-borda bg-fundo p-4 text-controle md:max-w-80">
+    <aside aria-label="Painel lateral" className="flex w-full flex-col gap-6 border-t border-borda bg-fundo p-4 text-controle lg:border-t-0">
       <section aria-label="Sugestão do Bimo" className="rounded-bloco border border-borda bg-destaque-suave p-4">
         <h2 className="mb-2 flex items-center gap-2 text-controle font-semibold text-balance text-destaque-texto"><MarcaBimo tamanho={16} />Sugestão do Bimo</h2>
         {props.estado === "carregando" ? <BimoPensando texto="Buscando ligações…" /> : props.estado === "erro" ? <p>Não consegui carregar as ligações.</p> : props.sugestao ? <>

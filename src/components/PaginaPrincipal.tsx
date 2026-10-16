@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AlternadorDeTema from "@/components/AlternadorDeTema";
 import BarraDoGrafo from "@/components/BarraDoGrafo";
 import BarraLateral from "@/components/BarraLateral";
@@ -39,6 +39,9 @@ const OPCOES_DE_MODO = [
   { valor: "notas", rotulo: "Notas" },
 ] as const;
 
+/** Criar notas chega com a edição (Fase 8b); uma função só, para o texto da nota não remontar a cada render. */
+const NAO_CRIAR = () => {};
+
 export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
   const [modo, setModo] = useState<Modo>("bimo");
   // Nota selecionada no grafo da aba Gráfico — a que ganha o cartão de foco. É
@@ -75,13 +78,20 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
     setMenuAberto(false);
   }
 
-  /** Abrir uma nota leva ao modo Notas (a nota vive lá) e fecha o que estiver aberto por cima. */
-  function abrirNota(id: IdDeNota, opcoes: { novaAba: boolean } = { novaAba: false }) {
-    despachar({ tipo: "abrir-nota", id, novaAba: opcoes.novaAba });
-    setModo("notas");
-    setMenuAberto(false);
-    setPaletaAberta(false);
-  }
+  /**
+   * Abrir uma nota leva ao modo Notas (a nota vive lá) e fecha o que estiver aberto por cima.
+   * Estável (só usa setters e `despachar`): quem a recebe — o texto da nota, com todas as
+   * ligações — não pode remontar a cada render deste componente.
+   */
+  const abrirNota = useCallback(
+    (id: IdDeNota, opcoes: { novaAba: boolean } = { novaAba: false }) => {
+      despachar({ tipo: "abrir-nota", id, novaAba: opcoes.novaAba });
+      setModo("notas");
+      setMenuAberto(false);
+      setPaletaAberta(false);
+    },
+    [despachar],
+  );
 
   /** No Gráfico a barra lateral serve para achar a nota no grafo; nas demais abas e no modo Bimo, para abri-la. */
   function escolherNoMenu(id: IdDeNota) {
@@ -95,7 +105,11 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
   }
 
   function perguntarAoBimo(id: IdDeNota | null) {
-    setRascunho(id ? `O que eu anotei em "${notasPorId.get(id)?.titulo ?? "esta nota"}"?` : "");
+    // O que a pessoa já tinha digitado no chat é dela: a pergunta vai depois, nunca por cima.
+    if (id) {
+      const pergunta = `O que eu anotei em "${notasPorId.get(id)?.titulo ?? "esta nota"}"?`;
+      setRascunho((atual) => (atual.trim() === "" ? pergunta : `${atual}\n${pergunta}`));
+    }
     mudarModo("bimo");
   }
 
@@ -106,18 +120,27 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
       if (combinaAtalho(evento, "mod+o")) {
         evento.preventDefault();
         setPaletaAberta(true);
-      } else if (combinaAtalho(evento, "mod+g")) {
+        return;
+      }
+
+      // A paleta é um diálogo modal: enquanto está aberta, o resto da página não reage a atalhos.
+      if (paletaAberta) return;
+
+      if (combinaAtalho(evento, "mod+g")) {
         evento.preventDefault();
         despachar({ tipo: "ativar-aba", chave: ABA_DO_GRAFICO });
         setModo("notas");
+        // No celular o menu de notas cobre o conteúdo: sem fechá-lo o destino ficaria escondido.
+        setMenuAberto(false);
       } else if (combinaAtalho(evento, "mod+j")) {
         evento.preventDefault();
         setModo("bimo");
+        setMenuAberto(false);
       }
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
-  }, [despachar]);
+  }, [despachar, paletaAberta]);
 
   /**
    * Sair de verdade: a rota apaga o cookie e recarregamos a página inteira.
@@ -143,10 +166,11 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
             ☰
           </button>
 
-          <h1 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+          {/* A marca, não o título da página: o `h1` é o da nota aberta (ou o da tela inicial). */}
+          <p className="flex items-center gap-2 text-base font-semibold tracking-tight">
             <MarcaBimo tamanho={24} />
             <span className="sr-only md:not-sr-only">Bimo</span>
-          </h1>
+          </p>
         </div>
 
         <SeletorPill
@@ -190,7 +214,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
         </div>
 
         {/* min-w-0 impede que uma mensagem longa estique este painel e quebre o layout. */}
-        <div className={`${menuAberto ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
+        <main className={`${menuAberto ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
           <EspacoDeTrabalho
             ativo={emNotas}
             estado={estado}
@@ -199,7 +223,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
             conexoesPorNota={graus}
             totais={{ notas: notasPorId.size, conexoes: grafo.arestas.length }}
             aoAbrirNota={abrirNota}
-            aoCriarNota={() => {}}
+            aoCriarNota={NAO_CRIAR}
             aoPerguntarAoBimo={perguntarAoBimo}
             aoIrParaNota={() => setPaletaAberta(true)}
           >
@@ -256,7 +280,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
               </div>
             )}
           </EspacoDeTrabalho>
-        </div>
+        </main>
       </div>
 
       <PaletaIrParaNota
@@ -268,7 +292,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
         pastaDaCriacao={idDaNotaAberta ? (notasPorId.get(idDaNotaAberta)?.pasta ?? null) : null}
         aoFechar={() => setPaletaAberta(false)}
         aoAbrir={abrirNota}
-        aoCriar={() => {}}
+        aoCriar={NAO_CRIAR}
       />
     </div>
   );

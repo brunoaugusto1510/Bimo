@@ -653,9 +653,10 @@ export default function GrafoDeFundo({
     <div ref={containerRef} className="absolute inset-0 -z-0">
       <canvas
         ref={canvasRef}
-        role={interativo ? "img" : undefined}
-        aria-label={interativo ? "Grafo de notas conectadas" : undefined}
-        aria-hidden={interativo ? undefined : true}
+        role={interativo && !pausado ? "img" : undefined}
+        aria-label={interativo && !pausado ? "Grafo de notas conectadas" : undefined}
+        // Coberto por uma nota aberta, o grafo não existe para leitor de tela: só a nota está ali.
+        aria-hidden={interativo && !pausado ? undefined : true}
         // `touch-none`: sem isso o navegador roubaria o arrasto e a pinça para rolar/dar zoom na página.
         className={`h-full w-full ${interativo ? "cursor-grab touch-none" : "cursor-pointer"}`}
       />

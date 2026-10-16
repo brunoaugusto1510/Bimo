@@ -68,26 +68,32 @@ export default function EspacoDeTrabalho({
     [estado.recentes, notas, conexoesPorNota],
   );
 
-  if (!ativo) {
-    return <div className="relative min-h-0 flex-1">{children}</div>;
-  }
-
+  // Uma árvore só, nos dois modos. Se o modo Bimo devolvesse outra estrutura, o React veria
+  // `children` em outro lugar, desmontaria e montaria de novo o chat e o grafo — e a conversa
+  // e o layout da simulação se perderiam a cada ida e volta. Por isso tudo que é do modo
+  // Notas entra com `{ativo && ...}`: o `false` ocupa o lugar e as posições não mudam.
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <BarraDeAbas
-        abas={abas}
-        ativa={estado.ativa}
-        aoAtivar={(chave) => despachar({ tipo: "ativar-aba", chave })}
-        aoFechar={(chave) => despachar({ tipo: "fechar-aba", chave })}
-        aoNovaAba={() => despachar({ tipo: "nova-aba-vazia" })}
-      />
+      {ativo && (
+        <BarraDeAbas
+          abas={abas}
+          ativa={estado.ativa}
+          aoAtivar={(chave) => despachar({ tipo: "ativar-aba", chave })}
+          aoFechar={(chave) => despachar({ tipo: "fechar-aba", chave })}
+          aoNovaAba={() => despachar({ tipo: "nova-aba-vazia" })}
+        />
+      )}
 
-      <div className="relative min-h-0 flex-1">
+      {/* O painel da aba ativa: o id e o rótulo seguem a aba, como o padrão de abas da WAI-ARIA pede. */}
+      <div
+        className="relative min-h-0 flex-1"
+        {...(ativo ? { role: "tabpanel", id: `painel-${estado.ativa}`, "aria-labelledby": `aba-${estado.ativa}` } : {})}
+      >
         {children}
 
-        {aba?.tipo === "nota" && (
+        {ativo && aba?.tipo === "nota" && (
           <AbaDeNota
-            key={`${aba.chave}:${idAtual(aba)}`}
+            key={aba.chave}
             aba={aba}
             notas={notas}
             aoVoltar={() => despachar({ tipo: "voltar" })}
@@ -99,7 +105,7 @@ export default function EspacoDeTrabalho({
           />
         )}
 
-        {aba?.tipo === "vazia" && (
+        {ativo && aba?.tipo === "vazia" && (
           <div className="absolute inset-0 z-10 overflow-auto bg-painel motion-safe:animate-entrada">
             <TelaInicial
               recentes={recentes}
@@ -116,7 +122,7 @@ export default function EspacoDeTrabalho({
       </div>
 
       {/* A aba de nota tem a barra de status dela (palavras, caracteres); o gráfico e a tela inicial mostram os totais. */}
-      {aba?.tipo !== "nota" && (
+      {ativo && aba?.tipo !== "nota" && (
         <BarraDeStatus
           itens={[
             `${formatar(totais.notas)} ${totais.notas === 1 ? "nota" : "notas"}`,
