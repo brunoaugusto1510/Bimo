@@ -1,0 +1,49 @@
+﻿"use client";
+
+import { useRef } from "react";
+
+type Props = {
+  abas: { chave: string; titulo: string }[];
+  ativa: string;
+  aoAtivar(chave: string): void;
+  aoFechar(chave: string): void;
+  aoNovaAba(): void;
+};
+
+const interacao = "transition-[color,background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]";
+
+export default function BarraDeAbas({ abas, ativa, aoAtivar, aoFechar, aoNovaAba }: Props) {
+  const botoes = useRef(new Map<string, HTMLButtonElement>());
+  const todas = [{ chave: "grafico", titulo: "Gráfico" }, ...abas.filter((aba) => aba.chave !== "grafico")];
+
+  function mover(indice: number) {
+    const aba = todas[(indice + todas.length) % todas.length];
+    aoAtivar(aba.chave);
+    botoes.current.get(aba.chave)?.focus();
+  }
+
+  return (
+    <div role="tablist" aria-label="Abas abertas" className="flex items-end gap-0.5 overflow-x-auto border-b border-borda bg-painel-alt px-2 pt-2 text-controle">
+      {todas.map((aba, indice) => (
+        <div key={aba.chave} onAuxClick={(evento) => {
+          if (evento.button === 1 && aba.chave !== "grafico") {
+            evento.preventDefault();
+            aoFechar(aba.chave);
+          }
+        }} className={`flex shrink-0 items-center rounded-t-bloco border ${ativa === aba.chave ? "-mb-px border-b-painel border-x-borda border-t-borda bg-painel font-semibold" : "border-transparent text-suave"}`}>
+          <button type="button" role="tab" aria-selected={ativa === aba.chave} aria-controls={`painel-${aba.chave}`} id={`aba-${aba.chave}`} tabIndex={ativa === aba.chave ? 0 : -1}
+            ref={(elemento) => { if (elemento) botoes.current.set(aba.chave, elemento); else botoes.current.delete(aba.chave); }}
+            onClick={() => aoAtivar(aba.chave)} onKeyDown={(evento) => {
+              const movimentos: Record<string, number> = { ArrowLeft: indice - 1, ArrowRight: indice + 1, Home: 0, End: todas.length - 1 };
+              if (evento.key in movimentos) { evento.preventDefault(); mover(movimentos[evento.key]); }
+              if (evento.key === "Delete" && aba.chave !== "grafico") { evento.preventDefault(); aoFechar(aba.chave); }
+            }} className={`h-10 max-w-[200px] truncate rounded-t-bloco px-3 ${interacao}`}>
+            {aba.chave === "grafico" && <span aria-hidden="true" className="mr-2">◈</span>}{aba.titulo}
+          </button>
+          {aba.chave !== "grafico" && <button type="button" aria-label={`Fechar ${aba.titulo}`} onClick={() => aoFechar(aba.chave)} className={`h-10 w-10 shrink-0 rounded-full text-suave ${interacao}`}><span aria-hidden="true">✕</span></button>}
+        </div>
+      ))}
+      <button type="button" aria-label="Nova aba" title="Nova aba" onClick={aoNovaAba} className={`h-10 w-10 shrink-0 rounded-full text-suave ${interacao}`}>+</button>
+    </div>
+  );
+}
