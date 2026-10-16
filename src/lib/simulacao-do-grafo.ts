@@ -90,6 +90,8 @@ type Parametros = {
   /** Injetável para os testes não dependerem de `Math.random`. */
   aleatorio?: () => number;
   passos?: number;
+  /** Refresh de dados preserva o layout dos ids que continuam no grafo. */
+  posicoes?: ReadonlyMap<string, Pick<NoSimulado, "x" | "y" | "vx" | "vy">>;
 };
 
 export function criarSimulacaoDoGrafo({
@@ -99,6 +101,7 @@ export function criarSimulacaoDoGrafo({
   graus,
   aleatorio = Math.random,
   passos = PASSOS_DE_ACOMODACAO,
+  posicoes,
 }: Parametros): SimulacaoDoGrafo {
   const forcas = converterParaForcas(configuracao);
   const grau = (id: string) => graus.get(id) ?? 0;
@@ -109,12 +112,13 @@ export function criarSimulacaoDoGrafo({
   const nosSimulados: NoSimulado[] = nos.map((no) => {
     const angulo = aleatorio() * Math.PI * 2;
     const distancia = Math.sqrt(aleatorio()) * raioInicial;
+    const anterior = posicoes?.get(no.id);
     return {
       ...no,
-      x: Math.cos(angulo) * distancia,
-      y: Math.sin(angulo) * distancia,
-      vx: 0,
-      vy: 0,
+      x: anterior?.x ?? Math.cos(angulo) * distancia,
+      y: anterior?.y ?? Math.sin(angulo) * distancia,
+      vx: anterior?.vx ?? 0,
+      vy: anterior?.vy ?? 0,
     };
   });
   const porId = new Map(nosSimulados.map((n) => [n.id, n]));

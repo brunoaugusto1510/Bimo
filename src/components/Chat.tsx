@@ -105,6 +105,11 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
         },
       ]);
       onRespostaAgente?.();
+      for (const ferramenta of (dados.ferramentas ?? []) as NonNullable<TipoMensagem["ferramentas"]>) {
+        if (!ferramenta.erro && ferramenta.notaId && ["criar_nota", "editar_nota"].includes(ferramenta.nome)) {
+          window.dispatchEvent(new CustomEvent("bimo:nota-alterada-pelo-agente", { detail: { id: ferramenta.notaId } }));
+        }
+      }
     } catch (falha) {
       setErro(
         falha instanceof Error

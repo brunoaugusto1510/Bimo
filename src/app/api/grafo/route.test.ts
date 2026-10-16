@@ -21,6 +21,12 @@ afterEach(() => {
 });
 
 describe("GET /api/grafo", () => {
+  it("entrega árvore e grafo juntos para atualização sem navegação, sob sessão", async () => {
+    const res = await GET(pedido("/api/grafo?comArvore=1"));
+    const dados = await res.json(); expect(dados.itens).toHaveLength(2); expect(dados.grafo.nos).toHaveLength(2);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect((await GET(pedido("/api/grafo?comArvore=1", { autenticado: false }))).status).toBe(401);
+  });
   it("devolve nós e arestas pelo id das notas, mais a configuração do grafo", async () => {
     const res = await GET(pedido("/api/grafo"));
 

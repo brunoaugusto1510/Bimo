@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { contarPalavras, extrairTitulos } from "@/lib/markdown-da-nota";
 import { criarResolvedor } from "@/lib/ligacoes";
 import { idAtual, type AbaDeNota as EstadoDaAbaDeNota } from "@/lib/espaco-de-trabalho/estado";
@@ -11,8 +11,13 @@ import BarraDeNavegacao from "./BarraDeNavegacao";
 import BarraDeStatus from "./BarraDeStatus";
 import PainelLateralDaNota from "./PainelLateralDaNota";
 import VisaoDaNota from "./VisaoDaNota";
+import EditorDeNota from "./EditorDeNota";
+import ControlesDaEdicao from "./ControlesDaEdicao";
+import { useEdicaoDeNota } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
 
 type Props = {
+  ativa?: boolean;
+  aoMudarPendencia?: (id: IdDeNota, pendente: boolean) => void;
   aba: EstadoDaAbaDeNota;
   /** Todas as notas, por id: dão o título e a pasta enquanto a nota ainda carrega. */
   notas: ReadonlyMap<IdDeNota, NotaParaArvore>;
@@ -47,12 +52,53 @@ export default function AbaDeNota({
   aoAbrirNota,
   aoCriarNota,
   aoPerguntarAoBimo,
+  ativa = true,
+  aoMudarPendencia,
 }: Props) {
   const id = idAtual(aba);
-  const nota = useNota(id);
-  const ligacoes = useLigacoes(id);
+  const pendenciaAtual = useRef(false);
+  const nota = useNota(id, ativa, () => !pendenciaAtual.current);
+  const ligacoes = useLigacoes(ativa ? id : null);
+  const recarregarNota = nota.recarregar;
+  const recarregarLigacoes = ligacoes.recarregar;
+  const timerLigacoes = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const ultimoConjunto = useRef<string | undefined>(undefined);
+  const conjunto = (texto: string) => JSON.stringify([...new Set(texto.match(/\[\[[^\]]+\]\]/g) ?? [])].sort());
+  const edicao = useEdicaoDeNota(id, nota.dados, ativa && aba.modo === "edicao", (salva, checkpoint) => {
+    const novo = conjunto(salva.conteudo);
+    const anterior = ultimoConjunto.current ?? conjunto(nota.dados?.nota.conteudo ?? "");
+    ultimoConjunto.current = novo;
+    if (ativa && (checkpoint || novo !== anterior)) {
+      clearTimeout(timerLigacoes.current);
+      timerLigacoes.current = setTimeout(ligacoes.recarregar, 600);
+    }
+  });
+  useEffect(() => { pendenciaAtual.current = edicao.pendente; }, [edicao.pendente]);
+  useEffect(() => { ultimoConjunto.current = undefined; return () => clearTimeout(timerLigacoes.current); }, [id, ativa]);
+  useEffect(() => {
+    function aoAgente(evento: Event) {
+      if (ativa && !pendenciaAtual.current && (evento as CustomEvent<{ id: string }>).detail.id === id) { recarregarNota(); recarregarLigacoes(); }
+    }
+    window.addEventListener("bimo:nota-alterada-pelo-agente", aoAgente);
+    return () => window.removeEventListener("bimo:nota-alterada-pelo-agente", aoAgente);
+  }, [ativa, id, recarregarNota, recarregarLigacoes]);
+  const idRecuperacao = useId();
+  const [focarAoEntrar, definirFocarAoEntrar] = useState(false);
+  const [anuncioManual, definirAnuncioManual] = useState(0);
+  useEffect(() => { const timer = setTimeout(() => definirFocarAoEntrar(false), 0); return () => clearTimeout(timer); }, [ativa, aba.modo, id]);
+  async function salvarAgora() { await edicao.forcar({ checkpoint: true }); definirAnuncioManual((n) => n + 1); }
+  useEffect(() => { aoMudarPendencia?.(id, edicao.pendente); }, [id, edicao.pendente, aoMudarPendencia]);
   const artigo = useRef<HTMLElement>(null);
   const rolagem = useRef<HTMLDivElement>(null);
+  const moldura = useRef<HTMLDivElement>(null);
+  const navegacao = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const ajustar = () => moldura.current?.style.setProperty("--altura-navegacao", `${navegacao.current?.offsetHeight ?? 56}px`);
+    ajustar();
+    const observador = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(ajustar);
+    if (navegacao.current) observador?.observe(navegacao.current);
+    return () => observador?.disconnect();
+  }, []);
 
   // O que foi "descartado" na sugestão do Bimo vale só para a nota em que foi descartado.
   const [descartes, setDescartes] = useState<{ id: IdDeNota; ids: ReadonlySet<IdDeNota> }>({ id, ids: SEM_DESCARTES });
@@ -65,7 +111,7 @@ export default function AbaDeNota({
   const pasta = nota.dados?.nota.pasta ?? resumo?.pasta ?? null;
   const carregada = nota.dados !== undefined;
 
-  const conteudo = nota.dados?.nota.conteudo ?? "";
+  const conteudo = edicao.texto;
   const estrutura = useMemo(() => extrairTitulos(conteudo), [conteudo]);
   const entradas = ligacoes.dados?.ligacoes.entrada ?? [];
   const saidas = ligacoes.dados?.ligacoes.saida ?? [];
@@ -80,13 +126,13 @@ export default function AbaDeNota({
 
   // A aba do navegador acompanha a nota aberta.
   useEffect(() => {
-    if (!carregada) return;
+    if (!carregada || !ativa) return;
     const anterior = document.title;
     document.title = `${titulo} · Bimo`;
     return () => {
       document.title = anterior;
     };
-  }, [carregada, titulo]);
+  }, [carregada, titulo, ativa]);
 
   // Outra nota na mesma aba começa lida do topo.
   useEffect(() => {
@@ -101,6 +147,11 @@ export default function AbaDeNota({
   }, [aviso]);
 
   function irParaLinha(linha: number) {
+    const editor = artigo.current?.querySelector<HTMLTextAreaElement>("textarea");
+    if (editor) {
+      const inicio = conteudo.split("\n").slice(0, linha - 1).join("\n").length + (linha > 1 ? 1 : 0);
+      editor.focus(); editor.setSelectionRange(inicio, inicio); return;
+    }
     const titulo = artigo.current?.querySelector<HTMLElement>(`[data-linha="${linha}"]`);
     if (!titulo) return;
     titulo.scrollIntoView?.({ block: "start" });
@@ -122,7 +173,7 @@ export default function AbaDeNota({
   }
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-painel motion-safe:animate-entrada">
+    <div ref={moldura} className="absolute inset-0 z-10 flex flex-col bg-painel motion-safe:animate-entrada">
       {/* Uma região de status para leitor de tela: sem ela, trocar de nota na mesma aba não é anunciado. */}
       <p role="status" className="sr-only">
         {carregada ? `Nota aberta: ${titulo}` : ""}
@@ -134,18 +185,17 @@ export default function AbaDeNota({
         estrutura) vem depois da nota, em vez de sumir.
       */}
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="sticky top-0 z-10 bg-painel lg:static">
+        <div ref={navegacao} className="sticky top-0 z-10 bg-painel lg:static">
           <BarraDeNavegacao
             pasta={pasta}
             titulo={titulo}
             podeVoltar={aba.historico.indice > 0}
             podeAvancar={aba.historico.indice < aba.historico.pilha.length - 1}
             modo={aba.modo}
-            // A edição chega com o salvamento automático (Fase 8a); até lá, só leitura.
-            edicaoDisponivel={false}
+            edicaoDisponivel={escrita}
             aoVoltar={aoVoltar}
             aoAvancar={aoAvancar}
-            aoAlternarModo={aoAlternarModo}
+            aoAlternarModo={() => { definirFocarAoEntrar(aba.modo === "leitura"); aoAlternarModo(); }}
             aoCopiarLigacao={copiarLigacao}
             aoAbrirEmNovaAba={() => aoAbrirNota(id, { novaAba: true })}
             aoPerguntarAoBimo={() => aoPerguntarAoBimo(id)}
@@ -190,16 +240,26 @@ export default function AbaDeNota({
             </div>
           )}
 
+          <ControlesDaEdicao conflito={edicao.estado === "conflito"} recuperado={edicao.rascunhoRecuperado}
+            recusado={edicao.estado === "recusado"} mensagem={edicao.mensagem} idAviso={idRecuperacao} ativo={ativa}
+            editando={ativa && escrita && aba.modo === "edicao"} salvar={salvarAgora}
+            resolver={edicao.resolverConflito} aoResolver={() => {
+              const alvo = rolagem.current?.querySelector<HTMLElement>("textarea") ?? rolagem.current?.querySelector<HTMLElement>("h1") ?? rolagem.current;
+              alvo?.focus({ preventScroll: true });
+            }} />
+          {edicao.avisoLocal && <p role="alert" className="px-5 py-3 text-texto">{edicao.avisoLocal}</p>}
           {nota.dados && (
             <VisaoDaNota
               ref={artigo}
-              nota={nota.dados.nota}
+              nota={{ ...(edicao.nota ?? nota.dados.nota), conteudo }}
               conexoes={conexoes}
               resolver={resolver}
               podeCriar={false}
               aoAbrirNota={aoAbrirNota}
               aoCriarNota={aoCriarNota}
-            />
+            >
+              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
+            </VisaoDaNota>
           )}
         </div>
 
@@ -224,11 +284,12 @@ export default function AbaDeNota({
       </div>
 
       <BarraDeStatus
+        estado={escrita ? edicao.estado : undefined} anuncioManual={anuncioManual}
         itens={[
           ...(conexoes === null ? [] : [`${formatar(conexoes)} ${conexoes === 1 ? "conexão" : "conexões"}`]),
           ...(carregada ? [`${formatar(contarPalavras(conteudo))} palavras`, `${formatar(conteudo.length)} caracteres`] : []),
         ]}
-        mensagem={aviso ?? (escrita ? undefined : "Somente leitura")}
+        mensagem={(escrita && ["erro", "conflito", "recusado"].includes(edicao.estado) ? null : aviso) ?? (escrita ? ({ salvo: "Salvo", pendente: "Alterações ainda não salvas", salvando: "Salvando…", erro: "Não foi possível salvar. Tentando de novo…", conflito: "Conflito: salvamento pausado. Escolha uma opção no aviso acima da nota.", recusado: edicao.mensagem ?? "Não foi possível salvar. Suas alterações estão preservadas." })[edicao.estado] : "Somente leitura")}
       />
     </div>
   );

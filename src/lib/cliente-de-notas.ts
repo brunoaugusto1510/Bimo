@@ -7,7 +7,38 @@
 
 import type { LigacoesDaNota } from "./servico-de-notas";
 import { criarPrevia } from "./previa-de-nota";
-import type { CapacidadesDoRepositorio, IdDeNota, NotaCompleta, ResultadoDeBusca } from "./repositorio-de-notas/tipos";
+import type { CapacidadesDoRepositorio, IdDeNota, NotaCompleta, ResultadoDeBusca, MudancasDeNota } from "./repositorio-de-notas/tipos";
+
+export type ResultadoDoSalvamento =
+  | { tipo: "ok"; nota: NotaCompleta }
+  | { tipo: "conflito"; atual: NotaCompleta }
+  | { tipo: "titulo-em-uso" | "nao-encontrada" | "somente-leitura" | "grande-demais" };
+
+export async function salvarNota(
+  id: IdDeNota,
+  mudancas: MudancasDeNota,
+  opcoes: { revisaoBase: number; checkpoint?: boolean },
+  transporte: { sinal?: AbortSignal; keepalive?: boolean } = {},
+): Promise<ResultadoDoSalvamento> {
+  let resposta: Response;
+  try {
+    resposta = await fetch(`/api/notas/${encodeURIComponent(id)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...mudancas, ...opcoes }), signal: transporte.sinal ?? AbortSignal.timeout(20000), keepalive: transporte.keepalive,
+    });
+  } catch (erro) {
+    if (erro instanceof DOMException && erro.name === "AbortError") throw erro;
+    throw new ErroDoCliente("Não consegui falar com o servidor.");
+  }
+  const corpo = await resposta.json().catch(() => null);
+  if (resposta.ok && corpo?.nota) { esquecerPrevias(); return { tipo: "ok", nota: corpo.nota }; }
+  if (resposta.status === 409 && corpo?.tipo === "conflito" && corpo.atual) return { tipo: "conflito", atual: corpo.atual };
+  if (resposta.status === 409 && corpo?.tipo === "titulo-em-uso") return { tipo: "titulo-em-uso" };
+  if (resposta.status === 404) return { tipo: "nao-encontrada" };
+  if (resposta.status === 413) return { tipo: "grande-demais" };
+  if (resposta.status === 403 && corpo?.tipo === "somente-leitura") return { tipo: "somente-leitura" };
+  throw new ErroDoCliente("Não foi possível salvar. Tente de novo.", resposta.status);
+}
 
 export type RespostaDeNota = { nota: NotaCompleta; capacidades: CapacidadesDoRepositorio };
 

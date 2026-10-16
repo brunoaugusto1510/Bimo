@@ -57,8 +57,8 @@ the README mentioning one — check with the user before assuming its shape):
   (`npm run gerar-segredo`)
 - `VAULT_BRANCH` — optional, defaults to `main`
 - `VAULT_SUBPATH` — optional, subfolder inside the repo where notes live
-- `NOTAS_FONTE` — optional, where the notes come from: `github` (default; the new UI is
-  read-only), `memoria` (sample notes in server memory, dev/tests only — refused in
+- `NOTAS_FONTE` — optional, where the notes come from: `github` (default; read-only),
+  `memoria` (sample notes in server memory, dev/tests only — refused in
   production) or `banco` (Postgres via Drizzle: needs `DATABASE_URL` + `USER_ID_PADRAO`;
   supports reads, writes and version history). See `src/lib/repositorio-de-notas/config.ts`.
 
@@ -153,6 +153,61 @@ read because it needs *every* note, hundreds of downloads on the GitHub source),
 `GET /api/notas/busca?q=` and `GET /api/grafo`. Shared bits live in `http-de-notas.ts`.
 Next 16 doesn't allow `[id]` and `[...caminho]` as siblings, which is why the old
 catch-all read route is gone.
+
+### Edição e salvamento automático (Fase 8a)
+
+`AbaDeNota` habilita Edição pela `capacidades.escrita` da resposta da nota.
+`EditorDeNota` é um textarea de Markdown; título, pasta e tags continuam somente
+leitura. `useEdicaoDeNota` mantém texto e revisão confirmada separados, inclusive
+ao alternar para Leitura. Abas de notas inativas ficam montadas e ocultas;
+Desativar ou sair da edição força checkpoint sem bloquear a UI. Ao desmontar,
+a instância descarrega o rascunho, solicita checkpoint e ignora respostas tardias; não apaga cópias de
+uma instância nova. O fechamento definitivo avisa se há trabalho pendente.
+
+`edicao/salvamento-automatico.ts` serializa PATCHs, com debounce de 3 s e teto de
+30 s, encadeando a revisão devolvida pelo servidor. Texto digitado durante um voo
+reagenda o próximo envio com o restante do teto de 30 s, limitado a 3 s; só
+forçar/checkpoint pendente permite envio imediato. Rede/5xx/timeout de 20 s usam
+recuo de 5/15/30 s, mantido inclusive em aba oculta. Ctrl/Cmd+S fecha a sessão com
+checkpoint, inclusive depois de um autosave sem texto novo. Um 409 cujo conteúdo
+atual é igual ao enviado é confirmação de resposta perdida: adota a revisão,
+preserva texto mais novo e não abre conflito. Conflitos reais suspendem escrita
+até escolha explícita: manter (substitui a salva), usar a salva (descarta a local)
+ou copiar. Copiar só copia e mantém o conflito; sucesso e falha são anunciados.
+413 é recusa sem repetição automática, com saída para copiar ou tentar de novo.
+
+`edicao/rascunho-local.ts` guarda `bimo_rascunho:<id>` a cada 500 ms e descarrega
+a cópia ao sair. O storage é não confiável: JSON, tipos, revisão e data são
+validados; um rascunho grande ou multibyte nunca é apagado por exceder o limite
+do servidor. Cada rascunho tem token de instância; uma confirmação só remove a
+cópia que lhe pertence (ou a cópia recuperada ainda idêntica). O evento storage
+avisa sobre outra janela; indisponibilidade/cota cheia gera aviso para copiar o texto.
+Uma cópia diferente com a mesma revisão oferece Restaurar/Descartar; uma revisão
+divergente abre conflito. Só confirmar o mesmo texto apaga a cópia.
+
+`visibilitychange` hidden e `pagehide` tentam checkpoint com `keepalive` pela mesma
+fila, só se não há pedido em voo e o JSON completo em UTF-8 cabe em 64 KiB.
+Acima disso, ou durante um voo existente, a cópia local é a proteção; há aviso
+`beforeunload` enquanto houver trabalho não salvo. Keepalive não garante entrega.
+
+Ligações só são buscadas para a aba ativa, mantendo os dados anteriores durante
+recarga (stale-while-revalidate). Salvamentos as recarregam com debounce de 600 ms
+somente em checkpoint ou quando muda o conjunto de wikilinks. Ativar uma aba sem
+pendência revalida sua nota; escrita do chat com notaId revalida a ativa e atualiza
+árvore/grafo. Revisão maior só é adotada automaticamente sem texto pendente.
+
+`AtualizadorDasNotas` vive dentro de `PaginaPrincipal` e consulta
+`GET /api/grafo?comArvore=1`, sob exigirSessao, a cada 10 s no máximo. Mescla os
+dados pelo estado cliente; falha mantém a árvore inteira e mostra aviso. Não usa
+router.refresh(): falhar uma atualização nunca desmonta chat, abas ou editor.
+O grafo reaproveita somente x/y/vx/vy, mantendo título/grupo novos e acomodando
+nós adicionados. Câmera e conversa permanecem montadas.
+
+O editor normaliza CRLF para LF na entrada, limita novas entradas a 1.000.000
+caracteres e foca somente na ação Leitura→Edição. Recuperação tem descrição,
+aria-readonly e foco em Restaurar rascunho. Anúncios persistentes não narram cada
+estado transitório: Salvo espera 1,5 s (imediato no atalho), erros são alertas
+persistentes sem repetição, e a barra de status permite quebra de linha.
 
 ### Notes layer (`src/lib/`)
 

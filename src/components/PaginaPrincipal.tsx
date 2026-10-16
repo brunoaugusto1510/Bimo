@@ -1,4 +1,5 @@
 "use client";
+import AtualizadorDasNotas from "./AtualizadorDasNotas";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AlternadorDeTema from "@/components/AlternadorDeTema";
@@ -42,7 +43,9 @@ const OPCOES_DE_MODO = [
 /** Criar notas chega com a edição (Fase 8b); uma função só, para o texto da nota não remontar a cada render. */
 const NAO_CRIAR = () => {};
 
-export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
+export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial }: Props) {
+  const [atualizacao, definirAtualizacao] = useState<{ origem: Props["itens"]; dados: import("@/lib/servico-de-notas").DadosDaPagina } | null>(null);
+  const { itens, grafo, aviso } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial };
   const [modo, setModo] = useState<Modo>("bimo");
   // Nota selecionada no grafo da aba Gráfico — a que ganha o cartão de foco. É
   // separada da aberta: selecionar é "olhar", abrir é "ler".
@@ -196,6 +199,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
         </div>
       </header>
 
+      <AtualizadorDasNotas aoAtualizar={(dados) => definirAtualizacao({ origem: itensIniciais, dados })} />
       {(aviso || grafo.aviso) && (
         <p className="shrink-0 border-b border-destaque-suave-borda bg-destaque-suave px-4 py-1.5 text-center text-xs text-destaque-texto">
           {aviso ?? grafo.aviso}

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PaginaPrincipal from "./PaginaPrincipal";
@@ -87,6 +87,16 @@ function renderizar() {
   render(<PaginaPrincipal itens={ITENS} grafo={GRAFO} />);
   return userEvent.setup();
 }
+it("falha na atualização por API conserva conversa e grafo montados", async () => {
+  const usuario = renderizar();
+  await usuario.type(campoDoChat(), "Pergunta persistente"); await usuario.click(screen.getByRole("button", { name: "Enviar" }));
+  await screen.findByText("Pergunta persistente");
+  const conversa = screen.getByText("Pergunta persistente"); const grafo = screen.getByTestId("grafo");
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("rede")));
+  await act(async () => { window.dispatchEvent(new Event("bimo:nota-salva")); });
+  expect(screen.getByText("Pergunta persistente")).toBe(conversa); expect(screen.getByTestId("grafo")).toBe(grafo);
+  expect(await screen.findByText(/Os dados anteriores continuam na tela/)).toBeInTheDocument();
+});
 
 const abaNotas = () => screen.getByRole("button", { name: "Notas" });
 const abaBimo = () => screen.getByRole("button", { name: "Bimo" });
@@ -123,6 +133,15 @@ beforeEach(() => {
 });
 
 describe("PaginaPrincipal — seletor Bimo | Notas", () => {
+  it("mesclar novos dados do servidor preserva o chat e a instância do grafo", async () => {
+    const usuario = userEvent.setup();
+    const { rerender } = render(<PaginaPrincipal itens={ITENS} grafo={GRAFO} />);
+    const campo = campoDoChat(); const grafo = screen.getByTestId("grafo");
+    await usuario.type(campo, "conversa preservada");
+    rerender(<PaginaPrincipal itens={[...ITENS]} grafo={{ ...GRAFO, nos: [...GRAFO.nos], arestas: [...GRAFO.arestas] }} />);
+    expect(campoDoChat()).toBe(campo); expect(campoDoChat()).toHaveValue("conversa preservada");
+    expect(screen.getByTestId("grafo")).toBe(grafo);
+  });
   it("começa na aba Bimo: chat à mostra, grafo só de fundo e sem barra do grafo", () => {
     renderizar();
 

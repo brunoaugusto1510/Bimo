@@ -13,7 +13,9 @@ export async function GET(request: Request) {
 
   try {
     const repositorio = await obterRepositorio();
-    const { grafo, aviso } = await obterDadosDaPagina(repositorio);
+    const dados = await obterDadosDaPagina(repositorio);
+    if (new URL(request.url).searchParams.get("comArvore") === "1") return Response.json(dados, { headers: { "Cache-Control": "no-store" } });
+    const { grafo, aviso } = dados;
     return Response.json({ ...grafo, aviso });
   } catch (erro) {
     return tratarErroDeRepositorio(erro, "GET /api/grafo");

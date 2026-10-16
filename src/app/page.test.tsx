@@ -5,6 +5,7 @@ import { ErroDeConfiguracao } from "@/lib/repositorio-de-notas/config";
 import type { DadosDaPagina } from "@/lib/servico-de-notas";
 
 vi.mock("@/lib/repositorio-de-notas", () => ({ obterRepositorio: vi.fn() }));
+vi.mock("@/components/AtualizadorDasNotas", () => ({ default: () => null }));
 vi.mock("@/lib/servico-de-notas", () => ({ obterDadosDaPagina: vi.fn() }));
 /** O grafo desenha num canvas, que o jsdom não tem: a página só precisa saber o que repassa a ele. */
 vi.mock("@/components/PaginaPrincipal", () => ({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { buscarLigacoes, buscarNota, ErroDoCliente, type RespostaDeNota } from "../cliente-de-notas";
 import type { LigacoesDaNota } from "../servico-de-notas";
 import type { IdDeNota } from "../types";
@@ -21,43 +21,46 @@ export type PedidoDeNota<T> = {
  * quando o `id` troca (ou o componente sai) e ignora uma resposta que chega depois de
  * já não ser a da nota atual. `recarregar` refaz o pedido depois de uma falha.
  */
-function usePedido<T>(id: IdDeNota | null, buscar: (id: IdDeNota, sinal: AbortSignal) => Promise<T>): PedidoDeNota<T> {
+function usePedido<T>(id: IdDeNota | null, buscar: (id: IdDeNota, sinal: AbortSignal) => Promise<T>, habilitado = true, podeRevalidar?: () => boolean): PedidoDeNota<T> {
   const [tentativa, setTentativa] = useState(0);
-  const [resultado, setResultado] = useState<Resultado<T> | null>(null);
+  const [resultados, setResultados] = useState<ReadonlyMap<string, Resultado<T>>>(new Map());
+  const permissao = useRef(podeRevalidar);
+  const cache = useRef(resultados);
+  useEffect(() => { permissao.current = podeRevalidar; cache.current = resultados; }, [podeRevalidar, resultados]);
   const chave = `${id}:${tentativa}`;
 
   useEffect(() => {
-    if (id === null) return;
+    if (id === null || !habilitado || (cache.current.get(id)?.tipo === "pronto" && permissao.current?.() === false)) return;
 
     const controle = new AbortController();
     // Um pedido cancelado pode terminar mesmo assim (nem todo `fetch` obedece na hora): o que ele
     // trouxer é de uma nota que já não está na tela e não pode sobrescrever o resultado da atual.
     buscar(id, controle.signal)
       .then((dados) => {
-        if (!controle.signal.aborted) setResultado({ chave, tipo: "pronto", dados });
+        if (!controle.signal.aborted) setResultados((anteriores) => new Map(anteriores).set(id, { chave, tipo: "pronto", dados }));
       })
       .catch((erro: unknown) => {
         if (controle.signal.aborted || (erro instanceof DOMException && erro.name === "AbortError")) return;
         const mensagem = erro instanceof Error ? erro.message : "Não consegui carregar.";
-        setResultado({ chave, tipo: "erro", mensagem, status: erro instanceof ErroDoCliente ? erro.status : undefined });
+        setResultados((anteriores) => anteriores.get(id)?.tipo === "pronto" ? anteriores : new Map(anteriores).set(id, { chave, tipo: "erro", mensagem, status: erro instanceof ErroDoCliente ? erro.status : undefined }));
       });
 
     return () => controle.abort();
     // `buscar` é sempre uma função de módulo, estável: recriá-la não deve refazer o pedido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, tentativa]);
+  }, [id, tentativa, habilitado]);
 
   const recarregar = useCallback(() => setTentativa((n) => n + 1), []);
 
   // Só vale o resultado desta nota e desta tentativa; qualquer outro é de um pedido que já passou.
-  const atual = resultado?.chave === chave ? resultado : null;
+  const atual = resultados.get(id ?? "");
   if (atual?.tipo === "pronto") return { estado: "pronto", dados: atual.dados, recarregar };
-  if (atual?.tipo === "erro") return { estado: "erro", mensagem: atual.mensagem, status: atual.status, recarregar };
+  if (atual?.tipo === "erro" && atual.chave === chave) return { estado: "erro", mensagem: atual.mensagem, status: atual.status, recarregar };
   return { estado: "carregando", recarregar };
 }
 
-export function useNota(id: IdDeNota | null): PedidoDeNota<RespostaDeNota> {
-  return usePedido(id, buscarNota);
+export function useNota(id: IdDeNota | null, ativa = true, podeRevalidar?: () => boolean): PedidoDeNota<RespostaDeNota> {
+  return usePedido(id, buscarNota, ativa, podeRevalidar);
 }
 
 export function useLigacoes(id: IdDeNota | null): PedidoDeNota<LigacoesDaNota> {

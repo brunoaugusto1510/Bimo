@@ -16,6 +16,19 @@ const ARESTAS: ArestaDoGrafo[] = [
   { de: "A.md", para: "tag:x" },
 ];
 
+it("preserva posições anteriores ao receber novos dados do servidor", () => {
+  const resultado = criarSimulacaoDoGrafo({ nos: NOS, arestas: ARESTAS, configuracao: CONFIGURACAO_PADRAO, graus: calcularGraus(ARESTAS), passos: 0,
+    posicoes: new Map([["A.md", { x: 123, y: -40, vx: 0, vy: 0 }]]) });
+  expect(resultado.nos.find((n) => n.id === "A.md")).toMatchObject({ x: 123, y: -40 });
+  resultado.simulacao.stop();
+});
+it("posição anterior nunca substitui título, grupo ou fixa o nó novo", () => {
+  const anterior = { ...NOS[0], titulo: "Velho", grupo: "Antigo", fx: 8, fy: 9, x: 12, y: 14, vx: 0, vy: 0 };
+  const resultado = criarSimulacaoDoGrafo({ nos: NOS, arestas: [], configuracao: CONFIGURACAO_PADRAO, graus: new Map(), passos: 0, posicoes: new Map([["A.md", anterior]]) });
+  expect(resultado.nos[0]).toMatchObject({ titulo: "A", grupo: "Raiz", x: 12, y: 14 });
+  expect(resultado.nos[0].fx).toBeUndefined(); resultado.simulacao.stop();
+});
+
 /** Gerador congruencial simples — o teste não pode depender de Math.random. */
 function criarAleatorio(semente: number) {
   let estado = semente;

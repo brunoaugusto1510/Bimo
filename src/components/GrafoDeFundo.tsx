@@ -217,21 +217,26 @@ export default function GrafoDeFundo({
       return;
     }
 
+    const anteriores = new Map(nosRef.current.map((no) => [no.id, no]));
     const { nos: nosSimulados, links, simulacao } = criarSimulacaoDoGrafo({
       nos,
       arestas,
       configuracao,
       graus: grauPorId,
+      posicoes: anteriores,
+      passos: anteriores.size ? (nos.some((no) => !anteriores.has(no.id)) ? 30 : 0) : undefined,
     });
 
     // A simulação mexe nestes mesmos objetos; a fase da "respiração" só entra por cima.
     nosRef.current = nosSimulados.map((no) =>
-      Object.assign(no, { fase: Math.random() * Math.PI * 2, frequencia: 0.4 + Math.random() * 0.5 }),
+      Object.assign(no, { fase: anteriores.get(no.id)?.fase ?? Math.random() * Math.PI * 2, frequencia: anteriores.get(no.id)?.frequencia ?? 0.4 + Math.random() * 0.5 }),
     );
     linksRef.current = links;
     simulacaoRef.current = simulacao;
-    zoomIniciadoRef.current = false;
-    alvoDaCameraRef.current = null;
+    if (!anteriores.size) {
+      zoomIniciadoRef.current = false;
+      alvoDaCameraRef.current = null;
+    }
 
     return () => {
       simulacao.stop();

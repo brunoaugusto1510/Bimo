@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useMemo } from "react";
+import { forwardRef, useMemo, type ReactNode } from "react";
 import type { Resolvedor } from "@/lib/ligacoes";
 import { extrairTags } from "@/lib/markdown-da-nota";
 import type { NotaCompleta } from "@/lib/repositorio-de-notas/tipos";
@@ -16,6 +16,7 @@ type Props = {
   podeCriar: boolean;
   aoAbrirNota: (id: IdDeNota, opcoes: { novaAba: boolean }) => void;
   aoCriarNota: (titulo: string) => void;
+  children?: ReactNode;
 };
 
 /**
@@ -24,7 +25,7 @@ type Props = {
  * (`[data-linha]`) quando a pessoa clica nele na "Estrutura" do painel lateral.
  */
 const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
-  { nota, conexoes, resolver, podeCriar, aoAbrirNota, aoCriarNota },
+  { nota, conexoes, resolver, podeCriar, aoAbrirNota, aoCriarNota, children },
   referencia,
 ) {
   // As tags valem de dois lugares: as da própria nota (coluna do banco) e as escritas no texto.
@@ -40,7 +41,7 @@ const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
 
   return (
     <article ref={referencia} className="relative mx-auto max-w-[720px] px-5 pt-8 pb-24 md:px-8 md:pt-10">
-      <h1 className="mb-4 text-titulo-nota font-semibold break-words text-balance text-destaque-texto">{nota.titulo}</h1>
+      <h1 tabIndex={-1} className="mb-4 text-titulo-nota font-semibold break-words text-balance text-destaque-texto">{nota.titulo}</h1>
 
       <div className="mb-7">
         <PropriedadesDaNota
@@ -52,14 +53,14 @@ const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
         />
       </div>
 
-      <RenderizadorDeMarkdown
+      {children ?? <RenderizadorDeMarkdown
         conteudo={nota.conteudo}
         resolver={resolver}
         pastaDeOrigem={nota.pasta}
         podeCriar={podeCriar}
         aoAbrirNota={aoAbrirNota}
         aoCriarNota={aoCriarNota}
-      />
+      />}
     </article>
   );
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type Dispatch, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type Dispatch, type ReactNode } from "react";
 import type { NotaParaArvore } from "@/lib/arvore-de-notas";
 import { ABA_DO_GRAFICO, abaAtiva, idAtual, type Acao, type EstadoDoEspaco } from "@/lib/espaco-de-trabalho/estado";
 import type { IdDeNota } from "@/lib/types";
@@ -49,14 +49,19 @@ export default function EspacoDeTrabalho({
   children,
 }: Props) {
   const aba = abaAtiva(estado);
+  const [pendencias, definirPendencias] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const aoMudarPendencia = useCallback((id: string, pendente: boolean) => {
+    definirPendencias((anteriores) => anteriores.get(id) === pendente ? anteriores : new Map(anteriores).set(id, pendente));
+  }, []);
 
   const abas = useMemo(
     () =>
       estado.abas.map((candidata) => ({
         chave: candidata.chave,
+        pendente: candidata.tipo === "nota" && pendencias.get(idAtual(candidata)),
         titulo: candidata.tipo === "nota" ? (notas.get(idAtual(candidata))?.titulo ?? "Nota") : "Nova aba",
       })),
-    [estado.abas, notas],
+    [estado.abas, notas, pendencias],
   );
 
   const recentes = useMemo(
@@ -91,19 +96,22 @@ export default function EspacoDeTrabalho({
       >
         {children}
 
-        {ativo && aba?.tipo === "nota" && (
+        {estado.abas.map((candidata) => candidata.tipo === "nota" && (
+          <div key={candidata.chave} hidden={!ativo || estado.ativa !== candidata.chave}>
           <AbaDeNota
-            key={aba.chave}
-            aba={aba}
+            aba={candidata}
+            ativa={ativo && estado.ativa === candidata.chave}
+            aoMudarPendencia={aoMudarPendencia}
             notas={notas}
             aoVoltar={() => despachar({ tipo: "voltar" })}
             aoAvancar={() => despachar({ tipo: "avancar" })}
-            aoAlternarModo={() => despachar({ tipo: "alternar-modo", chave: aba.chave })}
+            aoAlternarModo={() => despachar({ tipo: "alternar-modo", chave: candidata.chave })}
             aoAbrirNota={aoAbrirNota}
             aoCriarNota={aoCriarNota}
             aoPerguntarAoBimo={aoPerguntarAoBimo}
           />
-        )}
+          </div>
+        ))}
 
         {ativo && aba?.tipo === "vazia" && (
           <div className="absolute inset-0 z-10 overflow-auto bg-painel motion-safe:animate-entrada">
