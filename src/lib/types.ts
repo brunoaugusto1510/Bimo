@@ -17,17 +17,6 @@ export type Mensagem = {
 };
 
 /**
- * A estrutura do vault é uma árvore: pastas contêm outras pastas e notas.
- *
- * Isto é uma *união discriminada* — o campo `tipo` diz qual das duas formas o
- * item tem. Ao checar `if (item.tipo === "pasta")`, o TypeScript passa a saber
- * que `item.filhos` existe. É o padrão que evita campos opcionais espalhados.
- */
-export type ItemVault =
-  | { tipo: "pasta"; nome: string; filhos: ItemVault[] }
-  | { tipo: "nota"; nome: string; caminho: string };
-
-/**
  * Identidade de uma nota para a interface, as rotas e o grafo. É opaca: quem
  * recebe um id não deve interpretá-lo. Hoje é o id da linha no banco ou, na
  * transição, o caminho do arquivo no GitHub codificado — nunca contém `:`, então

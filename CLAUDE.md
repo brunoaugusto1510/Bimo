@@ -46,6 +46,10 @@ the README mentioning one — check with the user before assuming its shape):
   (`npm run gerar-segredo`)
 - `VAULT_BRANCH` — optional, defaults to `main`
 - `VAULT_SUBPATH` — optional, subfolder inside the repo where notes live
+- `NOTAS_FONTE` — optional, where the notes come from: `github` (default; the new UI is
+  read-only), `memoria` (sample notes in server memory, dev/tests only — refused in
+  production) or `banco` (Postgres via Drizzle: needs `DATABASE_URL` + `USER_ID_PADRAO`;
+  not wired yet, planned for the migration). See `src/lib/repositorio-de-notas/config.ts`.
 
 Missing/invalid *vault* env vars don't crash the app — `src/lib/github.ts`'s
 `getGitHubConfig()` throws a descriptive error that `src/app/page.tsx` catches and
@@ -97,9 +101,11 @@ single callback URL breaks Vercel preview deployments, and its one real gain
 ### Server/client split
 
 `src/app/page.tsx` is a server component (`dynamic = "force-dynamic"`, no static
-caching — the vault can change between visits). It fetches the vault tree and the
-link graph **in parallel** via `Promise.all`, and is the only place `GITHUB_TOKEN`
-is used — the token never reaches the client. It hands the result to
+caching — the notes can change between visits). It asks `obterRepositorio()` for the
+configured source and `obterDadosDaPagina()` (`servico-de-notas.ts`) for the tree and
+the link graph: one read of the notes, cached per repository and valid while that
+repository's `marcaDeVersao()` is unchanged. Secrets (`GITHUB_TOKEN`, the DB
+connection) never reach the client. It hands the result to
 `PaginaPrincipal` ("use client"), which owns all interactive state (mode, open note,
 focused note, menu, draft text, graph "pulse" counter) and composes the rest of the UI:
 
@@ -110,7 +116,7 @@ page.tsx (server: fetch tree + grafo)
        -> GrafoDeFundo   (canvas graph, d3-force physics; background OR interactive)
        -> Chat -> Mensagem (stays mounted, only hidden, on the Notas tab)
        -> BarraDoGrafo + CartaoDeFoco (Notas tab overlays: counts/zoom, selected note)
-       -> LeitorDeNota   (note content panel, fetches on demand)
+       -> LeitorDeNota   (note content panel, fetches /api/notas/<id> on demand)
 ```
 
 Two tabs share the **same** `GrafoDeFundo` (so switching never reshuffles the
@@ -125,9 +131,32 @@ physics is `lib/simulacao-do-grafo.ts`, camera math `lib/camera-do-grafo.ts`
 escapes the clipping and makes the document scrollable, so the chat's
 `scrollIntoView` scrolls the whole page.
 
-`src/app/api/notas/[...caminho]/route.ts` is a catch-all GET route that
-`LeitorDeNota` calls on demand to fetch one note's Markdown — this keeps the
-token-authenticated GitHub read on the server.
+Notes are identified everywhere by an opaque `IdDeNota` (a string, never parsed by the
+UI), not by file path. The HTTP surface, all behind `exigirSessao` (writes also behind
+`exigirMesmaOrigem`, JSON only, 1 MB cap, `zod` in `validacao-de-notas.ts`):
+`GET/POST /api/notas`, `GET/PATCH /api/notas/[id]` (PATCH carries `revisaoBase` for
+optimistic concurrency; a stale one answers 409 with the saved note),
+`GET /api/notas/[id]/ligacoes` (links in/out + unlinked mentions — separate from the note
+read because it needs *every* note, hundreds of downloads on the GitHub source),
+`POST /api/notas/[id]/renomear` (rewrites the `[[links]]` of other notes),
+`GET /api/notas/busca?q=` and `GET /api/grafo`. Shared bits live in `http-de-notas.ts`.
+Next 16 doesn't allow `[id]` and `[...caminho]` as siblings, which is why the old
+catch-all read route is gone.
+
+### Notes layer (`src/lib/`)
+
+Pure core (no I/O, same code on server and client): `caminho-da-nota.ts` (title/folder
+rules), `markdown-da-nota.ts` (frontmatter, tags, headings), `ligacoes.ts` (`[[links]]`:
+parse, resolve with a deterministic tie-break, rewrite), `indice-de-ligacoes.ts` (who
+links to whom — **derived from the text on read, never mirrored into `relacoes`**),
+`grafo-de-notas.ts`, `arvore-de-notas.ts`.
+
+`repositorio-de-notas/` is the storage contract (`tipos.ts`) with `memoria.ts`,
+`github-somente-leitura.ts` (wraps `vault-real.ts`; ids are the path in base64url) and,
+later, `banco.ts`. `config.ts` never imports the DB: `db/cliente.ts` throws on import
+without `DATABASE_URL`, so the DB must only be `await import()`ed after the config
+passes, or the fail-soft page breaks. Any writable repository must pass
+`suite-de-contrato.ts`.
 
 ### Data layer (`src/lib/`)
 
@@ -135,17 +164,14 @@ Layered, each file only knows about the layer below it:
 
 - `github.ts` — thin GitHub REST client. Knows nothing about "notes" or
   "vaults": just repos, trees, blobs. `getGitHubConfig()` reads/validates env vars.
-- `vault-real.ts` — turns the GitHub file tree into the `ItemVault[]` folder/note
-  structure the sidebar renders. Filters out non-`.md` files and Obsidian internals
-  (`.obsidian`, `.trash`, `.git`). Owns a module-level, process-lifetime 5-minute
-  cache (`obterNotasPlanas`) that both the tree and the graph build on top of.
-- `grafo.ts` — downloads note contents (bounded concurrency of 8, capped at 800
-  notes) to extract `[[wikilink]]`-style links and build the local graph. Has its
-  own separate 5-minute cache.
+- `vault-real.ts` — lists the GitHub notes (non-`.md` files and Obsidian internals —
+  `.obsidian`, `.trash`, `.git` — filtered out), reads, searches and writes them (each
+  write is a commit). Owns a module-level, process-lifetime 5-minute cache
+  (`obterNotasPlanas`) that the GitHub repository and the agent's tools build on.
 
-Both caches are plain in-memory module state — they reset on restart/redeploy and
-aren't shared across serverless instances. Any future write path (creating/editing
-notes) needs to explicitly invalidate them.
+The cache is plain in-memory module state — it resets on restart/redeploy and isn't
+shared across serverless instances. Every write through `vault-real.ts` invalidates
+it, which also changes `marcaDoCache()` and so renews the tree and graph in the service.
 
 ### `etapas-futuras/`
 

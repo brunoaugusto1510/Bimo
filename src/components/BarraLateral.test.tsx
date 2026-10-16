@@ -2,25 +2,27 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import BarraLateral from "./BarraLateral";
-import type { ItemVault } from "@/lib/types";
+import type { ItemDeNotas } from "@/lib/types";
 
-const ITENS: ItemVault[] = [
+const ITENS: ItemDeNotas[] = [
   {
     tipo: "pasta",
     nome: "Estudos",
+    caminho: "Estudos",
     filhos: [
       {
         tipo: "pasta",
         nome: "Redes",
+        caminho: "Estudos/Redes",
         filhos: [
-          { tipo: "nota", nome: "TCP", caminho: "Estudos/Redes/TCP.md" },
-          { tipo: "nota", nome: "DNS", caminho: "Estudos/Redes/DNS.md" },
+          { tipo: "nota", id: "tcp", nome: "TCP", pasta: "Estudos/Redes" },
+          { tipo: "nota", id: "dns", nome: "DNS", pasta: "Estudos/Redes" },
         ],
       },
-      { tipo: "nota", nome: "Álgebra Linear", caminho: "Estudos/Álgebra Linear.md" },
+      { tipo: "nota", id: "algebra", nome: "Álgebra Linear", pasta: "Estudos" },
     ],
   },
-  { tipo: "nota", nome: "Inbox", caminho: "Inbox.md" },
+  { tipo: "nota", id: "inbox", nome: "Inbox", pasta: null },
 ];
 
 function renderizar(props: Partial<React.ComponentProps<typeof BarraLateral>> = {}) {
@@ -69,16 +71,31 @@ describe("BarraLateral", () => {
     expect(screen.queryByText("TCP")).not.toBeInTheDocument();
   });
 
-  it("avisa a nota clicada, com caminho e nome", async () => {
+  it("avisa a nota clicada, com id e nome", async () => {
     const { usuario, aoSelecionar } = renderizar();
 
     await usuario.click(screen.getByRole("button", { name: /Inbox/ }));
 
-    expect(aoSelecionar).toHaveBeenCalledExactlyOnceWith({ caminho: "Inbox.md", nome: "Inbox" });
+    expect(aoSelecionar).toHaveBeenCalledExactlyOnceWith({ id: "inbox", nome: "Inbox" });
+  });
+
+  it("notas com o mesmo nome em pastas diferentes são notas diferentes, cada uma com o seu id", async () => {
+    const itens: ItemDeNotas[] = [
+      { tipo: "pasta", nome: "Leituras", caminho: "Leituras", filhos: [{ tipo: "nota", id: "10", nome: "Resumo", pasta: "Leituras" }] },
+      { tipo: "pasta", nome: "Projetos", caminho: "Projetos", filhos: [{ tipo: "nota", id: "11", nome: "Resumo", pasta: "Projetos" }] },
+    ];
+    const { usuario, aoSelecionar } = renderizar({ itens, notaSelecionada: "11" });
+
+    const notas = screen.getAllByRole("button", { name: /Resumo/ });
+    await usuario.click(notas[0]);
+
+    expect(notas).toHaveLength(2);
+    expect(aoSelecionar).toHaveBeenCalledExactlyOnceWith({ id: "10", nome: "Resumo" });
+    expect(notas[1]).toHaveAttribute("aria-current", "true");
   });
 
   it("marca a nota selecionada com aria-current", () => {
-    renderizar({ notaSelecionada: "Inbox.md" });
+    renderizar({ notaSelecionada: "inbox" });
 
     expect(screen.getByRole("button", { name: /Inbox/ })).toHaveAttribute("aria-current", "true");
     expect(screen.getByRole("button", { name: /Álgebra Linear/ })).not.toHaveAttribute("aria-current");

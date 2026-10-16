@@ -10,13 +10,14 @@ import GrafoDeFundo, { type ControleDoGrafo } from "@/components/GrafoDeFundo";
 import LeitorDeNota from "@/components/LeitorDeNota";
 import MarcaBimo from "@/components/MarcaBimo";
 import SeletorPill from "@/components/SeletorPill";
+import { grupoDaPasta } from "@/lib/caminho-da-nota";
 import { calcularGraus } from "@/lib/fisica-do-grafo";
-import type { Grafo } from "@/lib/grafo";
-import type { ItemVault } from "@/lib/types";
+import type { Grafo } from "@/lib/grafo-de-notas";
+import type { IdDeNota, ItemDeNotas } from "@/lib/types";
 
 type Props = {
   /** Já vem pronto do servidor — este componente só cuida da interatividade. */
-  itens: ItemVault[];
+  itens: ItemDeNotas[];
   grafo: Grafo;
   aviso?: string;
 };
@@ -32,24 +33,25 @@ const OPCOES_DE_MODO = [
   { valor: "notas", rotulo: "Notas" },
 ] as const;
 
-function nomeDaNota(caminho: string): string {
-  return caminho.split("/").pop()!.replace(/\.md$/i, "");
-}
+type DadosDaNota = { id: IdDeNota; titulo: string; pasta: string | null };
 
-/** Pasta de topo — mesma regra de `obterGrupoDoCaminho`, para notas que ficaram fora do grafo. */
-function pastaDaNota(caminho: string): string {
-  const primeiraBarra = caminho.indexOf("/");
-  return primeiraBarra === -1 ? "Raiz" : caminho.slice(0, primeiraBarra);
+/** Achata a árvore num mapa por id: título e pasta de qualquer nota, estando ela no grafo ou não. */
+function indexarNotas(itens: readonly ItemDeNotas[], mapa = new Map<IdDeNota, DadosDaNota>()) {
+  for (const item of itens) {
+    if (item.tipo === "nota") mapa.set(item.id, { id: item.id, titulo: item.nome, pasta: item.pasta });
+    else indexarNotas(item.filhos, mapa);
+  }
+  return mapa;
 }
 
 export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
   const [modo, setModo] = useState<Modo>("bimo");
-  // Caminho da nota aberta no painel de leitura — também é o que fica
+  // Id da nota aberta no painel de leitura — também é o que fica
   // destacado na barra lateral e no grafo (no modo fundo), então um estado só serve aos dois.
-  const [notaAberta, setNotaAberta] = useState<string | null>(null);
+  const [notaAberta, setNotaAberta] = useState<IdDeNota | null>(null);
   // Nota selecionada no grafo da aba Notas — a que ganha o cartão de foco. É
   // separada da aberta: selecionar é "olhar", abrir é "ler".
-  const [notaFocada, setNotaFocada] = useState<string | null>(null);
+  const [notaFocada, setNotaFocada] = useState<IdDeNota | null>(null);
   // Cada escolha na barra lateral pede à câmera que vá até a nota — inclusive de
   // novo, se ela já era a selecionada (ver `focoPedido` no GrafoDeFundo).
   const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
@@ -67,30 +69,32 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
 
   const emNotas = modo === "notas";
   const graus = useMemo(() => calcularGraus(grafo.arestas), [grafo.arestas]);
+  const notasPorId = useMemo(() => indexarNotas(itens), [itens]);
+  const dadosDaNotaFocada = notaFocada ? notasPorId.get(notaFocada) : undefined;
 
   function mudarModo(novo: Modo) {
     setModo(novo);
     setMenuAberto(false);
   }
 
-  function abrirNota(caminho: string) {
-    setNotaAberta(caminho);
+  function abrirNota(id: IdDeNota) {
+    setNotaAberta(id);
     setMenuAberto(false);
   }
 
   /** Na aba Notas a barra lateral serve para achar a nota no grafo; na aba Bimo, para ler. */
-  function escolherNoMenu(caminho: string) {
+  function escolherNoMenu(id: IdDeNota) {
     if (emNotas) {
-      setNotaFocada(caminho);
+      setNotaFocada(id);
       setPedidoDeFoco((n) => n + 1);
       setMenuAberto(false);
       return;
     }
-    abrirNota(caminho);
+    abrirNota(id);
   }
 
-  function perguntarSobreNota(caminho: string) {
-    setRascunho(`O que eu anotei em "${nomeDaNota(caminho)}"?`);
+  function perguntarSobreNota(id: IdDeNota) {
+    setRascunho(`O que eu anotei em "${notasPorId.get(id)?.titulo ?? "esta nota"}"?`);
     setNotaAberta(null);
     mudarModo("bimo");
   }
@@ -161,7 +165,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
           <BarraLateral
             itens={itens}
             notaSelecionada={emNotas ? notaFocada : notaAberta}
-            onSelecionarNota={(nota) => escolherNoMenu(nota.caminho)}
+            onSelecionarNota={(nota) => escolherNoMenu(nota.id)}
           />
         </div>
 
@@ -204,11 +208,11 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
                 onEnquadrar={() => controleDoGrafo.current?.enquadrar()}
               />
 
-              {notaFocada && (
+              {notaFocada && dadosDaNotaFocada && (
                 <div className="flex justify-center p-3 md:justify-start md:p-4">
                   <CartaoDeFoco
-                    titulo={nomeDaNota(notaFocada)}
-                    pasta={pastaDaNota(notaFocada)}
+                    titulo={dadosDaNotaFocada.titulo}
+                    pasta={grupoDaPasta(dadosDaNotaFocada.pasta)}
                     conexoes={graus.get(notaFocada) ?? 0}
                     onAbrir={() => abrirNota(notaFocada)}
                     onVizinhos={() => controleDoGrafo.current?.enquadrarVizinhos()}
@@ -224,7 +228,7 @@ export default function PaginaPrincipal({ itens, grafo, aviso }: Props) {
 
       <LeitorDeNota
         key={notaAberta ?? "fechado"}
-        caminho={notaAberta}
+        nota={notaAberta ? (notasPorId.get(notaAberta) ?? null) : null}
         onFechar={() => setNotaAberta(null)}
         onPerguntar={perguntarSobreNota}
       />

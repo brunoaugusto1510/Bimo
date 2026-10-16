@@ -26,7 +26,7 @@ import {
   converterParaForcas,
   type ConfiguracaoDoGrafo,
 } from "./fisica-do-grafo";
-import type { ArestaDoGrafo, NoDoGrafo } from "./grafo";
+import type { ArestaDoGrafo, NoDoGrafo } from "./grafo-de-notas";
 
 /**
  * Um nó com posição. `fx`/`fy` fixam o nó num ponto (é assim que o arrastar

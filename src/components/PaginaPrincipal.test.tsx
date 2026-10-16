@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PaginaPrincipal from "./PaginaPrincipal";
 import { CONFIGURACAO_PADRAO } from "@/lib/fisica-do-grafo";
-import type { Grafo } from "@/lib/grafo";
-import type { ItemVault } from "@/lib/types";
+import type { Grafo } from "@/lib/grafo-de-notas";
+import type { ItemDeNotas } from "@/lib/types";
 
 const controle = vi.hoisted(() => ({
   aproximar: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock("@/components/GrafoDeFundo", async () => {
   type Props = {
     interativo?: boolean;
     selecionado?: string | null;
-    onSelecionar?: (caminho: string | null) => void;
+    onSelecionar?: (id: string | null) => void;
     focoPedido?: number;
     controleRef?: React.Ref<import("@/components/GrafoDeFundo").ControleDoGrafo>;
   };
@@ -44,7 +44,7 @@ vi.mock("@/components/GrafoDeFundo", async () => {
           data-selecionado={selecionado ?? ""}
           data-foco-pedido={focoPedido ?? 0}
         >
-          <button type="button" onClick={() => onSelecionar?.("Leituras/Ler.md")}>
+          <button type="button" onClick={() => onSelecionar?.("10")}>
             clicar no nó Ler
           </button>
           <button type="button" onClick={() => onSelecionar?.(null)}>
@@ -56,25 +56,27 @@ vi.mock("@/components/GrafoDeFundo", async () => {
   };
 });
 
-const ITENS: ItemVault[] = [
+const ITENS: ItemDeNotas[] = [
   {
     tipo: "pasta",
     nome: "Leituras",
-    filhos: [{ tipo: "nota", nome: "Ler", caminho: "Leituras/Ler.md" }],
+    caminho: "Leituras",
+    filhos: [{ tipo: "nota", id: "10", nome: "Ler", pasta: "Leituras" }],
   },
   {
     tipo: "pasta",
     nome: "Ideias",
-    filhos: [{ tipo: "nota", nome: "Atomicas", caminho: "Ideias/Atomicas.md" }],
+    caminho: "Ideias",
+    filhos: [{ tipo: "nota", id: "11", nome: "Atomicas", pasta: "Ideias" }],
   },
 ];
 
 const GRAFO: Grafo = {
   nos: [
-    { tipo: "nota", id: "Leituras/Ler.md", titulo: "Ler", grupo: "Leituras" },
-    { tipo: "nota", id: "Ideias/Atomicas.md", titulo: "Atomicas", grupo: "Ideias" },
+    { tipo: "nota", id: "10", titulo: "Ler", grupo: "Leituras" },
+    { tipo: "nota", id: "11", titulo: "Atomicas", grupo: "Ideias" },
   ],
-  arestas: [{ de: "Leituras/Ler.md", para: "Ideias/Atomicas.md" }],
+  arestas: [{ de: "10", para: "11" }],
   configuracao: CONFIGURACAO_PADRAO,
 };
 
@@ -93,7 +95,7 @@ beforeEach(() => {
   Object.values(controle).forEach((funcao) => funcao.mockClear());
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ conteudo: "# Ler\n\ntexto da nota" }) }),
+    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ nota: { conteudo: "# Ler\n\ntexto da nota" } }) }),
   );
 });
 
@@ -151,7 +153,7 @@ describe("PaginaPrincipal — aba Notas", () => {
     const cartao = screen.getByRole("region", { name: "Nota selecionada" });
     expect(within(cartao).getByText("Ler")).toBeInTheDocument();
     expect(within(cartao).getByText("Leituras · 1 conexão")).toBeInTheDocument();
-    expect(screen.getByTestId("grafo")).toHaveAttribute("data-selecionado", "Leituras/Ler.md");
+    expect(screen.getByTestId("grafo")).toHaveAttribute("data-selecionado", "10");
   });
 
   it("não mostra cartão nenhum enquanto nada está selecionado", async () => {
@@ -182,7 +184,7 @@ describe("PaginaPrincipal — aba Notas", () => {
     await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
 
     expect(screen.getByRole("region", { name: "Nota selecionada" })).toBeInTheDocument();
-    expect(screen.getByTestId("grafo")).toHaveAttribute("data-selecionado", "Leituras/Ler.md");
+    expect(screen.getByTestId("grafo")).toHaveAttribute("data-selecionado", "10");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -217,7 +219,7 @@ describe("PaginaPrincipal — aba Notas", () => {
     await usuario.click(screen.getByRole("button", { name: "Abrir Nota" }));
 
     expect(await screen.findByText("texto da nota")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith("/api/notas/Leituras/Ler.md");
+    expect(fetch).toHaveBeenCalledWith("/api/notas/10");
   });
 
   it("'Perguntar ao Bimo' volta para o chat com a pergunta já escrita", async () => {

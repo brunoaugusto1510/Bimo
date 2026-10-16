@@ -242,21 +242,6 @@ describe("lerConteudoDaNota", () => {
   });
 });
 
-describe("obterArvoreDoVault", () => {
-  it("agrupa os caminhos em pastas e notas", async () => {
-    await configurarGitHubFalso();
-    const { obterArvoreDoVault } = await importarVaultReal();
-
-    const { itens } = await obterArvoreDoVault();
-
-    const pastaEstudos = itens.find((i) => i.tipo === "pasta" && i.nome === "Estudos");
-    expect(pastaEstudos).toBeDefined();
-
-    const notaRaiz = itens.find((i) => i.tipo === "nota" && i.nome === "Bem-vindo");
-    expect(notaRaiz).toBeDefined();
-  });
-});
-
 describe("criarNota", () => {
   it("cria a nota quando o caminho ainda não existe", async () => {
     const github = await configurarGitHubFalso();

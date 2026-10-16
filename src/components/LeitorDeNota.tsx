@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { IdDeNota } from "@/lib/types";
 import MarcaBimo from "./MarcaBimo";
 
 type Props = {
-  /** Caminho da nota aberta, ou null se o painel deve ficar fechado. */
-  caminho: string | null;
+  /** A nota aberta (já com título e pasta, para o cabeçalho aparecer antes do texto), ou null se o painel deve ficar fechado. */
+  nota: { id: IdDeNota; titulo: string; pasta: string | null } | null;
   onFechar: () => void;
   /** Preenche o campo do chat com uma pergunta sobre esta nota e fecha o painel. */
-  onPerguntar: (caminho: string) => void;
+  onPerguntar: (id: IdDeNota) => void;
 };
 
 type Estado =
@@ -20,22 +21,24 @@ type Estado =
 
 /**
  * Painel flutuante por cima da tela — igual a um modal. Busca o conteúdo da
- * nota em /api/notas/... toda vez que `caminho` muda, porque o servidor é
- * quem tem o GITHUB_TOKEN; o cliente nunca fala direto com o GitHub.
+ * nota em /api/notas/<id> toda vez que a nota muda, porque é o servidor que
+ * conhece a fonte das notas; o cliente nunca fala direto com ela.
  */
-export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) {
+export default function LeitorDeNota({ nota, onFechar, onPerguntar }: Props) {
+  const id = nota?.id ?? null;
+
   // "carregando" é o estado inicial de toda montagem. Quem garante que isso
-  // reseta a cada nota diferente é o `key={caminho}` passado lá em
+  // reseta a cada nota diferente é o `key` passado lá em
   // PaginaPrincipal: ao mudar a key, o React descarta este componente e monta
   // um novo do zero — em vez de um efeito forçando o reset manualmente.
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
 
   useEffect(() => {
-    if (!caminho) return;
+    if (!id) return;
 
     let cancelado = false;
 
-    fetch(`/api/notas/${caminho.split("/").map(encodeURIComponent).join("/")}`)
+    fetch(`/api/notas/${encodeURIComponent(id)}`)
       .then(async (res) => {
         const dados = await res.json();
         if (cancelado) return;
@@ -43,7 +46,7 @@ export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) 
           setEstado({ tipo: "erro", mensagem: dados.erro ?? "Erro ao carregar a nota." });
           return;
         }
-        setEstado({ tipo: "pronto", conteudo: dados.conteudo });
+        setEstado({ tipo: "pronto", conteudo: dados.nota.conteudo });
       })
       .catch(() => {
         if (!cancelado) setEstado({ tipo: "erro", mensagem: "Não consegui falar com o servidor." });
@@ -53,14 +56,13 @@ export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) 
     return () => {
       cancelado = true;
     };
-  }, [caminho]);
+  }, [id]);
 
-  if (!caminho) return null;
+  if (!nota) return null;
 
-  const partes = caminho.split("/");
-  const titulo = partes.pop()!.replace(/\.md$/i, "");
+  const { titulo } = nota;
   // A pasta vira a "meta" acima do título, como nos cards de nota do design.
-  const pasta = partes.join(" / ");
+  const pasta = nota.pasta?.split("/").join(" / ") ?? "";
 
   return (
     <div
@@ -76,7 +78,7 @@ export default function LeitorDeNota({ caminho, onFechar, onPerguntar }: Props) 
           {/* "Pílula Bimo" do design: atalho para levar a nota para o chat. */}
           <button
             type="button"
-            onClick={() => onPerguntar(caminho)}
+            onClick={() => onPerguntar(nota.id)}
             className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-destaque-texto px-3.5 text-xs font-semibold text-destaque-texto transition-[background-color,transform] hover:bg-destaque-suave motion-safe:active:scale-[0.96]"
           >
             <MarcaBimo tamanho={14} /> Perguntar sobre esta nota

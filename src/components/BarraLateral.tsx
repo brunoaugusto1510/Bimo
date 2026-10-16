@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { contarNotas, filtrarArvore } from "@/lib/filtro-da-arvore";
-import type { ItemVault } from "@/lib/types";
+import { contarNotas, filtrarArvore } from "@/lib/arvore-de-notas";
+import type { IdDeNota, ItemDeNotas } from "@/lib/types";
 
 type Props = {
-  itens: ItemVault[];
-  /** Caminho da nota atualmente destacada, ou null se nenhuma */
-  notaSelecionada: string | null;
-  onSelecionarNota: (nota: { caminho: string; nome: string }) => void;
+  itens: ItemDeNotas[];
+  /** Id da nota atualmente destacada, ou null se nenhuma */
+  notaSelecionada: IdDeNota | null;
+  onSelecionarNota: (nota: { id: IdDeNota; nome: string }) => void;
 };
 
 /** Recuo por nível de pasta, em pixels. */
@@ -100,11 +100,11 @@ function ItemDaArvore({
   notaSelecionada,
   onSelecionarNota,
 }: {
-  item: ItemVault;
+  item: ItemDeNotas;
   nivel: number;
   /** Durante a busca todas as pastas abrem — o resultado costuma morar numa pasta fechada. */
   forcarAberta: boolean;
-  notaSelecionada: string | null;
+  notaSelecionada: IdDeNota | null;
   onSelecionarNota: Props["onSelecionarNota"];
 }) {
   // Pastas de primeiro nível começam abertas; as de dentro, fechadas.
@@ -115,13 +115,13 @@ function ItemDaArvore({
   const recuoBase = nivel * RECUO_POR_NIVEL;
 
   if (item.tipo === "nota") {
-    const selecionada = notaSelecionada === item.caminho;
+    const selecionada = notaSelecionada === item.id;
 
     return (
       <button
         type="button"
         style={{ paddingLeft: `${recuoBase + RECUO_DA_NOTA}px` }}
-        onClick={() => onSelecionarNota({ caminho: item.caminho, nome: item.nome })}
+        onClick={() => onSelecionarNota({ id: item.id, nome: item.nome })}
         aria-current={selecionada ? "true" : undefined}
         // Linhas mais altas no celular (dedo) e compactas no desktop (cursor).
         className={`flex w-full items-center gap-2 rounded-tag py-2.5 pr-2 text-left text-controle transition-colors hover:bg-painel md:py-1.5 ${
@@ -177,6 +177,6 @@ function ItemDaArvore({
 }
 
 /** O React precisa de uma chave estável por item de lista. */
-function chaveDoItem(item: ItemVault): string {
-  return item.tipo === "nota" ? item.caminho : `pasta:${item.nome}`;
+function chaveDoItem(item: ItemDeNotas): string {
+  return item.tipo === "nota" ? `nota:${item.id}` : `pasta:${item.caminho}`;
 }

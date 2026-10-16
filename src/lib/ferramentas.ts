@@ -7,15 +7,14 @@
  * GitHub — ele só pede, e este arquivo decide o que acontece.
  *
  * As de escrita (`criar_nota`/`editar_nota`) geram commits reais no repositório
- * do vault — por isso ficam por último no `switch` abaixo e são as únicas que
- * precisam invalidar o cache do grafo (`invalidarCacheDoGrafo`) além do de
- * `vault-real.ts` (que ele já invalida por conta própria).
+ * do vault — por isso ficam por último no `switch` abaixo. Cada uma invalida o
+ * cache de `vault-real.ts`, e é isso que renova a árvore e o grafo da interface
+ * (o serviço de notas guarda os dele por uma marca que muda junto com esse cache).
  *
  * As descrições abaixo são prompt: quanto mais claras, menos o modelo erra.
  */
 
 import type { FunctionDeclaration } from "@google/genai";
-import { invalidarCacheDoGrafo } from "./grafo";
 import { buscarNotas, criarNota, editarNota, lerNota, listarNotas, tituloDoCaminho } from "./vault-real";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
@@ -250,9 +249,6 @@ async function execCriar(args: Args): Promise<SaidaFerramenta> {
   const conteudo = texto(args.conteudo, "conteudo");
 
   const resultado = await criarNota(caminho, conteudo);
-  // A escrita já invalidou o cache de vault-real.ts por conta própria; falta
-  // só o do grafo, que fica num módulo separado (ver comentário no topo).
-  invalidarCacheDoGrafo();
 
   return {
     resposta: {
@@ -270,7 +266,6 @@ async function execEditar(args: Args): Promise<SaidaFerramenta> {
   const modo = args.modo === "substituir" ? "substituir" : "acrescentar";
 
   const resultado = await editarNota(caminho, conteudo, modo);
-  invalidarCacheDoGrafo();
 
   return {
     resposta: {

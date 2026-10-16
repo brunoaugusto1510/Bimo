@@ -1,17 +1,16 @@
 /**
- * Transforma a árvore de arquivos do repositório do GitHub numa árvore de
- * pastas/notas (`ItemVault[]`) — o mesmo formato que `vault-exemplo.ts` usava.
+ * Lê as notas do repositório do GitHub a partir da árvore de arquivos.
  *
- * Também é a camada que o agente (Etapa 4) usa para buscar e ler notas: o
+ * É a camada que o agente (Etapa 4) usa para buscar e ler notas, e que o
+ * repositório de notas do GitHub (modo leitura) embrulha: o
  * cache de conteúdo baixado sob demanda é compartilhado entre a busca, a
  * leitura de uma nota específica e a resolução de caminhos aproximados.
  *
  * Guarda o resultado em cache por alguns minutos: cada visita à página não
  * precisa refazer a chamada ao GitHub, e o preço é que uma nota criada direto
  * no Obsidian pode levar até `CACHE_TTL_MS` para aparecer aqui. Por isso toda
- * escrita daqui (`criarNota`/`editarNota`) invalida o cache na hora — mas só
- * o deste módulo: quem invalida o do grafo (`grafo.ts`) é `ferramentas.ts`,
- * para não criar um import circular entre os dois.
+ * escrita daqui (`criarNota`/`editarNota`) invalida o cache na hora — e é a mudança
+ * dele (`marcaDoCache`) que renova a árvore e o grafo no serviço de notas.
  */
 
 import {
@@ -22,7 +21,6 @@ import {
   readBlob,
   type GitHubConfig,
 } from "./github";
-import type { ItemVault } from "./types";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 /** Teto de notas cujo conteúdo baixamos para a busca — protege contra vaults enormes. */
@@ -114,68 +112,6 @@ async function garantirCache(): Promise<Cache> {
 export async function obterNotasPlanas(): Promise<{ notas: NotaPlana[]; aviso?: string }> {
   const c = await garantirCache();
   return { notas: c.notas, aviso: c.truncado ? avisoTruncamento() : undefined };
-}
-
-/**
- * Agrupa uma lista plana de caminhos ("Faculdade/Redes/TCP.md") numa árvore
- * de pastas. A ideia: cada pasta é uma entrada num Map (por nome), e cada
- * caminho vai "descendo" um nível de cada vez, criando a pasta se ainda não
- * existir.
- */
-function construirArvore(caminhos: string[]): ItemVault[] {
-  type NoPasta = { nome: string; filhos: Map<string, NoPasta>; notas: string[] };
-
-  const raiz: NoPasta = { nome: "", filhos: new Map(), notas: [] };
-
-  for (const caminho of caminhos) {
-    const partes = caminho.split("/");
-    const nomeArquivo = partes.pop()!;
-
-    let atual = raiz;
-    for (const parte of partes) {
-      let filho = atual.filhos.get(parte);
-      if (!filho) {
-        filho = { nome: parte, filhos: new Map(), notas: [] };
-        atual.filhos.set(parte, filho);
-      }
-      atual = filho;
-    }
-    atual.notas.push(nomeArquivo);
-  }
-
-  // Converte o Map intermediário no formato final ItemVault, pasta por pasta,
-  // ordenando pastas e notas por nome (igual ao Obsidian mostra por padrão).
-  function paraItens(no: NoPasta, prefixo: string): ItemVault[] {
-    const pastas: ItemVault[] = [...no.filhos.values()]
-      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-      .map((filho) => ({
-        tipo: "pasta" as const,
-        nome: filho.nome,
-        filhos: paraItens(filho, prefixo ? `${prefixo}/${filho.nome}` : filho.nome),
-      }));
-
-    const notas: ItemVault[] = no.notas
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .map((nomeArquivo) => ({
-        tipo: "nota" as const,
-        nome: nomeArquivo.replace(/\.md$/i, ""),
-        caminho: prefixo ? `${prefixo}/${nomeArquivo}` : nomeArquivo,
-      }));
-
-    return [...pastas, ...notas];
-  }
-
-  return paraItens(raiz, "");
-}
-
-/** Busca a árvore do vault (para a barra lateral), usando o cache quando possível. */
-export async function obterArvoreDoVault(): Promise<{
-  itens: ItemVault[];
-  aviso?: string;
-}> {
-  const { notas, aviso } = await obterNotasPlanas();
-  const itens = construirArvore(notas.map((n) => n.caminho));
-  return { itens, aviso };
 }
 
 /** Baixa (ou reaproveita do cache) o conteúdo de uma nota já conhecida. */

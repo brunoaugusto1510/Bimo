@@ -25,7 +25,7 @@ import {
   raioDoNo,
   type ConfiguracaoDoGrafo,
 } from "@/lib/fisica-do-grafo";
-import type { ArestaDoGrafo, NoDoGrafo } from "@/lib/grafo";
+import type { ArestaDoGrafo, NoDoGrafo } from "@/lib/grafo-de-notas";
 import {
   criarSimulacaoDoGrafo,
   montarVizinhos,

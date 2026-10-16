@@ -15,13 +15,7 @@ vi.mock("../vault-real", () => ({
   tituloDoCaminho: (caminho: string) => caminho.split("/").pop()!.replace(/\.md$/i, ""),
 }));
 
-/** `grafo.ts` também é mockado, para testar (sem acoplar) que a escrita invalida o cache do grafo. */
-vi.mock("../grafo", () => ({
-  invalidarCacheDoGrafo: vi.fn(),
-}));
-
 import { buscarNotas, criarNota, editarNota, lerNota, listarNotas } from "../vault-real";
-import { invalidarCacheDoGrafo } from "../grafo";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -100,7 +94,7 @@ describe("executarFerramenta — ler_nota", () => {
 });
 
 describe("executarFerramenta — criar_nota", () => {
-  it("cria a nota e invalida o cache do grafo depois do commit", async () => {
+  it("cria a nota e devolve o link do commit", async () => {
     vi.mocked(criarNota).mockResolvedValue({
       caminho: "Estudos/DNS.md",
       criada: true,
@@ -120,10 +114,9 @@ describe("executarFerramenta — criar_nota", () => {
       commit: "https://github.com/usuario/vault/commit/abc",
     });
     expect(saida.resumo).toMatch(/Criou/);
-    expect(invalidarCacheDoGrafo).toHaveBeenCalledTimes(1);
   });
 
-  it("devolve erro (sem lançar exceção) quando a nota já existe, e NÃO invalida o cache", async () => {
+  it("devolve erro (sem lançar exceção) quando a nota já existe", async () => {
     vi.mocked(criarNota).mockRejectedValue(new Error('A nota "Estudos/TCP.md" já existe.'));
 
     const saida = await executarFerramenta("criar_nota", {
@@ -133,7 +126,6 @@ describe("executarFerramenta — criar_nota", () => {
 
     expect(saida.erro).toBe(true);
     expect(saida.resumo).toMatch(/já existe/);
-    expect(invalidarCacheDoGrafo).not.toHaveBeenCalled();
   });
 
   it("falha com erro claro quando 'conteudo' está faltando", async () => {
@@ -145,7 +137,7 @@ describe("executarFerramenta — criar_nota", () => {
 });
 
 describe("executarFerramenta — editar_nota", () => {
-  it("edita no modo pedido e invalida o cache do grafo depois do commit", async () => {
+  it("edita no modo pedido", async () => {
     vi.mocked(editarNota).mockResolvedValue({
       caminho: "Estudos/TCP.md",
       criada: false,
@@ -161,7 +153,6 @@ describe("executarFerramenta — editar_nota", () => {
     expect(editarNota).toHaveBeenCalledWith("TCP", "Parágrafo novo.", "acrescentar");
     expect(saida.resposta.modo).toBe("acrescentar");
     expect(saida.resumo).toMatch(/Complementou/);
-    expect(invalidarCacheDoGrafo).toHaveBeenCalledTimes(1);
   });
 
   it("usa 'acrescentar' como padrão quando 'modo' vem inválido ou ausente", async () => {
@@ -178,7 +169,7 @@ describe("executarFerramenta — editar_nota", () => {
     expect(editarNota).toHaveBeenLastCalledWith("TCP", "x", "acrescentar");
   });
 
-  it("devolve erro (sem lançar exceção) quando a nota não é encontrada, e NÃO invalida o cache", async () => {
+  it("devolve erro (sem lançar exceção) quando a nota não é encontrada", async () => {
     vi.mocked(editarNota).mockRejectedValue(new Error("Não encontrei a nota."));
 
     const saida = await executarFerramenta("editar_nota", {
@@ -188,7 +179,6 @@ describe("executarFerramenta — editar_nota", () => {
     });
 
     expect(saida.erro).toBe(true);
-    expect(invalidarCacheDoGrafo).not.toHaveBeenCalled();
   });
 });
 

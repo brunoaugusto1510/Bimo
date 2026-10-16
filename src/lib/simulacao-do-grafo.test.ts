@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CONFIGURACAO_PADRAO, calcularGraus } from "./fisica-do-grafo";
-import type { ArestaDoGrafo, NoDoGrafo } from "./grafo";
+import type { ArestaDoGrafo, NoDoGrafo } from "./grafo-de-notas";
 import { criarSimulacaoDoGrafo, montarVizinhos } from "./simulacao-do-grafo";
 
 const NOS: NoDoGrafo[] = [
