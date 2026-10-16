@@ -70,6 +70,15 @@ export function invalidarCache(): void {
 }
 
 /**
+ * Muda toda vez que o cache é recarregado (vencimento de `CACHE_TTL_MS` ou
+ * `invalidarCache` depois de uma escrita). É a marca de versão que o serviço
+ * de notas usa para saber se o que ele guardou ainda vale.
+ */
+export async function marcaDoCache(): Promise<string> {
+  return String((await garantirCache()).carregadoEm);
+}
+
+/**
  * Garante que o cache está carregado e em dia, buscando a árvore do GitHub
  * de novo se estiver vencido. É a única função aqui que fala com a API do
  * GitHub para listar arquivos — todo o resto (árvore da barra lateral,

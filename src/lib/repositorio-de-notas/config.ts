@@ -1,0 +1,71 @@
+/**
+ * De onde as notas vêm, lido do ambiente — sem importar nada do banco.
+ *
+ * Isso importa: `db/cliente.ts` lança erro assim que é importado sem
+ * `DATABASE_URL`. Se este arquivo (ou a página) o importasse, a falha suave
+ * quebraria e o app inteiro cairia em vez de mostrar "falta configurar".
+ * Quem precisa do banco só o carrega (`await import`) depois que esta
+ * validação passou.
+ */
+
+export type ConfiguracaoDeNotas =
+  | { fonte: "github" }
+  | { fonte: "memoria" }
+  | { fonte: "banco"; userId: string };
+
+/** Uma configuração que falta ou está errada — a interface mostra `mensagem` e lista `variaveis`. */
+export class ErroDeConfiguracao extends Error {
+  constructor(
+    mensagem: string,
+    readonly variaveis: string[],
+  ) {
+    super(mensagem);
+    this.name = "ErroDeConfiguracao";
+  }
+}
+
+const FONTES = ["github", "banco", "memoria"] as const;
+const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `NOTAS_FONTE` escolhe a fonte; ausente, vale `github` (o app como era antes
+ * da migração para o banco). `memoria` só existe para testes e desenvolvimento.
+ */
+export function lerConfiguracaoDeNotas(env: NodeJS.ProcessEnv = process.env): ConfiguracaoDeNotas {
+  const fonte = (env.NOTAS_FONTE ?? "").trim().toLowerCase() || "github";
+
+  if (!(FONTES as readonly string[]).includes(fonte)) {
+    throw new ErroDeConfiguracao(
+      `NOTAS_FONTE="${env.NOTAS_FONTE}" não existe. Use github, banco ou memoria.`,
+      ["NOTAS_FONTE"],
+    );
+  }
+
+  if (fonte === "memoria") {
+    if (env.NODE_ENV === "production") {
+      throw new ErroDeConfiguracao(
+        "NOTAS_FONTE=memoria não pode ser usada em produção: tudo se perderia a cada reinício.",
+        ["NOTAS_FONTE"],
+      );
+    }
+    return { fonte: "memoria" };
+  }
+
+  if (fonte === "banco") {
+    const userId = env.USER_ID_PADRAO?.trim();
+    const faltando = [!env.DATABASE_URL?.trim() && "DATABASE_URL", !userId && "USER_ID_PADRAO"].filter(
+      (nome): nome is string => Boolean(nome),
+    );
+    if (faltando.length > 0) {
+      throw new ErroDeConfiguracao(`Para guardar as notas no banco, falta configurar: ${faltando.join(", ")}.`, faltando);
+    }
+    if (!REGEX_UUID.test(userId!)) {
+      throw new ErroDeConfiguracao("USER_ID_PADRAO precisa ser o UUID de um usuário do Supabase Auth.", [
+        "USER_ID_PADRAO",
+      ]);
+    }
+    return { fonte: "banco", userId: userId! };
+  }
+
+  return { fonte: "github" };
+}
