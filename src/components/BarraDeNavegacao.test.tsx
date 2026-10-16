@@ -12,7 +12,7 @@ describe("BarraDeNavegacao", () => {
     const acoes = preparar();
     const usuario = userEvent.setup();
     expect(screen.getByRole("navigation", { name: "Caminho da nota" })).toHaveTextContent("Leituras / Uma ideia");
-    expect(screen.getByRole("button", { name: "Avançar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Avançar" })).toHaveAttribute("aria-disabled", "true");
     await usuario.click(screen.getByRole("button", { name: "Voltar" }));
     await usuario.click(screen.getByRole("button", { name: "Edição" }));
     expect(acoes.aoVoltar).toHaveBeenCalledOnce();
@@ -23,7 +23,8 @@ describe("BarraDeNavegacao", () => {
     const botao = screen.getByRole("button", { name: "Edição" });
     await userEvent.setup().click(botao);
     expect(acoes.aoAlternarModo).not.toHaveBeenCalled();
-    expect(botao.closest("[title]")).toHaveAttribute("title", "A edição ainda não está disponível: as notas estão em modo somente leitura.");
+    expect(botao).toHaveAttribute("aria-disabled", "true");
+    expect(botao).toHaveAccessibleDescription("A edição ainda não está disponível: as notas estão em modo somente leitura.");
   });
   it("fecha menu com Esc e devolve foco", async () => {
     preparar();
@@ -46,4 +47,13 @@ describe("BarraDeNavegacao", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mais opções" })).toHaveFocus();
   });
+});
+
+it("preserva foco no histórico indisponível e ignora clique", async () => {
+  const acoes = preparar();
+  const avancar = screen.getByRole("button", { name: "Avançar" });
+  expect(avancar).not.toBeDisabled();
+  await userEvent.setup().click(avancar);
+  expect(avancar).toHaveFocus();
+  expect(acoes.aoAvancar).not.toHaveBeenCalled();
 });

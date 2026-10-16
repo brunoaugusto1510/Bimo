@@ -88,15 +88,16 @@ describe("PaletaIrParaNota", () => {
     await act(async () => entregar([{ id: "velha", titulo: "Atrasada", pasta: null, trecho: "Velho" }]));
     expect(screen.queryByText("Atrasada")).not.toBeInTheDocument();
     expect(screen.getAllByText("Trecho encontrado")).toHaveLength(5);
-    fireEvent.click(screen.getByRole("button", { name: /Conteúdo 0/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Conteúdo 0/ }));
     expect(props.aoAbrir).toHaveBeenCalledWith("c0", { novaAba: false });
   });
-  it("omite falhas silenciosamente e limpa ao apagar a consulta", async () => {
+  it("informa falhas e limpa ao apagar a consulta", async () => {
     buscar.mockRejectedValue(new Error("Falha de rede"));
     render(<PaletaIrParaNota {...propriedades()} />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "abc" } });
     await waitFor(() => expect(buscar).toHaveBeenCalledOnce());
-    expect(screen.queryByText(/Falha de rede/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Não foi possível buscar no conteúdo."));
+    expect(screen.getByText("Não foi possível buscar no conteúdo.", { selector: '[aria-hidden="true"]' })).toBeVisible();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "" } });
     expect(screen.queryByRole("region", { name: "No conteúdo" })).not.toBeInTheDocument();
   });
@@ -157,4 +158,101 @@ it("não cria nem abre ao confirmar uma composição de texto", () => {
   fireEvent.keyDown(campo, { key: "Enter", ctrlKey: true, isComposing: true });
   expect(props.aoCriar).not.toHaveBeenCalled();
   expect(props.aoAbrir).not.toHaveBeenCalled();
+});
+
+it("trata teclado no document e fecha somente pelo fundo", async () => {
+  const props = propriedades();
+  render(<PaletaIrParaNota {...props} />);
+  fireEvent.click(screen.getByText("Notas", { selector: "h2" }));
+  expect(props.aoFechar).not.toHaveBeenCalled();
+  screen.getByRole("combobox").blur();
+  fireEvent.keyDown(document, { key: "Tab" });
+  expect(screen.getByRole("combobox")).toHaveFocus();
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "Nova" } });
+  screen.getByRole("combobox").blur();
+  fireEvent.keyDown(document, { key: "Enter", ctrlKey: true });
+  expect(props.aoCriar).toHaveBeenCalledWith("Nova", "Ideias");
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(props.aoFechar).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("dialog").parentElement!);
+  expect(props.aoFechar).toHaveBeenCalledTimes(2);
+});
+
+it("anuncia resultados e busca, preserva conteúdo anterior e navega nele", async () => {
+  vi.useFakeTimers();
+  buscar.mockResolvedValueOnce([{ id: "c", titulo: "Outra", pasta: null, trecho: "Trecho" }]);
+  let entregar!: (valor: Awaited<ReturnType<typeof buscarNoConteudo>>) => void;
+  buscar.mockImplementationOnce(() => new Promise((resolver) => { entregar = resolver; }));
+  const props = propriedades();
+  render(<PaletaIrParaNota {...props} />);
+  expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
+  const campo = screen.getByRole("combobox");
+  fireEvent.change(campo, { target: { value: "zz" } });
+  expect(campo).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("status")).toHaveTextContent("Nenhuma nota encontrada");
+  await act(() => vi.advanceTimersByTimeAsync(250));
+  expect(screen.getByRole("status")).toHaveTextContent("1 resultados no conteúdo");
+  expect(screen.getByRole("listbox")).toContainElement(screen.getByRole("option", { name: /Outra/ }));
+  expect(campo).toHaveAttribute("aria-expanded", "true");
+  fireEvent.keyDown(campo, { key: "Enter" });
+  expect(props.aoAbrir).toHaveBeenCalledWith("c", { novaAba: false });
+  fireEvent.change(campo, { target: { value: "zzz" } });
+  await act(() => vi.advanceTimersByTimeAsync(250));
+  expect(screen.getByRole("status")).toHaveTextContent("Buscando no conteúdo…");
+  expect(screen.getByRole("option", { name: /Outra/ })).toBeInTheDocument();
+  await act(async () => entregar([]));
+  expect(screen.queryByRole("option")).not.toBeInTheDocument();
+});
+
+it.each(["abrir", "criar"])("não restaura foco anterior ao %s", async (acao) => {
+  const props = propriedades();
+  const { rerender } = render(<><button>Origem</button><PaletaIrParaNota {...props} aberta={false} /></>);
+  const origem = screen.getByRole("button", { name: "Origem" });
+  origem.focus();
+  rerender(<><button>Origem</button><PaletaIrParaNota {...props} /></>);
+  if (acao === "abrir") fireEvent.click(screen.getAllByRole("option")[0]);
+  else {
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Nova" } });
+    fireEvent.click(screen.getByRole("button", { name: /Criar a nota/ }));
+  }
+  rerender(<><button>Origem</button><PaletaIrParaNota {...props} aberta={false} /></>);
+  expect(origem).not.toHaveFocus();
+});
+
+it("identifica Esc pelo texto visível e destaca foco e opção ativa", () => {
+  render(<PaletaIrParaNota {...propriedades()} />);
+  expect(screen.getByRole("button", { name: "Esc, fechar a paleta" })).toBeInTheDocument();
+  expect(screen.getByRole("combobox").parentElement?.className).toContain("focus-within:");
+  expect(screen.getByRole("option", { selected: true }).className).toContain("border-l-destaque");
+});
+
+it("navega entre títulos e conteúdo no mesmo listbox", async () => {
+  vi.useFakeTimers();
+  buscar.mockResolvedValue([{ id: "c", titulo: "Outra", pasta: null, trecho: "Leituras no texto" }]);
+  const props = propriedades();
+  render(<PaletaIrParaNota {...props} />);
+  const campo = screen.getByRole("combobox");
+  fireEvent.change(campo, { target: { value: "Leituras" } });
+  await act(() => vi.advanceTimersByTimeAsync(250));
+  fireEvent.keyDown(campo, { key: "ArrowDown" });
+  const opcao = screen.getByRole("option", { name: /Outra/ });
+  expect(opcao).toHaveAttribute("aria-selected", "true");
+  expect(campo).toHaveAttribute("aria-activedescendant", opcao.id);
+  fireEvent.keyDown(campo, { key: "Enter", shiftKey: true });
+  expect(props.aoAbrir).toHaveBeenLastCalledWith("c", { novaAba: true });
+  fireEvent.keyDown(campo, { key: "ArrowDown" });
+  fireEvent.keyDown(campo, { key: "Enter" });
+  expect(props.aoAbrir).toHaveBeenLastCalledWith("b", { novaAba: false });
+});
+
+it("restaura foco ao fechar pelo fundo", () => {
+  const props = propriedades();
+  const { rerender } = render(<><button>Origem</button><PaletaIrParaNota {...props} aberta={false} /></>);
+  const origem = screen.getByRole("button", { name: "Origem" });
+  origem.focus();
+  rerender(<><button>Origem</button><PaletaIrParaNota {...props} /></>);
+  fireEvent.click(screen.getByRole("dialog").parentElement!);
+  expect(props.aoFechar).toHaveBeenCalledOnce();
+  rerender(<><button>Origem</button><PaletaIrParaNota {...props} aberta={false} /></>);
+  expect(origem).toHaveFocus();
 });

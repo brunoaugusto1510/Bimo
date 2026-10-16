@@ -18,7 +18,7 @@ type Props = {
   aoPerguntarAoBimo(): void;
 };
 
-const interacao = "min-h-10 rounded-full transition-[color,background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50";
+const interacao = "min-h-10 rounded-full transition-[color,background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96] aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
 const explicacao = "A edição ainda não está disponível: as notas estão em modo somente leitura.";
 
 export default function BarraDeNavegacao(props: Props) {
@@ -46,13 +46,13 @@ export default function BarraDeNavegacao(props: Props) {
 
   return (
     <div className="relative flex flex-wrap items-center gap-1 border-b border-borda bg-painel px-2 py-1.5 text-controle md:flex-nowrap md:px-3">
-      <button type="button" aria-label="Voltar" disabled={!props.podeVoltar} onClick={props.aoVoltar} className={`w-10 ${interacao}`}>←</button>
-      <button type="button" aria-label="Avançar" disabled={!props.podeAvancar} onClick={props.aoAvancar} className={`w-10 ${interacao}`}>→</button>
+      <button type="button" aria-label="Voltar" aria-disabled={!props.podeVoltar} onClick={() => { if (props.podeVoltar) props.aoVoltar(); }} className={`w-10 ${interacao}`}>←</button>
+      <button type="button" aria-label="Avançar" aria-disabled={!props.podeAvancar} onClick={() => { if (props.podeAvancar) props.aoAvancar(); }} className={`w-10 ${interacao}`}>→</button>
       <nav aria-label="Caminho da nota" className="min-w-0 flex-1 truncate px-2 text-suave">
         {props.pasta && <span className="hidden md:inline">{props.pasta} / </span>}<strong className="font-semibold text-texto">{props.titulo}</strong>
       </nav>
       <div title={!props.edicaoDisponivel ? explicacao : undefined}>
-        <SeletorPill opcoes={[{ valor: "edicao", rotulo: "Edição" }, { valor: "leitura", rotulo: "Leitura" }]} valor={props.modo} rotulo="Modo do editor" onChange={(modo) => {
+        <SeletorPill opcoes={[{ valor: "edicao", rotulo: "Edição", desabilitada: !props.edicaoDisponivel, explicacao: !props.edicaoDisponivel ? explicacao : undefined }, { valor: "leitura", rotulo: "Leitura" }]} valor={props.modo} rotulo="Modo do editor" onChange={(modo) => {
           if (modo !== props.modo && (modo !== "edicao" || props.edicaoDisponivel)) props.aoAlternarModo();
         }} />
       </div>

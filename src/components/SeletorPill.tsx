@@ -1,4 +1,6 @@
-type Opcao<V extends string> = { valor: V; rotulo: string };
+import { useId } from "react";
+
+type Opcao<V extends string> = { valor: V; rotulo: string; desabilitada?: boolean; explicacao?: string };
 
 type Props<V extends string> = {
   opcoes: readonly Opcao<V>[];
@@ -18,29 +20,34 @@ type Props<V extends string> = {
  * painéis trocando de lugar que justifiquem o papel de `tablist`.
  */
 export default function SeletorPill<V extends string>({ opcoes, valor, onChange, rotulo }: Props<V>) {
+  const id = useId();
   return (
     <div
       role="group"
       aria-label={rotulo}
       className="inline-flex gap-0.5 rounded-full border border-borda bg-fundo p-1"
     >
-      {opcoes.map((opcao) => {
+      {opcoes.map((opcao, indice) => {
         const ativa = opcao.valor === valor;
         return (
           <button
             key={opcao.valor}
             type="button"
+            aria-label={opcao.rotulo}
             aria-pressed={ativa}
+            aria-disabled={opcao.desabilitada || undefined}
+            aria-describedby={opcao.explicacao ? `${id}-explicacao-${indice}` : undefined}
             onClick={() => {
-              if (!ativa) onChange(opcao.valor);
+              if (!ativa && !opcao.desabilitada) onChange(opcao.valor);
             }}
             // O `after` alarga a área de toque para ~41px de altura sem engordar a pílula (o
             // design pede ~33px); só na vertical, para não invadir a opção vizinha.
             className={`relative rounded-full px-4 py-1.5 text-controle font-semibold transition-[color,background-color,transform] after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] motion-safe:active:scale-[0.96] md:px-[18px] md:py-[7px] ${
-              ativa ? "bg-destaque text-sobre-destaque" : "text-suave hover:text-texto"
+              opcao.desabilitada ? "cursor-not-allowed text-suave" : ativa ? "bg-destaque text-sobre-destaque" : "text-suave hover:text-texto"
             }`}
           >
             {opcao.rotulo}
+            {opcao.explicacao && <span id={`${id}-explicacao-${indice}`} className="sr-only">{opcao.explicacao}</span>}
           </button>
         );
       })}

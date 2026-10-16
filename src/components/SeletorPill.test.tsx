@@ -40,3 +40,16 @@ describe("SeletorPill", () => {
     expect(aoMudar).not.toHaveBeenCalled();
   });
 });
+
+it("explica a opção indisponível ao focar e ignora clique e Enter", async () => {
+  const aoMudar = vi.fn();
+  render(<SeletorPill rotulo="Modo" valor="bimo" onChange={aoMudar} opcoes={[OPCOES[0], { ...OPCOES[1], desabilitada: true, explicacao: "Somente leitura." }]} />);
+  const notas = screen.getByRole("button", { name: "Notas" });
+  expect(notas).toHaveAttribute("aria-disabled", "true");
+  expect(notas).toHaveAccessibleDescription("Somente leitura.");
+  const usuario = userEvent.setup();
+  await usuario.click(notas);
+  expect(notas).toHaveFocus();
+  await usuario.keyboard("{Enter}");
+  expect(aoMudar).not.toHaveBeenCalled();
+});
