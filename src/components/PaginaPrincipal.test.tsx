@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PaginaPrincipal from "./PaginaPrincipal";
@@ -23,6 +23,7 @@ vi.mock("@/components/GrafoDeFundo", async () => {
   const { useImperativeHandle } = await import("react");
   type Props = {
     interativo?: boolean;
+    pausado?: boolean;
     selecionado?: string | null;
     onSelecionar?: (id: string | null) => void;
     focoPedido?: number;
@@ -31,6 +32,7 @@ vi.mock("@/components/GrafoDeFundo", async () => {
   return {
     default: function GrafoFalso({
       interativo,
+      pausado,
       selecionado,
       onSelecionar,
       focoPedido,
@@ -41,6 +43,7 @@ vi.mock("@/components/GrafoDeFundo", async () => {
         <div
           data-testid="grafo"
           data-interativo={String(Boolean(interativo))}
+          data-pausado={String(Boolean(pausado))}
           data-selecionado={selecionado ?? ""}
           data-foco-pedido={focoPedido ?? 0}
         >
@@ -93,9 +96,29 @@ const menuDeNotas = () => screen.getByRole("navigation", { name: "Pastas e notas
 beforeEach(() => {
   vi.restoreAllMocks();
   Object.values(controle).forEach((funcao) => funcao.mockClear());
+  localStorage.clear();
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ nota: { conteudo: "# Ler\n\ntexto da nota" } }) }),
+    vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        url.endsWith("/ligacoes")
+          ? { ligacoes: { saida: [], entrada: [] }, mencoesSemLigacao: [] }
+          : {
+              nota: {
+                id: "10",
+                titulo: "Ler",
+                pasta: "Leituras",
+                tags: [],
+                conteudo: "# Ler\n\ntexto da nota",
+                criadoEm: null,
+                atualizadoEm: null,
+                revisao: 1,
+              },
+              capacidades: { escrita: false, datas: false },
+            },
+    })),
   );
 });
 
@@ -211,7 +234,7 @@ describe("PaginaPrincipal — aba Notas", () => {
     expect(screen.getByTestId("grafo")).toHaveAttribute("data-foco-pedido", "0");
   });
 
-  it("'Abrir Nota' abre o leitor da nota", async () => {
+  it("'Abrir Nota' abre a nota numa aba e deixa o grafo em pausa por baixo", async () => {
     const usuario = renderizar();
     await usuario.click(abaNotas());
     await usuario.click(screen.getByRole("button", { name: "clicar no nó Ler" }));
@@ -219,7 +242,23 @@ describe("PaginaPrincipal — aba Notas", () => {
     await usuario.click(screen.getByRole("button", { name: "Abrir Nota" }));
 
     expect(await screen.findByText("texto da nota")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith("/api/notas/10");
+    expect(fetch).toHaveBeenCalledWith("/api/notas/10", expect.anything());
+    expect(screen.getByRole("tab", { name: "Ler" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("grafo")).toHaveAttribute("data-pausado", "true");
+    expect(screen.queryByRole("region", { name: "Nota selecionada" })).not.toBeInTheDocument();
+  });
+
+  it("a aba Gráfico volta ao grafo vivo, com a barra do grafo, sem fechar a nota", async () => {
+    const usuario = renderizar();
+    await usuario.click(abaNotas());
+    await usuario.click(screen.getByRole("button", { name: "clicar no nó Ler" }));
+    await usuario.click(screen.getByRole("button", { name: "Abrir Nota" }));
+
+    await usuario.click(screen.getByRole("tab", { name: /Gráfico/ }));
+
+    expect(screen.getByTestId("grafo")).toHaveAttribute("data-pausado", "false");
+    expect(screen.getByRole("button", { name: "Enquadrar o grafo" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ler" })).toBeInTheDocument();
   });
 
   it("'Perguntar ao Bimo' volta para o chat com a pergunta já escrita", async () => {
@@ -259,12 +298,85 @@ describe("PaginaPrincipal — aba Notas", () => {
 });
 
 describe("PaginaPrincipal — aba Bimo", () => {
-  it("clicar numa nota da barra lateral abre o leitor (comportamento de sempre)", async () => {
+  it("clicar numa nota da barra lateral leva ao modo Notas e abre a nota numa aba", async () => {
     const usuario = renderizar();
 
     await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
 
     expect(await screen.findByText("texto da nota")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Nota selecionada" })).not.toBeInTheDocument();
+    expect(abaNotas()).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: "Ler" })).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+describe("PaginaPrincipal — abas e paleta", () => {
+  it("clicar noutra nota da barra lateral, estando numa aba de nota, navega dentro da mesma aba", async () => {
+    const usuario = renderizar();
+    await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
+    await screen.findByText("texto da nota");
+
+    await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Atomicas/ }));
+
+    // O Gráfico e uma aba só, agora com a outra nota.
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getByRole("tab", { name: "Atomicas" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("Ctrl+O abre a paleta 'Ir para nota', mesmo no modo Bimo, e escolher uma nota abre a aba", async () => {
+    const usuario = renderizar();
+
+    await usuario.keyboard("{Control>}o{/Control}");
+    const paleta = await screen.findByRole("dialog", { name: "Ir para nota" });
+    await usuario.click(within(paleta).getByRole("option", { name: /Ler/ }));
+
+    expect(screen.queryByRole("dialog", { name: "Ir para nota" })).not.toBeInTheDocument();
+    expect(abaNotas()).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByText("texto da nota")).toBeInTheDocument();
+  });
+
+  it("Esc fecha a paleta sem abrir nada", async () => {
+    const usuario = renderizar();
+    await usuario.keyboard("{Control>}o{/Control}");
+    await screen.findByRole("dialog", { name: "Ir para nota" });
+
+    await usuario.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Ir para nota" })).not.toBeInTheDocument();
+    expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Ctrl+G vai para o Gráfico no modo Notas e Ctrl+J volta ao Bimo", async () => {
+    const usuario = renderizar();
+
+    await usuario.keyboard("{Control>}g{/Control}");
+    expect(abaNotas()).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: /Gráfico/ })).toHaveAttribute("aria-selected", "true");
+
+    await usuario.keyboard("{Control>}j{/Control}");
+    expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("'Perguntar ao Bimo' numa nota aberta leva ao chat com a pergunta escrita", async () => {
+    const usuario = renderizar();
+    await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
+    await screen.findByText("texto da nota");
+
+    await usuario.click(screen.getByRole("button", { name: "Mais opções" }));
+    await usuario.click(screen.getByRole("menuitem", { name: "Perguntar ao Bimo" }));
+
+    expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
+    expect(campoDoChat()).toHaveValue('O que eu anotei em "Ler"?');
+  });
+
+  it("as abas abertas voltam quando a página é recarregada", async () => {
+    const usuario = renderizar();
+    await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
+    await screen.findByText("texto da nota");
+
+    cleanup();
+    renderizar();
+    await usuario.click(abaNotas());
+
+    expect(await screen.findByRole("tab", { name: "Ler" })).toBeInTheDocument();
   });
 });
