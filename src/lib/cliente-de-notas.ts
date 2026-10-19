@@ -7,12 +7,13 @@
 
 import type { LigacoesDaNota } from "./servico-de-notas";
 import { criarPrevia } from "./previa-de-nota";
-import type { CapacidadesDoRepositorio, IdDeNota, NotaCompleta, ResultadoDeBusca, MudancasDeNota } from "./repositorio-de-notas/tipos";
+import type { CapacidadesDoRepositorio, IdDeNota, NotaCompleta, ResultadoDeBusca, MudancasDeNota, EntradaDeNota } from "./repositorio-de-notas/tipos";
 
 export type ResultadoDoSalvamento =
-  | { tipo: "ok"; nota: NotaCompleta }
+  | { tipo: "ok"; nota: NotaCompleta; notasReescritas?: number }
   | { tipo: "conflito"; atual: NotaCompleta }
-  | { tipo: "titulo-em-uso" | "nao-encontrada" | "somente-leitura" | "grande-demais" };
+  | { tipo: "titulo-em-uso"; idExistente?: IdDeNota }
+  | { tipo: "nao-encontrada" | "somente-leitura" | "grande-demais" };
 
 export async function salvarNota(
   id: IdDeNota,
@@ -20,6 +21,7 @@ export async function salvarNota(
   opcoes: { revisaoBase: number; checkpoint?: boolean },
   transporte: { sinal?: AbortSignal; keepalive?: boolean } = {},
 ): Promise<ResultadoDoSalvamento> {
+  esquecerSemente(id);
   let resposta: Response;
   try {
     resposta = await fetch(`/api/notas/${encodeURIComponent(id)}`, {
@@ -33,7 +35,7 @@ export async function salvarNota(
   const corpo = await resposta.json().catch(() => null);
   if (resposta.ok && corpo?.nota) { esquecerPrevias(); return { tipo: "ok", nota: corpo.nota }; }
   if (resposta.status === 409 && corpo?.tipo === "conflito" && corpo.atual) return { tipo: "conflito", atual: corpo.atual };
-  if (resposta.status === 409 && corpo?.tipo === "titulo-em-uso") return { tipo: "titulo-em-uso" };
+  if (resposta.status === 409 && corpo?.tipo === "titulo-em-uso") return { tipo: "titulo-em-uso", idExistente: corpo.idExistente };
   if (resposta.status === 404) return { tipo: "nao-encontrada" };
   if (resposta.status === 413) return { tipo: "grande-demais" };
   if (resposta.status === 403 && corpo?.tipo === "somente-leitura") return { tipo: "somente-leitura" };
@@ -80,6 +82,8 @@ async function pedir<T>(url: string, sinal?: AbortSignal): Promise<T> {
 }
 
 export function buscarNota(id: IdDeNota, sinal?: AbortSignal): Promise<RespostaDeNota> {
+  const semente = consultarSemente(id);
+  if (semente) { esquecerSemente(id); return Promise.resolve(semente); }
   return pedir(`/api/notas/${encodeURIComponent(id)}`, sinal);
 }
 
@@ -116,4 +120,47 @@ export function buscarPrevia(id: IdDeNota): Promise<PreviaDeNota | null> {
 /** Descarta as prévias guardadas — depois de uma edição elas estariam velhas. */
 export function esquecerPrevias(): void {
   previas.clear();
+}
+
+
+const sementes = new Map<IdDeNota, { resposta: RespostaDeNota; expira: number; timer: ReturnType<typeof setTimeout> }>();
+export function esquecerSemente(id: IdDeNota): void { clearTimeout(sementes.get(id)?.timer); sementes.delete(id); }
+export function semearNota(resposta: RespostaDeNota): void {
+  const id = resposta.nota.id;
+  esquecerSemente(id);
+  sementes.set(id, { resposta, expira: Date.now() + 10000, timer: setTimeout(() => esquecerSemente(id), 10000) });
+}
+export function consultarSemente(id: IdDeNota): RespostaDeNota | undefined {
+  const semente = sementes.get(id);
+  if (semente && semente.expira > Date.now()) return semente.resposta;
+  esquecerSemente(id); return undefined;
+}
+export type ResultadoDaCriacao =
+  | { tipo: "ok"; nota: NotaCompleta; capacidades?: CapacidadesDoRepositorio }
+  | { tipo: "titulo-em-uso"; idExistente: IdDeNota }
+  | { tipo: "erro"; mensagem: string }
+  | { tipo: "somente-leitura" | "grande-demais" };
+
+async function escreverNota(url: string, entrada: unknown) {
+  let resposta: Response;
+  try {
+    resposta = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entrada), signal: AbortSignal.timeout(20000) });
+  } catch { throw new ErroDoCliente("Não consegui falar com o servidor."); }
+  const corpo = await resposta.json().catch(() => null);
+  if (resposta.ok && corpo?.nota) { esquecerPrevias(); return { ...corpo, tipo: "ok" as const }; }
+  if (resposta.status === 409 && corpo?.tipo === "titulo-em-uso" && typeof corpo.idExistente === "string") return { tipo: "titulo-em-uso" as const, idExistente: corpo.idExistente };
+  if (resposta.status === 409 && corpo?.atual) return { tipo: "conflito" as const, atual: corpo.atual as NotaCompleta };
+  if (resposta.status === 404) return { tipo: "nao-encontrada" as const };
+  if (resposta.status === 403 && corpo?.tipo === "somente-leitura") return { tipo: "somente-leitura" as const };
+  if (resposta.status === 413) return { tipo: "grande-demais" as const };
+  return { tipo: "erro" as const, mensagem: corpo?.erro ?? "Não foi possível concluir o pedido. Tente de novo." };
+}
+export async function criarNota(entrada: EntradaDeNota): Promise<ResultadoDaCriacao> {
+  const resultado = await escreverNota("/api/notas", entrada);
+  if (resultado.tipo === "nao-encontrada" || resultado.tipo === "conflito") return { tipo: "erro", mensagem: "Não foi possível criar a nota." };
+  return resultado;
+}
+export async function renomearNota(id: IdDeNota, titulo: string, revisaoBase: number): Promise<ResultadoDoSalvamento | { tipo: "erro"; mensagem: string }> {
+  esquecerSemente(id);
+  return escreverNota(`/api/notas/${encodeURIComponent(id)}/renomear`, { titulo, revisaoBase });
 }

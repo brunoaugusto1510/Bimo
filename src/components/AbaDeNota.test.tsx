@@ -170,12 +170,12 @@ describe("AbaDeNota", () => {
       expect(regiao).toHaveAttribute("tabindex", "0");
     });
 
-    it("anuncia a nota aberta e põe o título na aba do navegador", () => {
+    it("anuncia a nota aberta e põe o título na aba do navegador", async () => {
       const { unmount } = render(
         <AbaDeNota aba={ABA} notas={NOTAS} {...acoesFalsas()} />,
       );
 
-      expect(screen.getByText("Nota aberta: Ler é uma conversa")).toBeInTheDocument();
+      expect(await screen.findByText("Nota aberta: Ler é uma conversa")).toBeInTheDocument();
       expect(document.title).toBe("Ler é uma conversa · Bimo");
 
       unmount();

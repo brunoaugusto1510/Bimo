@@ -16,7 +16,7 @@ import { carregarEstadoSalvo, salvarEstado } from "./persistencia";
  * `existentes` são os ids que ainda existem: o que sumiu (nota apagada no GitHub, por
  * exemplo) sai das abas. Uma lista vazia é tratada pelo redutor como "ainda não sei".
  */
-export function useEspacoDeTrabalho(existentes: ReadonlySet<IdDeNota>): {
+export function useEspacoDeTrabalho(existentes: ReadonlySet<IdDeNota>, protegidos?: ReadonlySet<IdDeNota>): {
   estado: EstadoDoEspaco;
   despachar: Dispatch<Acao>;
 } {
@@ -33,8 +33,8 @@ export function useEspacoDeTrabalho(existentes: ReadonlySet<IdDeNota>): {
   }, []);
 
   useEffect(() => {
-    if (pronto) despachar({ tipo: "descartar-inexistentes", existentes });
-  }, [pronto, existentes]);
+    if (pronto) despachar({ tipo: "descartar-inexistentes", existentes, protegidos });
+  }, [pronto, existentes, protegidos]);
 
   useEffect(() => {
     if (pronto) salvarEstado(estado);

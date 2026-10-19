@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buscarLigacoes, buscarNota, ErroDoCliente, type RespostaDeNota } from "../cliente-de-notas";
+import { buscarLigacoes, buscarNota, consultarSemente, ErroDoCliente, type RespostaDeNota } from "../cliente-de-notas";
 import type { LigacoesDaNota } from "../servico-de-notas";
 import type { IdDeNota } from "../types";
 
@@ -21,7 +21,7 @@ export type PedidoDeNota<T> = {
  * quando o `id` troca (ou o componente sai) e ignora uma resposta que chega depois de
  * já não ser a da nota atual. `recarregar` refaz o pedido depois de uma falha.
  */
-function usePedido<T>(id: IdDeNota | null, buscar: (id: IdDeNota, sinal: AbortSignal) => Promise<T>, habilitado = true, podeRevalidar?: () => boolean): PedidoDeNota<T> {
+function usePedido<T>(id: IdDeNota | null, buscar: (id: IdDeNota, sinal: AbortSignal) => Promise<T>, habilitado = true, podeRevalidar?: () => boolean, inicial?: (id: string) => T | undefined): PedidoDeNota<T> {
   const [tentativa, setTentativa] = useState(0);
   const [resultados, setResultados] = useState<ReadonlyMap<string, Resultado<T>>>(new Map());
   const permissao = useRef(podeRevalidar);
@@ -35,7 +35,13 @@ function usePedido<T>(id: IdDeNota | null, buscar: (id: IdDeNota, sinal: AbortSi
     const controle = new AbortController();
     // Um pedido cancelado pode terminar mesmo assim (nem todo `fetch` obedece na hora): o que ele
     // trouxer é de uma nota que já não está na tela e não pode sobrescrever o resultado da atual.
-    buscar(id, controle.signal)
+    // StrictMode cancela o primeiro efeito antes do microtask: não consumir a
+    // semente de um pedido já cancelado evita um GET redundante no segundo.
+    const pedido = inicial?.(id) ? Promise.resolve().then(() => {
+      if (controle.signal.aborted) throw new DOMException("Pedido cancelado", "AbortError");
+      return buscar(id, controle.signal);
+    }) : buscar(id, controle.signal);
+    pedido
       .then((dados) => {
         if (!controle.signal.aborted) setResultados((anteriores) => new Map(anteriores).set(id, { chave, tipo: "pronto", dados }));
       })
@@ -56,11 +62,12 @@ function usePedido<T>(id: IdDeNota | null, buscar: (id: IdDeNota, sinal: AbortSi
   const atual = resultados.get(id ?? "");
   if (atual?.tipo === "pronto") return { estado: "pronto", dados: atual.dados, recarregar };
   if (atual?.tipo === "erro" && atual.chave === chave) return { estado: "erro", mensagem: atual.mensagem, status: atual.status, recarregar };
-  return { estado: "carregando", recarregar };
+  const semente = id && inicial?.(id);
+  return semente ? { estado: "pronto", dados: semente, recarregar } : { estado: "carregando", recarregar };
 }
 
 export function useNota(id: IdDeNota | null, ativa = true, podeRevalidar?: () => boolean): PedidoDeNota<RespostaDeNota> {
-  return usePedido(id, buscarNota, ativa, podeRevalidar);
+  return usePedido(id, buscarNota, ativa, podeRevalidar, consultarSemente);
 }
 
 export function useLigacoes(id: IdDeNota | null): PedidoDeNota<LigacoesDaNota> {

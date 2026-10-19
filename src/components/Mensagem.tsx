@@ -1,3 +1,7 @@
+import { dividirCaminho } from "@/lib/caminho-da-nota";
+
+export type AbrirNotaDoChat = (id: string, resumo?: { titulo: string; pasta: string | null }) => void;
+
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import MarcaBimo from "./MarcaBimo";
@@ -10,7 +14,7 @@ import type { Mensagem as TipoMensagem, UsoDeFerramenta } from "@/lib/types";
  * ReactMarkdown, porque modelos respondem em Markdown (listas, negrito,
  * blocos de código) — sem isso a resposta apareceria cheia de `**` e `-`.
  */
-export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
+export default function Mensagem({ mensagem, aoAbrirNota }: { mensagem: TipoMensagem; aoAbrirNota?: AbrirNotaDoChat }) {
   const doUsuario = mensagem.papel === "usuario";
 
   return (
@@ -44,7 +48,7 @@ export default function Mensagem({ mensagem }: { mensagem: TipoMensagem }) {
         {!doUsuario && <AssinaturaDoBimo />}
 
         {!doUsuario && mensagem.ferramentas && mensagem.ferramentas.length > 0 && (
-          <UsosDeFerramentas usos={mensagem.ferramentas} />
+          <UsosDeFerramentas usos={mensagem.ferramentas} aoAbrirNota={aoAbrirNota} />
         )}
       </div>
     </div>
@@ -66,17 +70,17 @@ export function AssinaturaDoBimo() {
 }
 
 /** Uma "pastilha" por ferramenta usada no turno — o que o agente consultou ou escreveu. */
-function UsosDeFerramentas({ usos }: { usos: UsoDeFerramenta[] }) {
+function UsosDeFerramentas({ usos, aoAbrirNota }: { usos: UsoDeFerramenta[]; aoAbrirNota?: AbrirNotaDoChat }) {
   return (
     <div className="flex flex-wrap gap-1.5 px-1">
       {usos.map((uso, indice) => (
-        <FerramentaUsada key={indice} uso={uso} />
+        <FerramentaUsada key={indice} uso={uso} aoAbrirNota={aoAbrirNota} />
       ))}
     </div>
   );
 }
 
-function FerramentaUsada({ uso }: { uso: UsoDeFerramenta }) {
+function FerramentaUsada({ uso, aoAbrirNota }: { uso: UsoDeFerramenta; aoAbrirNota?: AbrirNotaDoChat }) {
   // Mesmas cores do banner de erro do Chat, só que numa pastilha pequena —
   // erro de ferramenta é sempre não-fatal (o agente costuma se recuperar),
   // mas ainda vale destacar visualmente que algo não saiu como esperado.
@@ -87,6 +91,16 @@ function FerramentaUsada({ uso }: { uso: UsoDeFerramenta }) {
   // Escritas (criar_nota/editar_nota bem-sucedidas) viram link pro commit —
   // é a única ação aqui que gera uma mudança real e permanente no vault.
   // Por isso ganham o roxo suave das "sugestões do Bimo" em vez do cinza.
+  if (uso.notaId && !uso.erro && aoAbrirNota) {
+    const caminho = uso.argumentos.caminho;
+    const resumo = typeof caminho === "string" && caminho.trim() ? dividirCaminho(caminho) : undefined;
+    return <span className="inline-flex items-center gap-1">
+      <button type="button" aria-label={`${uso.resumo}. Abrir nota`} onClick={() => aoAbrirNota(uso.notaId!, resumo)}
+        className="min-h-10 rounded-full border border-destaque-suave-borda bg-destaque-suave px-3 text-meta text-destaque-texto transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]">{uso.resumo}</button>
+      {uso.commitUrl && <a href={uso.commitUrl} target="_blank" rel="noopener noreferrer" aria-label={`Abrir commit de «${resumo?.titulo ?? uso.resumo}» (nova aba)`} className="inline-flex h-10 min-w-10 items-center justify-center rounded-full text-destaque-texto"><span aria-hidden="true">↗</span></a>}
+    </span>;
+  }
+
   if (uso.commitUrl) {
     const corDoLink = uso.erro
       ? classes

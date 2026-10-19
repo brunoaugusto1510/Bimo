@@ -48,5 +48,5 @@ export default async function Pagina() {
   if (dados.tipo === "erro") {
     return <ConfiguracaoNecessaria mensagem={dados.mensagem} variaveis={dados.variaveis} />;
   }
-  return <PaginaPrincipal itens={dados.itens} grafo={dados.grafo} aviso={dados.aviso} />;
+  return <PaginaPrincipal itens={dados.itens} grafo={dados.grafo} aviso={dados.aviso} capacidades={dados.capacidades} />;
 }

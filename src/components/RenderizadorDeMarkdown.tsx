@@ -18,7 +18,7 @@ type Props = {
   pastaDeOrigem: string | null;
   podeCriar: boolean;
   aoAbrirNota: (id: IdDeNota, opcoes: { novaAba: boolean }) => void;
-  aoCriarNota: (titulo: string) => void;
+  aoCriarNota: (alvo: string, pastaDeOrigem?: string | null, opcoes?: { novaAba: boolean }) => Promise<import("@/lib/espaco-de-trabalho/usar-criacao-de-nota").ResultadoDaAbertura> | void;
   carregarPrevia?: (id: IdDeNota) => Promise<PreviaDeNota | null>;
 };
 
@@ -52,6 +52,7 @@ function LinkDoMarkdown({ href = "", children }: PropsDe<"a">): ReactNode {
     return (
       <LigacaoDeNota
         alvo={alvo}
+        pastaDeOrigem={dados.pastaDeOrigem}
         resolucao={dados.resolver(alvo, dados.pastaDeOrigem)}
         podeCriar={dados.podeCriar}
         aoAbrir={dados.aoAbrirNota}

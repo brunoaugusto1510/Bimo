@@ -35,8 +35,10 @@
   --destaque-hover: #1e66c4; /* azul-hover */
   /* Texto e ícones em cima de `--destaque` (botão primário, bolha do usuário). */
   --sobre-destaque: #ffffff;
-  /* O mesmo azul quando usado como cor de texto (links, títulos, item selecionado). */
-  --destaque-texto: #2574e0;
+  /* Azul usado como cor de texto (links, títulos, item selecionado). Um tom acima
+     do `--destaque` (o mesmo do hover) para passar de 4.5:1 também sobre
+     `--destaque-suave` e `--painel-alt`, não só sobre o painel branco. */
+  --destaque-texto: #1e66c4;
   /* azul-suave / azul-suave-borda: sugestões e escritas do Bimo. */
   --destaque-suave: #e8f1fc;
   --destaque-suave-borda: #cfe0f8;

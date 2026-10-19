@@ -1,6 +1,6 @@
 # Bimo — Plano: notas no banco, espaço de trabalho e edição automática
 
-Branch: `feat/notas-por-id`. Última atualização: 16/10/2026.
+Branch: `feat/notas-por-id`. Última atualização: 19/10/2026.
 
 ## Objetivo
 
@@ -29,7 +29,7 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 | 6 | Agente (Gemini) lendo e escrevendo pelo repositório configurado | Feita |
 | 7 | Espaço de trabalho de leitura: abas, navegação, Ctrl+O, painel lateral, prévia de ligação | Feita |
 | 8a | Edição com salvamento automático | Feita |
-| 8b | Nota nova: Alt+N, "Criar nota" pela paleta (Ctrl+Enter), criar pela ligação `[[x]]` | A fazer |
+| 8b | Nota nova: Alt+N, "Criar nota" pela paleta (Ctrl+Enter), criar pela ligação `[[x]]` | Feita |
 | 9 | Extras do editor: autocompletar `[[` e `#`, menu `/`, rascunho do Bimo; editar título (renomear), pasta e tags | A fazer |
 | 10 | Corte para o banco e limpeza | A fazer |
 
@@ -47,8 +47,14 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 - `Alt+N` e o botão criam uma nota no banco e abrem a aba já em edição.
 - Na paleta Ctrl+O, um título que não existe oferece "Criar nota" (Ctrl+Enter).
 - Clicar numa ligação `[[x]]` que não existe cria a nota.
-- Título repetido na mesma pasta é recusado com mensagem clara.
+- Título explícito repetido na mesma pasta abre a nota existente e anuncia isso;
+  criações automáticas tentam até vinte títulos livres. A renomeação recusa colisões.
 - Aproveitar para ligar a pílula do chat (`notaId` já chega) à nota no espaço de trabalho.
+- Implementada: título selecionado nas criações automáticas da sessão; paleta e
+  ligações focam o texto. Renomeação serializada com autosave, proteção local
+  contra listagens antigas e atualização imediata por `bimo:nota-criada`.
+- Notas vazias permanecem. Durante o POST há anúncio “Criando nota…”; teclas
+  digitadas antes da chegada do foco podem se perder (limitação aceita).
 
 ### Fase 9 — extras do editor
 

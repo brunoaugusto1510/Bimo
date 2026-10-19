@@ -15,8 +15,9 @@ type Props = {
   resolver: Resolvedor;
   podeCriar: boolean;
   aoAbrirNota: (id: IdDeNota, opcoes: { novaAba: boolean }) => void;
-  aoCriarNota: (titulo: string) => void;
+  aoCriarNota: (alvo: string, pastaDeOrigem?: string | null, opcoes?: { novaAba: boolean }) => Promise<import("@/lib/espaco-de-trabalho/usar-criacao-de-nota").ResultadoDaAbertura> | void;
   children?: ReactNode;
+  campoDeTitulo?: ReactNode;
 };
 
 /**
@@ -25,7 +26,7 @@ type Props = {
  * (`[data-linha]`) quando a pessoa clica nele na "Estrutura" do painel lateral.
  */
 const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
-  { nota, conexoes, resolver, podeCriar, aoAbrirNota, aoCriarNota, children },
+  { nota, conexoes, resolver, podeCriar, aoAbrirNota, aoCriarNota, children, campoDeTitulo },
   referencia,
 ) {
   // As tags valem de dois lugares: as da própria nota (coluna do banco) e as escritas no texto.
@@ -41,7 +42,8 @@ const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
 
   return (
     <article ref={referencia} className="relative mx-auto max-w-[720px] px-5 pt-8 pb-24 md:px-8 md:pt-10">
-      <h1 tabIndex={-1} className="mb-4 text-titulo-nota font-semibold break-words text-balance text-destaque-texto">{nota.titulo}</h1>
+      <h1 data-titulo-da-nota tabIndex={-1} className={campoDeTitulo ? "sr-only" : "mb-4 text-titulo-nota font-semibold break-words text-balance text-destaque-texto"}>{nota.titulo}</h1>
+      {campoDeTitulo}
 
       <div className="mb-7">
         <PropriedadesDaNota

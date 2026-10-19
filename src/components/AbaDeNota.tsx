@@ -15,6 +15,9 @@ import EditorDeNota from "./EditorDeNota";
 import ControlesDaEdicao from "./ControlesDaEdicao";
 import { useEdicaoDeNota } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
 
+import CampoDeTitulo from "./CampoDeTitulo";
+import type { FocoPedido, ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
+
 type Props = {
   ativa?: boolean;
   aoMudarPendencia?: (id: IdDeNota, pendente: boolean) => void;
@@ -25,7 +28,12 @@ type Props = {
   aoAvancar: () => void;
   aoAlternarModo: () => void;
   aoAbrirNota: (id: IdDeNota, opcoes: { novaAba: boolean }) => void;
-  aoCriarNota: (titulo: string) => void;
+  aoCriarNota: (titulo: string, pasta?: string | null, opcoes?: { novaAba: boolean }) => Promise<ResultadoDaAbertura> | void;
+  focoPedido?: FocoPedido | null;
+  aoConsumirFoco?: () => void;
+  tituloEditavel?: boolean;
+  aoRenomear?: (nota: NotaParaArvore) => void;
+  escritaDisponivel?: boolean;
   aoPerguntarAoBimo: (id: IdDeNota) => void;
 };
 
@@ -53,10 +61,13 @@ export default function AbaDeNota({
   aoCriarNota,
   aoPerguntarAoBimo,
   ativa = true,
-  aoMudarPendencia,
+  aoMudarPendencia, focoPedido, aoConsumirFoco, tituloEditavel = false, aoRenomear, escritaDisponivel,
 }: Props) {
   const id = idAtual(aba);
   const pendenciaAtual = useRef(false);
+  const tituloPendente = useRef(false);
+  const [avisoDeTitulo, definirAvisoDeTitulo] = useState("");
+  const [abertura, definirAbertura] = useState({ id: "", texto: "" });
   const nota = useNota(id, ativa, () => !pendenciaAtual.current);
   const ligacoes = useLigacoes(ativa ? id : null);
   const recarregarNota = nota.recarregar;
@@ -64,7 +75,9 @@ export default function AbaDeNota({
   const timerLigacoes = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ultimoConjunto = useRef<string | undefined>(undefined);
   const conjunto = (texto: string) => JSON.stringify([...new Set(texto.match(/\[\[[^\]]+\]\]/g) ?? [])].sort());
-  const edicao = useEdicaoDeNota(id, nota.dados, ativa && aba.modo === "edicao", (salva, checkpoint) => {
+  const dadosDaEdicao = useMemo(() => nota.dados && escritaDisponivel === false
+    ? { ...nota.dados, capacidades: { ...nota.dados.capacidades, escrita: false } } : nota.dados, [nota.dados, escritaDisponivel]);
+  const edicao = useEdicaoDeNota(id, dadosDaEdicao, ativa && aba.modo === "edicao", (salva, checkpoint) => {
     const novo = conjunto(salva.conteudo);
     const anterior = ultimoConjunto.current ?? conjunto(nota.dados?.nota.conteudo ?? "");
     ultimoConjunto.current = novo;
@@ -107,7 +120,7 @@ export default function AbaDeNota({
 
   const resolver = useMemo(() => criarResolvedor([...notas.values()]), [notas]);
   const resumo = notas.get(id);
-  const titulo = nota.dados?.nota.titulo ?? resumo?.titulo ?? "Nota";
+  const titulo = edicao.nota?.titulo ?? nota.dados?.nota.titulo ?? resumo?.titulo ?? "Nota";
   const pasta = nota.dados?.nota.pasta ?? resumo?.pasta ?? null;
   const carregada = nota.dados !== undefined;
 
@@ -122,7 +135,31 @@ export default function AbaDeNota({
     ligacoes.estado === "pronto"
       ? new Set([...entradas.map((entrada) => entrada.id), ...saidas.flatMap((destino) => (destino.tipo === "nota" ? [destino.id] : []))]).size
       : null;
-  const escrita = nota.dados?.capacidades.escrita ?? false;
+  const escrita = (escritaDisponivel ?? true) && (nota.dados?.capacidades.escrita ?? false);
+
+  useEffect(() => { tituloPendente.current = false; }, [id]);
+  useEffect(() => {
+    if (!ativa || !carregada) return;
+    const inicio = setTimeout(() => definirAbertura({ id, texto: focoPedido && focoPedido.alvo !== "nota" ? "" : `Nota aberta: ${titulo}` }), 0);
+    const fim = setTimeout(() => definirAbertura({ id, texto: "" }), 2000);
+    return () => { clearTimeout(inicio); clearTimeout(fim); };
+    // Uma renomeação tem anúncio próprio; só a identidade carregada anuncia abertura.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, carregada, ativa]);
+  useEffect(() => {
+    if (!ativa || focoPedido?.id !== id) return;
+    if (nota.estado === "erro") { aoConsumirFoco?.(); return; }
+    if (carregada && focoPedido.alvo === "nota") {
+      artigo.current?.querySelector<HTMLElement>("[data-titulo-da-nota]")?.focus({ preventScroll: true });
+      aoConsumirFoco?.();
+    }
+  }, [ativa, focoPedido, id, nota.estado, carregada, aoConsumirFoco]);
+
+  useEffect(() => {
+    if (!ativa || !carregada || !escrita || aba.modo !== "edicao" || focoPedido?.id !== id || focoPedido.alvo !== "texto") return;
+    const campo = artigo.current?.querySelector("textarea");
+    if (campo) { campo.focus({ preventScroll: true }); aoConsumirFoco?.(); }
+  }, [ativa, carregada, escrita, aba.modo, focoPedido, id, aoConsumirFoco]);
 
   // A aba do navegador acompanha a nota aberta.
   useEffect(() => {
@@ -176,7 +213,7 @@ export default function AbaDeNota({
     <div ref={moldura} className="absolute inset-0 z-10 flex flex-col bg-painel motion-safe:animate-entrada">
       {/* Uma região de status para leitor de tela: sem ela, trocar de nota na mesma aba não é anunciado. */}
       <p role="status" className="sr-only">
-        {carregada ? `Nota aberta: ${titulo}` : ""}
+        {abertura.id === id ? abertura.texto : ""}
       </p>
 
       {/*
@@ -195,7 +232,7 @@ export default function AbaDeNota({
             edicaoDisponivel={escrita}
             aoVoltar={aoVoltar}
             aoAvancar={aoAvancar}
-            aoAlternarModo={() => { definirFocarAoEntrar(aba.modo === "leitura"); aoAlternarModo(); }}
+            aoAlternarModo={() => { if (tituloPendente.current) { definirAvisoDeTitulo("Confirme o título com Enter ou desfaça com Esc antes de mudar para Leitura."); return; } definirFocarAoEntrar(aba.modo === "leitura"); aoAlternarModo(); }}
             aoCopiarLigacao={copiarLigacao}
             aoAbrirEmNovaAba={() => aoAbrirNota(id, { novaAba: true })}
             aoPerguntarAoBimo={() => aoPerguntarAoBimo(id)}
@@ -248,13 +285,19 @@ export default function AbaDeNota({
               alvo?.focus({ preventScroll: true });
             }} />
           {edicao.avisoLocal && <p role="alert" className="px-5 py-3 text-texto">{edicao.avisoLocal}</p>}
+          <p role="status" className={avisoDeTitulo ? "px-5 py-3 text-texto" : "sr-only"}>{avisoDeTitulo}</p>
           {nota.dados && (
             <VisaoDaNota
               ref={artigo}
               nota={{ ...(edicao.nota ?? nota.dados.nota), conteudo }}
+              campoDeTitulo={tituloEditavel && escrita && aba.modo === "edicao" ? <CampoDeTitulo key={id} titulo={titulo}
+                aoMudarPendencia={(pendente) => { tituloPendente.current = pendente; if (!pendente) definirAvisoDeTitulo(""); }}
+                focar={ativa && focoPedido?.id === id && focoPedido.alvo === "titulo"} aoConsumirFoco={aoConsumirFoco}
+                aoTexto={() => artigo.current?.querySelector("textarea")?.focus({ preventScroll: true })}
+                aoConfirmar={async (novo) => { const salva = await edicao.renomear(novo); aoRenomear?.(salva); }} /> : undefined}
               conexoes={conexoes}
               resolver={resolver}
-              podeCriar={false}
+              podeCriar={escrita}
               aoAbrirNota={aoAbrirNota}
               aoCriarNota={aoCriarNota}
             >

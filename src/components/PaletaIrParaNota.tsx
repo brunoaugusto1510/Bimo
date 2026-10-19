@@ -3,7 +3,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { IdDeNota } from "@/lib/types";
 import { buscarPorTitulo, type Intervalo, type NotaParaBusca } from "@/lib/busca-por-titulo";
+import { analisarPedidoDeCriacao } from "@/lib/nota-nova";
+import { combinaAtalho } from "@/lib/atalhos";
+import { AVISO_SOMENTE_LEITURA, type ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
 import { buscarNoConteudo } from "@/lib/cliente-de-notas";
+import { useNoMac } from "@/lib/usar-plataforma";
 
 type Props = {
   aberta: boolean;
@@ -13,12 +17,12 @@ type Props = {
   pastaDaCriacao: string | null;
   aoFechar(): void;
   aoAbrir(id: IdDeNota, opcoes: { novaAba: boolean }): void;
-  aoCriar(titulo: string, pasta: string | null): void;
+  aoCriar(titulo: string, pasta: string | null): Promise<ResultadoDaAbertura> | void;
 };
 
 type ResultadosNoConteudo = Awaited<ReturnType<typeof buscarNoConteudo>>;
 const interacao = "min-h-10 transition-[color,background-color,transform] motion-safe:active:scale-[0.96]";
-const normalizar = (texto: string) => texto.trim().normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pt-BR");
+
 
 function destacar(titulo: string, intervalos: Intervalo[]): ReactNode[] {
   const partes: ReactNode[] = [];
@@ -38,6 +42,13 @@ export default function PaletaIrParaNota(props: Props) {
 }
 
 function DialogoIrParaNota({ notas, recentes, podeCriar, pastaDaCriacao, aoFechar, aoAbrir, aoCriar }: Props) {
+  const [criando, definirCriando] = useState(false);
+  const [criandoDemorado, definirCriandoDemorado] = useState(false);
+  const [tentativaDeCriacao, definirTentativaDeCriacao] = useState(0);
+  const [regiaoViva, definirRegiaoViva] = useState({ id: 0, texto: "" });
+  const mac = useNoMac();
+  const emVoo = useRef(false);
+  const [erroDeCriacao, definirErroDeCriacao] = useState("");
   const [consulta, definirConsulta] = useState("");
   const [indice, definirIndice] = useState(0);
   const [conteudo, definirConteudo] = useState<{ consulta: string; resultados: ResultadosNoConteudo; erro?: boolean } | null>(null);
@@ -49,7 +60,8 @@ function DialogoIrParaNota({ notas, recentes, podeCriar, pastaDaCriacao, aoFecha
   const id = useId();
   const consultaAparada = consulta.trim();
   const resultados = buscarPorTitulo(notas, consulta, recentes);
-  const podeOferecerCriacao = consultaAparada.length > 0 && !notas.some((nota) => normalizar(nota.titulo) === normalizar(consultaAparada));
+  const pedido = analisarPedidoDeCriacao(consulta, pastaDaCriacao, notas);
+  const podeOferecerCriacao = consultaAparada.length > 0 && pedido.tipo === "criar";
   const resultadosNoConteudo = consultaAparada.length >= 2 ? conteudo?.resultados ?? [] : [];
   const opcoes = [...resultados.map(({ nota }) => nota), ...resultadosNoConteudo];
   const indiceAtivo = opcoes.length ? Math.min(indice, opcoes.length - 1) : -1;
@@ -58,6 +70,18 @@ function DialogoIrParaNota({ notas, recentes, podeCriar, pastaDaCriacao, aoFecha
     : erro ? "Não foi possível buscar no conteúdo."
     : conteudo?.consulta === consultaAparada && resultadosNoConteudo.length ? `${resultadosNoConteudo.length} resultados no conteúdo`
     : opcoes.length ? `${opcoes.length} resultados` : "Nenhuma nota encontrada";
+  const motivo = !podeCriar ? AVISO_SOMENTE_LEITURA : pedido.tipo !== "criar" ? pedido.motivo : "";
+  const dicaDeCriacao = podeOferecerCriacao && podeCriar ? `${mac ? "⌘ ↵" : "Ctrl+Enter"} cria a nota «${pedido.tipo === "criar" ? pedido.titulo : consultaAparada}»` : motivo;
+  useEffect(() => {
+    const inicio = setTimeout(() => definirRegiaoViva((a) => ({ id: a.id + 1, texto: criandoDemorado ? "Criando nota…" : `${anuncio}. ${dicaDeCriacao}` })), 0);
+    const fim = setTimeout(() => definirRegiaoViva((a) => ({ ...a, texto: "" })), 2000);
+    return () => { clearTimeout(inicio); clearTimeout(fim); };
+  }, [anuncio, dicaDeCriacao, criandoDemorado]);
+  useEffect(() => {
+    if (!criando) return;
+    const timer = setTimeout(() => definirCriandoDemorado(true), 800);
+    return () => clearTimeout(timer);
+  }, [criando]);
 
   function fechar() {
     restaurarFoco.current = true;
@@ -101,11 +125,18 @@ function DialogoIrParaNota({ notas, recentes, podeCriar, pastaDaCriacao, aoFecha
     if (indiceAtivo >= 0) document.getElementById(`${id}-opcao-${indiceAtivo}`)?.scrollIntoView({ block: "nearest" });
   }, [indiceAtivo, consulta, id]);
 
-  function criar() {
-    if (podeCriar && podeOferecerCriacao) {
-      restaurarFoco.current = false;
-      aoCriar(consultaAparada, pastaDaCriacao);
-    }
+  async function criar() {
+    if (emVoo.current) return;
+    definirTentativaDeCriacao((n) => n + 1);
+    if (!podeCriar) { definirErroDeCriacao(AVISO_SOMENTE_LEITURA); return; }
+    if (pedido.tipo === "existente") { abrir(pedido.id, false); return; }
+    if (pedido.tipo !== "criar") { definirErroDeCriacao(pedido.motivo); return; }
+    emVoo.current = true; definirCriando(true); definirErroDeCriacao("");
+    try {
+      const resultado = await aoCriar(pedido.titulo, pedido.pasta);
+      if (resultado?.tipo === "erro") definirErroDeCriacao(resultado.mensagem);
+    } catch (erro) { definirErroDeCriacao(erro instanceof Error ? erro.message : "Falha ao criar nota."); }
+    finally { emVoo.current = false; definirCriando(false); definirCriandoDemorado(false); }
   }
 
   useEffect(() => {
@@ -120,7 +151,7 @@ function DialogoIrParaNota({ notas, recentes, podeCriar, pastaDaCriacao, aoFecha
         return;
       }
       if (evento.isComposing) return;
-      if (evento.key === "Enter" && evento.ctrlKey) { evento.preventDefault(); criar(); return; }
+      if (combinaAtalho(evento, "mod+enter")) { evento.preventDefault(); if (!evento.repeat) void criar(); return; }
       if (evento.target !== campo.current || evento.isComposing) return;
       if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
         evento.preventDefault();
@@ -138,38 +169,42 @@ function DialogoIrParaNota({ notas, recentes, podeCriar, pastaDaCriacao, aoFecha
   return (
     <div onClick={(evento) => { if (evento.target === evento.currentTarget) fechar(); }} className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-texto/30 px-3 py-6 md:px-4 md:pt-28">
       <div ref={dialogo} role="dialog" aria-modal="true" aria-label="Ir para nota" className="relative w-full max-w-2xl overflow-hidden rounded-painel border border-borda bg-painel text-texto shadow-foco motion-safe:animate-entrada">
-        <div className="flex items-center gap-3 border-b border-borda px-4 focus-within:shadow-foco">
+        <div className="flex items-center gap-3 border-b border-borda px-4 focus-within:ring-2 focus-within:ring-destaque">
           <span aria-hidden="true" className="text-suave">⌕</span>
           <label htmlFor={`${id}-busca`} className="sr-only">Buscar nota pelo nome</label>
-          <input ref={campo} id={`${id}-busca`} type="search" role="combobox" aria-autocomplete="list" aria-expanded={opcoes.length > 0} aria-controls={`${id}-resultados`} aria-activedescendant={indiceAtivo >= 0 ? `${id}-opcao-${indiceAtivo}` : undefined} value={consulta} onChange={(evento) => {
+          <input ref={campo} id={`${id}-busca`} type="search" role="combobox" aria-describedby={`${id}-motivo ${id}-atalhos`} aria-autocomplete="list" aria-expanded={opcoes.length > 0} aria-controls={`${id}-resultados`} aria-activedescendant={indiceAtivo >= 0 ? `${id}-opcao-${indiceAtivo}` : undefined} value={consulta} onChange={(evento) => {
             definirConsulta(evento.target.value); definirIndice(0);
             if (evento.target.value.trim().length < 2) definirConteudo(null);
           }} className="h-14 min-w-0 flex-1 bg-painel text-corpo outline-none" />
-          <button type="button" aria-label="Esc, fechar a paleta" onClick={fechar} className={`min-w-10 rounded-full px-2 text-meta text-suave hover:bg-painel-alt ${interacao}`}><kbd>Esc</kbd></button>
+          <button type="button" aria-label="Fechar a paleta" onClick={fechar} className={`min-w-10 rounded-full px-2 text-meta text-texto hover:bg-painel-alt ${interacao}`}><kbd aria-hidden="true">Esc</kbd></button>
         </div>
-        <p role="status" className="sr-only">{anuncio}</p>
+        <p role="status" className="sr-only"><span key={regiaoViva.id}>{regiaoViva.texto}</span></p>
+        <p role="alert" className="sr-only"><span key={tentativaDeCriacao}>{erroDeCriacao}</span></p>
         <div className="max-h-[60dvh] overflow-y-auto p-2">
           <h2 className="px-3 py-2 text-secao font-semibold text-balance text-suave uppercase">Notas</h2>
           <div id={`${id}-resultados`} role="listbox" aria-label="Resultados">
             {resultados.map(({ nota, intervalos }, posicao) => <button key={nota.id} id={`${id}-opcao-${posicao}`} type="button" role="option" aria-selected={posicao === indiceAtivo} tabIndex={-1} onClick={(evento) => abrir(nota.id, evento.shiftKey)} className={`flex w-full items-center gap-3 rounded-bloco border-l-4 px-3 py-2 text-left text-controle ${interacao} ${posicao === indiceAtivo ? "border-l-destaque bg-destaque-suave" : "border-l-transparent hover:bg-painel-alt"}`}>
               <span aria-hidden="true" className="text-suave">◈</span><span className="min-w-0 flex-1 truncate">{destacar(nota.titulo, intervalos)}</span><span className="max-w-32 truncate text-meta text-suave">{nota.pasta ?? "Raiz"}</span>
             </button>)}
-            {consultaAparada.length >= 2 && <section aria-label="No conteúdo" className="mt-2">
-              <h2 className="px-3 py-2 text-secao font-semibold text-balance text-suave uppercase">No conteúdo</h2>
+            {consultaAparada.length >= 2 && <div role="group" aria-labelledby={`${id}-conteudo`} className="mt-2">
+              <h2 id={`${id}-conteudo`} className="px-3 py-2 text-secao font-semibold text-balance text-suave uppercase">No conteúdo</h2>
               {resultadosNoConteudo.map((nota, posicao) => <button key={nota.id} id={`${id}-opcao-${resultados.length + posicao}`} role="option" aria-selected={resultados.length + posicao === indiceAtivo} tabIndex={-1} type="button" onClick={(evento) => abrir(nota.id, evento.shiftKey)} className={`block w-full rounded-bloco border-l-4 px-3 py-2 text-left text-controle ${interacao} ${resultados.length + posicao === indiceAtivo ? "border-l-destaque bg-destaque-suave" : "border-l-transparent hover:bg-painel-alt"}`}>
                 <span className="flex justify-between gap-3"><span className="font-semibold">{nota.titulo}</span><span className="text-meta text-suave">{nota.pasta ?? "Raiz"}</span></span><span className="mt-1 block text-meta text-suave">{nota.trecho}</span>
               </button>)}
-            </section>}
+            </div>}
           </div>
-          {resultados.length === 0 && <p className="px-3 py-2 text-meta text-suave">Nenhuma nota encontrada pelo nome.</p>}
+          {resultados.length === 0 && <p className="px-3 py-2 text-meta text-texto">Nenhuma nota encontrada pelo nome.</p>}
           {erro && <p aria-hidden="true" className="px-3 py-2 text-meta text-texto">Não foi possível buscar no conteúdo.</p>}
           {podeOferecerCriacao && <section aria-label="Criar" className="mt-2">
             <h2 className="px-3 py-2 text-secao font-semibold text-balance text-suave uppercase">Criar</h2>
-            <button type="button" disabled={!podeCriar} title={!podeCriar ? "Criar notas não está disponível no modo somente leitura." : undefined} onClick={criar} className={`w-full rounded-bloco px-3 py-2 text-left text-controle hover:bg-destaque-suave disabled:cursor-not-allowed disabled:text-suave ${interacao}`}>Criar a nota “{consultaAparada}” em {pastaDaCriacao ?? "Raiz"}</button>
+            <button type="button" aria-keyshortcuts="Control+Enter Meta+Enter" aria-describedby={`${id}-motivo`} aria-disabled={!podeCriar || criando} aria-busy={criando} onClick={() => void criar()} className={`w-full rounded-bloco px-3 py-2 text-left text-controle text-texto aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&:not([aria-disabled=true])]:hover:bg-destaque-suave ${interacao}`}>Criar nota «{pedido.tipo === "criar" ? pedido.titulo : consultaAparada}» em {pedido.tipo === "criar" ? pedido.pasta ?? "Raiz" : pastaDaCriacao ?? "Raiz"}</button>
           </section>}
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-borda bg-painel-alt px-4 py-3 text-meta text-suave">
-          <span><kbd>↑↓</kbd> navegar</span><span><kbd>↵</kbd> abrir</span><span><kbd>Shift ↵</kbd> abrir ao lado</span><span><kbd>Ctrl ↵</kbd> criar nota nova</span>
+        <p id={`${id}-motivo`} className="px-4 py-2 text-meta text-texto">{dicaDeCriacao}{consultaAparada && pedido.tipo === "existente" && <button type="button" onClick={() => abrir(pedido.id, false)} className="min-h-10 rounded-full px-3 text-destaque-texto">Abrir nota existente</button>}</p>
+        {criando && <p aria-hidden="true" className="px-4 py-2">Criando nota…</p>}
+        {erroDeCriacao && <p aria-hidden="true" className="px-4 py-2 text-erro">{erroDeCriacao}</p>}
+        <div id={`${id}-atalhos`} className="flex flex-wrap gap-x-4 gap-y-1 border-t border-borda bg-painel-alt px-4 py-3 text-meta text-texto">
+          <span><kbd>↑↓</kbd> navegar</span><span><kbd>↵</kbd> abrir</span><span><kbd>Shift ↵</kbd> abrir ao lado</span><span><kbd>{mac ? "⌘ ↵" : "Ctrl ↵"}</kbd> criar nota nova</span>
         </div>
       </div>
     </div>

@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { salvarNota, type RespostaDeNota } from "../cliente-de-notas";
+import { buscarNota, renomearNota, salvarNota, type RespostaDeNota } from "../cliente-de-notas";
 import { criarSalvamentoAutomatico, type RetratoDaEdicao, type SalvamentoAutomatico } from "../edicao/salvamento-automatico";
 import { criarRascunhoLocal, decidirRascunho, type RascunhoLocal } from "../edicao/rascunho-local";
 import type { NotaCompleta } from "../repositorio-de-notas/tipos";
 
 export type EscolhaDaEdicao = "manter" | "usar" | "copiar" | "restaurar" | "descartar" | "tentar";
 export const EVENTO_NOTA_SALVA = "bimo:nota-salva";
+export const EVENTO_NOTAS_REESCRITAS = "bimo:notas-reescritas";
 const LIMITE_KEEPALIVE = 64 * 1024;
 
 export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, editando: boolean, aoSalvar?: (nota: NotaCompleta, checkpoint: boolean) => void) {
@@ -39,6 +40,7 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
       },
       aoMudar: (retrato) => { if (montado) definirVista({ ...retrato, id }); },
       aoSalvar: (nota, checkpoint) => {
+        if (!montado) return;
         const atual = maquina.obter();
         copia.confirmar(nota.conteudo);
         // Uma resposta atrasada só atualiza a base da cópia, nunca o texto mais recente.
@@ -88,8 +90,10 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
       copia.descarregar();
       // Não bloquear navegação. O rascunho já foi descarregado mesmo se a rede falhar.
       // O backup já está descarregado. Uma instância desmontada não confirma nem apaga a cópia de uma nova.
-      if (escrita) void maquina.forcar({ checkpoint: true });
-      maquina.destruir(); copia.destruir();
+      maquina.habilitar(false);
+      if (escrita) void maquina.forcar({ checkpoint: true }).finally(() => maquina.destruir());
+      else maquina.destruir();
+      copia.destruir();
       if (controle.current?.maquina === maquina) controle.current = null;
     };
     // A sessão pertence à identidade carregada. Revisões devolvidas pela escrita não recriam a fila.
@@ -108,6 +112,25 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
     atual.maquina.habilitar(escrita && editando);
     return () => { if (escrita && editando) { atual.copia.descarregar(); void atual.maquina.forcar({ checkpoint: true }); } };
   }, [id, escrita, editando]);
+
+  useEffect(() => {
+    const sinal = new AbortController();
+    async function revalidar(evento: Event) {
+      if ((evento as CustomEvent<{ id: string }>).detail.id === id) return;
+      const atual = controle.current;
+      if (!atual || atual.id !== id) return;
+      try {
+        await atual.maquina.revalidarReescrita(async () => (await buscarNota(id, sinal.signal)).nota);
+        if (sinal.signal.aborted || controle.current !== atual) return;
+        // O servidor informa apenas a quantidade reescrita: revalidamos todas as abas.
+        const novo = atual.maquina.obter();
+        atual.copia.confirmar(novo.nota.conteudo);
+        if (novo.texto !== novo.nota.conteudo) atual.copia.guardar(novo.texto, novo.nota.revisao);
+      } catch { /* Mantém texto e revisão locais; a próxima leitura pode tentar de novo. */ }
+    }
+    window.addEventListener(EVENTO_NOTAS_REESCRITAS, revalidar);
+    return () => { sinal.abort(); window.removeEventListener(EVENTO_NOTAS_REESCRITAS, revalidar); };
+  }, [id]);
 
   const aoMudar = useCallback((texto: string) => {
     const atual = controle.current;
@@ -140,6 +163,31 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
   return {
     texto: retrato?.texto ?? dados?.nota.conteudo ?? "", nota: retrato?.nota ?? dados?.nota,
     estado: retrato?.estado ?? "salvo", aoMudar, forcar, resolverConflito,
+    async renomear(titulo: string): Promise<NotaCompleta> {
+      const atual = controle.current;
+      if (!escrita || !atual || atual.id !== id || recuperacao?.id === id) throw new Error("A nota não está disponível para renomear.");
+      return atual.maquina.executarExclusivo(async (revisao) => {
+        const textoEnviado = atual.maquina.obter().texto;
+        const resultado = await renomearNota(id, titulo, revisao);
+        if (resultado.tipo === "ok" || (resultado.tipo === "conflito" && resultado.atual.titulo === titulo && resultado.atual.conteudo === atual.maquina.obter().nota.conteudo)) {
+          const salva = resultado.tipo === "ok" ? resultado.nota : resultado.atual;
+          atual.maquina.rebasear(salva, textoEnviado);
+          const retrato = atual.maquina.obter();
+          if (retrato.estado === "conflito") throw new Error("O conteúdo mudou durante a renomeação. Resolva o conflito.");
+          if (controle.current !== atual) return salva;
+          atual.copia.confirmar(salva.conteudo);
+          if (retrato.texto !== salva.conteudo) atual.copia.guardar(retrato.texto, salva.revisao);
+          callback.current?.(salva, true);
+          window.dispatchEvent(new CustomEvent(EVENTO_NOTA_SALVA, { detail: { id, checkpoint: true } }));
+          if (resultado.tipo === "conflito" || (resultado.notasReescritas ?? 0) > 0) {
+            window.dispatchEvent(new CustomEvent(EVENTO_NOTAS_REESCRITAS, { detail: { id } }));
+          }
+          return salva;
+        }
+        if (resultado.tipo === "conflito") atual.maquina.recuperarConflito(atual.maquina.obter().texto, resultado.atual);
+        throw new Error(resultado.tipo === "erro" ? resultado.mensagem : resultado.tipo === "titulo-em-uso" ? "Já existe uma nota com esse título nessa pasta." : resultado.tipo === "somente-leitura" ? "As notas estão em modo somente leitura." : "Não foi possível renomear a nota.");
+      });
+    },
     mensagem: retrato?.mensagem, avisoLocal,
     rascunhoRecuperado: recuperacao?.id === id,
     pendente: recuperacao?.id === id || (!!retrato && (retrato.texto !== retrato.nota.conteudo || retrato.estado === "salvando")),

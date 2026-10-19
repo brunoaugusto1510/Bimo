@@ -23,6 +23,8 @@ export function criarSalvamentoAutomatico(deps: Dependencias) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let primeira: number | undefined;
   let voo: Promise<void> | null = null;
+  let exclusiva: Promise<unknown> | null = null;
+  let exclusividadePedida = false;
   let falhas = 0;
   let destruido = false;
   let sessaoAberta = false;
@@ -37,10 +39,11 @@ export function criarSalvamentoAutomatico(deps: Dependencias) {
   }
   function limparTimer() { if (timer !== undefined) cancelar(timer); timer = undefined; }
   function programar(ms: number) {
-    limparTimer(); if (!destruido && (automatico || retrato.estado === "erro")) timer = agendar(() => { timer = undefined; void executar(); }, ms);
+    limparTimer(); if (!exclusiva && !destruido && (automatico || retrato.estado === "erro")) timer = agendar(() => { timer = undefined; void executar(); }, ms);
   }
   function bloqueado() { return destruido || retrato.estado === "conflito" || retrato.estado === "recusado"; }
   function executar(): Promise<void> {
+    if (exclusiva) return Promise.resolve();
     if (voo) return voo;
     if (bloqueado() || (!sujo() && !(checkpointPendente && sessaoAberta))) return Promise.resolve();
     limparTimer();
@@ -82,6 +85,7 @@ export function criarSalvamentoAutomatico(deps: Dependencias) {
   }
   const sujoDepois = (nota: NotaCompleta) => retrato.texto !== nota.conteudo;
   async function forcar(opcoes: { checkpoint: boolean; keepalive?: boolean }): Promise<void> {
+    if (exclusiva) { await exclusiva.catch(() => {}); return forcar(opcoes); }
     if (bloqueado()) return;
     if (!voo && !sujo() && !sessaoAberta) return;
     checkpointPendente ||= opcoes.checkpoint;
@@ -114,14 +118,52 @@ export function criarSalvamentoAutomatico(deps: Dependencias) {
     emitir({ nota: atual, atual: undefined, estado: retrato.texto === atual.conteudo ? "salvo" : "pendente" });
     await forcar({ checkpoint: true });
   }
+  function rebasear(nota: NotaCompleta, textoEnviado?: string) {
+    if (destruido) return;
+    if (textoEnviado === undefined && nota.conteudo !== retrato.nota.conteudo) { limparTimer(); emitir({ atual: nota, estado: "conflito" }); return; }
+    const texto = textoEnviado !== undefined && retrato.texto === textoEnviado ? nota.conteudo : retrato.texto;
+    emitir({ nota, texto, atual: undefined, estado: texto === nota.conteudo ? "salvo" : "pendente" });
+  }
   return {
-    obter: () => retrato, mudar, forcar, descartar, resolver,
+    obter: () => retrato, mudar, forcar, descartar, resolver, rebasear,
+    async revalidarReescrita(carregar: () => Promise<NotaCompleta>) {
+      const anterior = exclusiva;
+      const escritaEmVoo = voo;
+      limparTimer();
+      // A leitura também ocupa a fila: nenhum autosave pode sair com a revisão antiga.
+      const pedido = Promise.resolve().then(async () => {
+        await anterior?.catch(() => {});
+        await escritaEmVoo;
+        const nota = await carregar();
+        if (!destruido && nota.revisao > retrato.nota.revisao) rebasear(nota, retrato.nota.conteudo);
+      });
+      exclusiva = pedido;
+      try { await pedido; }
+      finally { if (exclusiva === pedido) exclusiva = null; if (sujo() && !bloqueado()) programar(3000); }
+    },
+    async executarExclusivo<T>(fn: (revisao: number) => Promise<T>): Promise<T> {
+      if (exclusividadePedida) throw new Error("Uma renomeação já está em andamento.");
+      exclusividadePedida = true;
+      let pedido: Promise<T> | undefined;
+      try {
+        await forcar({ checkpoint: true });
+        if (bloqueado() || retrato.estado === "erro" || sujo()) throw new Error("Salve ou resolva o conflito antes de renomear.");
+        limparTimer();
+        pedido = Promise.resolve().then(() => fn(retrato.nota.revisao));
+        exclusiva = pedido;
+        return await pedido;
+      } finally {
+        if (exclusiva === pedido) exclusiva = null;
+        exclusividadePedida = false;
+        if (sujo() && !bloqueado()) programar(3000);
+      }
+    },
     recuperarConflito(texto: string, atual: NotaCompleta) { limparTimer(); emitir({ texto, atual, estado: "conflito" }); },
     destruir() { destruido = true; limparTimer(); },
     temAlteracoes: sujo,
     emVoo: () => voo !== null,
     tentarNovamente() { if (retrato.estado === "recusado") emitir({ estado: "pendente", mensagem: undefined }); return forcar({ checkpoint: true }); },
-    adotar(nota: NotaCompleta) { if (!sujo() && !voo && retrato.estado === "salvo" && nota.revisao > retrato.nota.revisao) descartar(nota); },
+    adotar(nota: NotaCompleta) { if (!sujo() && !voo && !exclusiva && retrato.estado === "salvo" && nota.revisao > retrato.nota.revisao) descartar(nota); },
     habilitar(valor: boolean) { automatico = valor; if (!valor && retrato.estado !== "erro") limparTimer(); else if (sujo() && !bloqueado() && !voo) programar(retrato.estado === "erro" ? 5000 : 3000); },
   };
 }

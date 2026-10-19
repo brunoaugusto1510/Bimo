@@ -22,10 +22,10 @@ describe("TelaInicial", () => {
     const props = propriedades();
     render(<TelaInicial {...props} recentes={[]} criarDisponivel={false} />);
     const criar = screen.getByRole("button", { name: /Criar nova nota/ });
-    expect(criar).toBeDisabled();
-    expect(criar).toHaveAttribute("title", expect.stringContaining("somente leitura"));
+    expect(criar).toHaveAttribute("aria-disabled", "true");
+    expect(criar).toHaveAccessibleDescription(expect.stringContaining("somente leitura"));
     await userEvent.setup().click(criar);
-    expect(props.aoCriar).not.toHaveBeenCalled();
+    expect(props.aoCriar).toHaveBeenCalledOnce();
     expect(screen.getByText("Nenhuma nota aberta ainda.")).toBeInTheDocument();
   });
 });

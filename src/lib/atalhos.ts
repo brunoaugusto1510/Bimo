@@ -18,7 +18,7 @@ function teclaFisicaDe(tecla: string): string | null {
 
 export function combinaAtalho(evento: EventoDeTecla, atalho: string): boolean {
   // O Chrome dispara `keydown` sem `key` ao preencher um campo automaticamente.
-  if (evento.isComposing || typeof evento.key !== "string") return false;
+  if (evento.isComposing || typeof evento.key !== "string" || evento.key === "Dead") return false;
 
   const partes = atalho.toLowerCase().split("+");
   const tecla = partes[partes.length - 1];

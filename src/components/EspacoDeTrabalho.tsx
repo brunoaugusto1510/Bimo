@@ -1,4 +1,5 @@
 "use client";
+import { esquecerSemente } from "@/lib/cliente-de-notas";
 
 import { useCallback, useMemo, useState, type Dispatch, type ReactNode } from "react";
 import type { NotaParaArvore } from "@/lib/arvore-de-notas";
@@ -8,6 +9,8 @@ import AbaDeNota from "./AbaDeNota";
 import BarraDeAbas from "./BarraDeAbas";
 import BarraDeStatus from "./BarraDeStatus";
 import TelaInicial from "./TelaInicial";
+
+import type { FocoPedido, ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
 
 type Props = {
   /** O modo Notas: só nele as abas e as notas aparecem; no modo Bimo isto só repassa o conteúdo. */
@@ -19,7 +22,13 @@ type Props = {
   conexoesPorNota: ReadonlyMap<string, number>;
   totais: { notas: number; conexoes: number };
   aoAbrirNota: (id: IdDeNota, opcoes: { novaAba: boolean }) => void;
-  aoCriarNota: (titulo: string) => void;
+  aoCriarNota: (titulo: string, pasta?: string | null, opcoes?: { novaAba: boolean }) => Promise<ResultadoDaAbertura> | void;
+  aoNovaNota?: () => unknown;
+  criarDisponivel?: boolean;
+  focoPedido?: FocoPedido | null;
+  aoConsumirFoco?: () => void;
+  idsComTituloEditavel?: ReadonlySet<string>;
+  aoRenomear?: (nota: NotaParaArvore) => void;
   aoPerguntarAoBimo: (id: IdDeNota | null) => void;
   aoIrParaNota: () => void;
   /** O grafo, o chat e o que mais mora por baixo das abas — a aba Gráfico é só deixá-lo à mostra. */
@@ -46,7 +55,7 @@ export default function EspacoDeTrabalho({
   aoCriarNota,
   aoPerguntarAoBimo,
   aoIrParaNota,
-  children,
+  children, aoNovaNota, criarDisponivel = false, focoPedido, aoConsumirFoco, idsComTituloEditavel, aoRenomear,
 }: Props) {
   const aba = abaAtiva(estado);
   const [pendencias, definirPendencias] = useState<ReadonlyMap<string, boolean>>(new Map());
@@ -81,10 +90,16 @@ export default function EspacoDeTrabalho({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {ativo && (
         <BarraDeAbas
+          aoNovaNota={aoNovaNota}
+          criarDisponivel={criarDisponivel}
           abas={abas}
           ativa={estado.ativa}
           aoAtivar={(chave) => despachar({ tipo: "ativar-aba", chave })}
-          aoFechar={(chave) => despachar({ tipo: "fechar-aba", chave })}
+          aoFechar={(chave) => {
+            const fechada = estado.abas.find((aba) => aba.chave === chave);
+            if (fechada?.tipo === "nota") for (const id of fechada.historico.pilha) esquecerSemente(id);
+            despachar({ tipo: "fechar-aba", chave });
+          }}
           aoNovaAba={() => despachar({ tipo: "nova-aba-vazia" })}
         />
       )}
@@ -99,6 +114,11 @@ export default function EspacoDeTrabalho({
         {estado.abas.map((candidata) => candidata.tipo === "nota" && (
           <div key={candidata.chave} hidden={!ativo || estado.ativa !== candidata.chave}>
           <AbaDeNota
+            focoPedido={focoPedido}
+            aoConsumirFoco={aoConsumirFoco}
+            tituloEditavel={idsComTituloEditavel?.has(idAtual(candidata))}
+            aoRenomear={aoRenomear}
+            escritaDisponivel={criarDisponivel}
             aba={candidata}
             ativa={ativo && estado.ativa === candidata.chave}
             aoMudarPendencia={aoMudarPendencia}
@@ -117,9 +137,8 @@ export default function EspacoDeTrabalho({
           <div className="absolute inset-0 z-10 overflow-auto bg-painel motion-safe:animate-entrada">
             <TelaInicial
               recentes={recentes}
-              // Criar notas chega com a edição (Fase 8b).
-              criarDisponivel={false}
-              aoCriar={() => {}}
+              criarDisponivel={criarDisponivel}
+              aoCriar={() => { aoNovaNota?.(); }}
               aoIrParaNota={aoIrParaNota}
               aoAbrirGrafico={() => despachar({ tipo: "ativar-aba", chave: ABA_DO_GRAFICO })}
               aoPerguntarAoBimo={() => aoPerguntarAoBimo(null)}

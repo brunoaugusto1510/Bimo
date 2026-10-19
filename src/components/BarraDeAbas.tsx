@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 type Props = {
   abas: { chave: string; titulo: string; pendente?: boolean }[];
@@ -8,12 +8,15 @@ type Props = {
   aoAtivar(chave: string): void;
   aoFechar(chave: string): void;
   aoNovaAba(): void;
+  aoNovaNota?: () => unknown;
+  criarDisponivel?: boolean;
 };
 
 const interacao = "transition-[color,background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]";
 
-export default function BarraDeAbas({ abas, ativa, aoAtivar, aoFechar, aoNovaAba }: Props) {
+export default function BarraDeAbas({ abas, ativa, aoAtivar, aoFechar, aoNovaAba, aoNovaNota, criarDisponivel = false }: Props) {
   const botoes = useRef(new Map<string, HTMLButtonElement>());
+  const idAviso = useId();
   const todas = [{ chave: "grafico", titulo: "Gráfico", pendente: false }, ...abas.filter((aba) => aba.chave !== "grafico")];
 
   const fechamentoPendente = useRef(false);
@@ -59,6 +62,8 @@ export default function BarraDeAbas({ abas, ativa, aoAtivar, aoFechar, aoNovaAba
         {todas.map((aba, indice) => aba.chave !== "grafico" && <button key={aba.chave} style={{ gridColumn: indice + 1, gridRow: 1 }} type="button" tabIndex={ativa === aba.chave ? 0 : -1} aria-label={`Fechar ${aba.titulo}`} onClick={() => fechar(aba.chave)} className={`z-10 h-10 w-10 justify-self-end rounded-full text-texto ${interacao}`}><span aria-hidden="true">✕</span></button>)}
         <button type="button" aria-label="Nova aba" title="Nova aba" onClick={aoNovaAba} className={`h-10 w-10 shrink-0 rounded-full text-suave ${interacao}`}>+</button>
       </div>
+      {aoNovaNota && <button type="button" aria-describedby={!criarDisponivel ? idAviso : undefined} aria-keyshortcuts="Alt+N" aria-disabled={!criarDisponivel} onClick={() => { aoNovaNota(); }} className="sticky right-0 z-20 ml-auto min-h-10 shrink-0 rounded-full bg-painel-alt px-3 text-destaque-texto transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50 [&:not([aria-disabled=true])]:hover:bg-painel">Nova nota</button>}
+      <span id={idAviso} className="sr-only">Criar notas não está disponível no modo somente leitura.</span>
     </div>
   );
 }

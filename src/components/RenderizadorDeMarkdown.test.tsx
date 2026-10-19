@@ -72,9 +72,9 @@ describe("RenderizadorDeMarkdown", () => {
     it("uma ligação sem nota é um botão que cria a nota", async () => {
       const { aoCriarNota, usuario } = montar("Ainda falta [[Zettelkasten]].");
 
-      await usuario.click(screen.getByRole("button", { name: "Zettelkasten" }));
+      await usuario.click(screen.getByRole("button", { name: "Criar a nota «Zettelkasten»" }));
 
-      expect(aoCriarNota).toHaveBeenCalledWith("Zettelkasten");
+      expect(aoCriarNota).toHaveBeenCalledWith("Zettelkasten", null, { novaAba: false });
     });
 
     it("nomes com asteriscos aparecem como estão escritos e ainda abrem a nota", async () => {

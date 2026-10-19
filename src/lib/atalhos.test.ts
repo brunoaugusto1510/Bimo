@@ -6,6 +6,9 @@ function tecla(key: string, extras: Partial<EventoDeTecla> = {}): EventoDeTecla 
 }
 
 describe("combinaAtalho", () => {
+  it("não intercepta a tecla morta Option N", () => {
+    expect(combinaAtalho(tecla("Dead", { code: "KeyN", altKey: true }), "alt+n")).toBe(false);
+  });
   it("mod+o vale com Ctrl (Windows e Linux) e com Cmd (Mac)", () => {
     expect(combinaAtalho(tecla("o", { ctrlKey: true }), "mod+o")).toBe(true);
     expect(combinaAtalho(tecla("o", { metaKey: true }), "mod+o")).toBe(true);

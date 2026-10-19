@@ -105,23 +105,23 @@ describe("LigacaoDeNota — nota que ainda não existe", () => {
   it("é um botão com aparência de ligação pendente; o clique cria a nota com esse título", async () => {
     const { aoCriar, aoAbrir, usuario } = montar({ alvo: "Fantasma" }, naoResolvida);
 
-    await usuario.click(screen.getByRole("button", { name: "Notas atômicas" }));
+    await usuario.click(screen.getByRole("button", { name: "«Notas atômicas» (criar nota)" }));
 
-    expect(aoCriar).toHaveBeenCalledExactlyOnceWith("Fantasma");
+    expect(aoCriar).toHaveBeenCalledExactlyOnceWith("Fantasma", null, { novaAba: false });
     expect(aoAbrir).not.toHaveBeenCalled();
   });
 
-  it("usa só o último pedaço de 'Pasta/Título' como título da nota nova", async () => {
+  it("preserva o caminho de 'Pasta/Título' como título da nota nova", async () => {
     const { aoCriar, usuario } = montar({ alvo: "Pasta/Fantasma" }, naoResolvida);
 
-    await usuario.click(screen.getByRole("button", { name: "Notas atômicas" }));
+    await usuario.click(screen.getByRole("button", { name: "«Notas atômicas» (criar nota)" }));
 
-    expect(aoCriar).toHaveBeenCalledWith("Fantasma");
+    expect(aoCriar).toHaveBeenCalledWith("Pasta/Fantasma", null, { novaAba: false });
   });
 
   it("sem permissão para criar, o botão fica desabilitado e explica por quê", async () => {
     const { aoCriar, usuario } = montar({ podeCriar: false }, naoResolvida);
-    const botao = screen.getByRole("button", { name: "Notas atômicas" });
+    const botao = screen.getByRole("button", { name: /Criar a nota/ });
 
     await usuario.click(botao);
 
@@ -133,7 +133,7 @@ describe("LigacaoDeNota — nota que ainda não existe", () => {
   it("não mostra prévia: não há nota para mostrar", async () => {
     const { carregarPrevia, usuario } = montar({}, naoResolvida);
 
-    await usuario.hover(screen.getByRole("button", { name: "Notas atômicas" }));
+    await usuario.hover(screen.getByRole("button", { name: /Criar a nota/ }));
     await act(() => vi.advanceTimersByTimeAsync(500));
 
     expect(carregarPrevia).not.toHaveBeenCalled();

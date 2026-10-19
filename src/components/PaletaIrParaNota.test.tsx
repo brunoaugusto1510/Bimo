@@ -47,7 +47,7 @@ describe("PaletaIrParaNota", () => {
     const usuario = userEvent.setup();
     await usuario.type(screen.getByRole("combobox"), "arvore");
     expect(screen.getByText("Árvore", { selector: "strong,mark" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Criar a nota/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Criar nota/ })).not.toBeInTheDocument();
     await usuario.click(screen.getByRole("option"));
     expect(props.aoAbrir).toHaveBeenCalledWith("a", { novaAba: false });
   });
@@ -59,9 +59,9 @@ describe("PaletaIrParaNota", () => {
     await usuario.keyboard("{Control>}{Enter}{/Control}");
     expect(props.aoCriar).toHaveBeenCalledExactlyOnceWith("Nova", "Ideias");
     rerender(<PaletaIrParaNota {...props} podeCriar={false} />);
-    const criar = screen.getByRole("button", { name: /Criar a nota/ });
-    expect(criar).toBeDisabled();
-    expect(criar).toHaveAttribute("title", "Criar notas não está disponível no modo somente leitura.");
+    const criar = screen.getByRole("button", { name: /Criar nota/ });
+    expect(criar).toHaveAttribute("aria-disabled", "true");
+    expect(criar).toHaveAccessibleDescription("Criar notas não está disponível no modo somente leitura.");
     await usuario.keyboard("{Control>}{Enter}{/Control}");
     expect(props.aoCriar).toHaveBeenCalledOnce();
   });
@@ -113,7 +113,7 @@ it("cancela o temporizador ao fechar e reinicia a consulta ao reabrir", async ()
   expect(buscar).not.toHaveBeenCalled();
   rerender(<PaletaIrParaNota {...props} />);
   expect(screen.getByRole("combobox")).toHaveValue("");
-  expect(screen.queryByRole("button", { name: /Criar a nota/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Criar nota/ })).not.toBeInTheDocument();
 });
 
 it("aborta uma busca em andamento ao desmontar e ignora sua resposta", async () => {
@@ -138,7 +138,7 @@ it("cria por clique na raiz e não abre nem cria com consulta vazia sem resultad
   expect(props.aoAbrir).not.toHaveBeenCalled();
   expect(props.aoCriar).not.toHaveBeenCalled();
   await usuario.type(screen.getByRole("combobox"), "Nova");
-  await usuario.click(screen.getByRole("button", { name: "Criar a nota “Nova” em Raiz" }));
+  await usuario.click(screen.getByRole("button", { name: "Criar nota «Nova» em Raiz" }));
   expect(props.aoCriar).toHaveBeenCalledExactlyOnceWith("Nova", null);
 });
 
@@ -171,6 +171,7 @@ it("trata teclado no document e fecha somente pelo fundo", async () => {
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "Nova" } });
   screen.getByRole("combobox").blur();
   fireEvent.keyDown(document, { key: "Enter", ctrlKey: true });
+  await act(async () => {});
   expect(props.aoCriar).toHaveBeenCalledWith("Nova", "Ideias");
   fireEvent.keyDown(document, { key: "Escape" });
   expect(props.aoFechar).toHaveBeenCalledOnce();
@@ -185,12 +186,15 @@ it("anuncia resultados e busca, preserva conteúdo anterior e navega nele", asyn
   buscar.mockImplementationOnce(() => new Promise((resolver) => { entregar = resolver; }));
   const props = propriedades();
   render(<PaletaIrParaNota {...props} />);
+  await act(() => vi.advanceTimersByTimeAsync(0));
   expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
   const campo = screen.getByRole("combobox");
   fireEvent.change(campo, { target: { value: "zz" } });
+  await act(() => vi.advanceTimersByTimeAsync(0));
   expect(campo).toHaveAttribute("aria-expanded", "false");
   expect(screen.getByRole("status")).toHaveTextContent("Nenhuma nota encontrada");
   await act(() => vi.advanceTimersByTimeAsync(250));
+  await act(() => vi.advanceTimersByTimeAsync(1));
   expect(screen.getByRole("status")).toHaveTextContent("1 resultados no conteúdo");
   expect(screen.getByRole("listbox")).toContainElement(screen.getByRole("option", { name: /Outra/ }));
   expect(campo).toHaveAttribute("aria-expanded", "true");
@@ -198,6 +202,7 @@ it("anuncia resultados e busca, preserva conteúdo anterior e navega nele", asyn
   expect(props.aoAbrir).toHaveBeenCalledWith("c", { novaAba: false });
   fireEvent.change(campo, { target: { value: "zzz" } });
   await act(() => vi.advanceTimersByTimeAsync(250));
+  await act(() => vi.advanceTimersByTimeAsync(1));
   expect(screen.getByRole("status")).toHaveTextContent("Buscando no conteúdo…");
   expect(screen.getByRole("option", { name: /Outra/ })).toBeInTheDocument();
   await act(async () => entregar([]));
@@ -213,7 +218,7 @@ it.each(["abrir", "criar"])("não restaura foco anterior ao %s", async (acao) =>
   if (acao === "abrir") fireEvent.click(screen.getAllByRole("option")[0]);
   else {
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "Nova" } });
-    fireEvent.click(screen.getByRole("button", { name: /Criar a nota/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Criar nota/ }));
   }
   rerender(<><button>Origem</button><PaletaIrParaNota {...props} aberta={false} /></>);
   expect(origem).not.toHaveFocus();
@@ -221,7 +226,7 @@ it.each(["abrir", "criar"])("não restaura foco anterior ao %s", async (acao) =>
 
 it("identifica Esc pelo texto visível e destaca foco e opção ativa", () => {
   render(<PaletaIrParaNota {...propriedades()} />);
-  expect(screen.getByRole("button", { name: "Esc, fechar a paleta" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Fechar a paleta" })).toBeInTheDocument();
   expect(screen.getByRole("combobox").parentElement?.className).toContain("focus-within:");
   expect(screen.getByRole("option", { selected: true }).className).toContain("border-l-destaque");
 });

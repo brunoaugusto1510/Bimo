@@ -15,11 +15,12 @@ const ATRASO_PARA_FECHAR_MS = 150;
 type Props = {
   /** O que a ligação diz — "Pasta/Título" ou só "Título". */
   alvo: string;
+  pastaDeOrigem?: string | null;
   resolucao: ResolucaoDeLigacao;
   /** O repositório aceita escrita: só então uma ligação sem nota pode criá-la. */
   podeCriar: boolean;
   aoAbrir: (id: IdDeNota, opcoes: { novaAba: boolean }) => void;
-  aoCriar: (titulo: string) => void;
+  aoCriar: (alvo: string, pastaDeOrigem?: string | null, opcoes?: { novaAba: boolean }) => Promise<import("@/lib/espaco-de-trabalho/usar-criacao-de-nota").ResultadoDaAbertura | void> | void;
   carregarPrevia: (id: IdDeNota) => Promise<PreviaDeNota | null>;
   children: ReactNode;
 };
@@ -31,8 +32,11 @@ const tituloDoAlvo = (alvo: string) => alvo.split("/").pop() ?? alvo;
  * (a nota existe), link com aviso (há mais de uma com o título) e botão
  * pendente (a nota ainda não existe — clicar a cria, se for permitido).
  */
-export default function LigacaoDeNota({ alvo, resolucao, podeCriar, aoAbrir, aoCriar, carregarPrevia, children }: Props) {
+export default function LigacaoDeNota({ alvo, pastaDeOrigem = null, resolucao, podeCriar, aoAbrir, aoCriar, carregarPrevia, children }: Props) {
   const idDaPrevia = useId();
+  const criandoRef = useRef(false);
+  const [criando, definirCriando] = useState(false);
+  const [erro, definirErro] = useState("");
   const [previa, setPrevia] = useState<PreviaDeNota | null>(null);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Sobe a cada abertura ou fechamento: uma prévia que chega atrasada, de um pedido antigo, é descartada. */
@@ -75,17 +79,27 @@ export default function LigacaoDeNota({ alvo, resolucao, podeCriar, aoAbrir, aoC
   if (resolucao.tipo === "nao-resolvida") {
     const titulo = tituloDoAlvo(alvo);
     return (
-      <button
+      <span><button
         type="button"
-        aria-disabled={!podeCriar}
+        aria-label={typeof children === "string" && children !== titulo ? `«${children}» (criar nota)` : `Criar a nota «${titulo}»`}
+        aria-describedby={`${idDaPrevia}-motivo${erro ? ` ${idDaPrevia}-erro` : ""}`}
+        aria-busy={criando}
+        aria-disabled={!podeCriar || criando}
         title={podeCriar ? `Criar a nota “${titulo}”` : "Criar notas não está disponível: as notas estão em modo somente leitura."}
-        onClick={() => podeCriar && aoCriar(titulo)}
-        className={`inline rounded-tag px-0.5 text-left underline decoration-dashed underline-offset-[3px] ${
-          podeCriar ? "cursor-pointer text-suave hover:bg-painel-alt" : "cursor-not-allowed text-suave"
-        }`}
+        onClick={async (evento) => {
+          if (criandoRef.current) return;
+          if (!podeCriar) { definirErro("Criar notas não está disponível no modo somente leitura."); return; }
+          criandoRef.current = true; definirCriando(true); definirErro("");
+          try {
+            const resultado = await aoCriar(alvo, pastaDeOrigem, { novaAba: evento.ctrlKey || evento.metaKey });
+            if (resultado?.tipo === "erro") definirErro(resultado.mensagem);
+          } catch { definirErro("Falha ao criar nota."); }
+          finally { criandoRef.current = false; definirCriando(false); }
+        }}
+        className="inline rounded-tag px-0.5 text-left text-texto underline decoration-dashed underline-offset-[3px] aria-disabled:cursor-not-allowed aria-disabled:opacity-50 [&:not([aria-disabled=true])]:cursor-pointer [&:not([aria-disabled=true])]:hover:bg-painel-alt"
       >
         {children}
-      </button>
+      </button><span id={`${idDaPrevia}-motivo`} className="sr-only">{!podeCriar ? "Criar notas não está disponível no modo somente leitura." : criando ? "Criando nota…" : ""}</span><span id={`${idDaPrevia}-erro`} role="alert" className="ml-1 text-erro">{erro}</span></span>
     );
   }
 

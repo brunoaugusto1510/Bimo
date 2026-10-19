@@ -1,5 +1,10 @@
 "use client";
+import { mesclarNotasLocais, podarNotasLocais, type NotasLocais } from "@/lib/espaco-de-trabalho/notas-locais";
+import { useCriacaoDeNota, type FocoPedido } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
+import type { CapacidadesDoRepositorio } from "@/lib/repositorio-de-notas/tipos";
+import type { NotaParaArvore } from "@/lib/arvore-de-notas";
 import AtualizadorDasNotas from "./AtualizadorDasNotas";
+import { esquecerSemente } from "@/lib/cliente-de-notas";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AlternadorDeTema from "@/components/AlternadorDeTema";
@@ -12,7 +17,7 @@ import GrafoDeFundo, { type ControleDoGrafo } from "@/components/GrafoDeFundo";
 import MarcaBimo from "@/components/MarcaBimo";
 import PaletaIrParaNota from "@/components/PaletaIrParaNota";
 import SeletorPill from "@/components/SeletorPill";
-import { indexarNotas } from "@/lib/arvore-de-notas";
+import { construirArvore, indexarNotas } from "@/lib/arvore-de-notas";
 import { combinaAtalho } from "@/lib/atalhos";
 import { grupoDaPasta } from "@/lib/caminho-da-nota";
 import { ABA_DO_GRAFICO, abaAtiva, idAtual } from "@/lib/espaco-de-trabalho/estado";
@@ -26,6 +31,7 @@ type Props = {
   itens: ItemDeNotas[];
   grafo: Grafo;
   aviso?: string;
+  capacidades?: CapacidadesDoRepositorio;
 };
 
 /**
@@ -40,12 +46,11 @@ const OPCOES_DE_MODO = [
   { valor: "notas", rotulo: "Notas" },
 ] as const;
 
-/** Criar notas chega com a edição (Fase 8b); uma função só, para o texto da nota não remontar a cada render. */
-const NAO_CRIAR = () => {};
+const SOMENTE_LEITURA = { escrita: false, datas: false };
 
-export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial }: Props) {
+export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais = SOMENTE_LEITURA }: Props) {
   const [atualizacao, definirAtualizacao] = useState<{ origem: Props["itens"]; dados: import("@/lib/servico-de-notas").DadosDaPagina } | null>(null);
-  const { itens, grafo, aviso } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial };
+  const { itens, grafo, aviso, capacidades } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais };
   const [modo, setModo] = useState<Modo>("bimo");
   // Nota selecionada no grafo da aba Gráfico — a que ganha o cartão de foco. É
   // separada da aberta: selecionar é "olhar", abrir é "ler".
@@ -67,9 +72,14 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
 
   const emNotas = modo === "notas";
   const graus = useMemo(() => calcularGraus(grafo.arestas), [grafo.arestas]);
-  const notasPorId = useMemo(() => indexarNotas(itens), [itens]);
-  const idsExistentes = useMemo(() => new Set(notasPorId.keys()), [notasPorId]);
-  const { estado, despachar } = useEspacoDeTrabalho(idsExistentes);
+  const [notasLocais, definirNotasLocais] = useState<NotasLocais>(new Map());
+  const [idsComTituloEditavel, definirIdsComTituloEditavel] = useState<ReadonlySet<string>>(new Set());
+  const [focoPedido, definirFocoPedido] = useState<FocoPedido | null>(null);
+  const notasPorId = useMemo(() => mesclarNotasLocais(indexarNotas(itens), notasLocais), [itens, notasLocais]);
+  const arvore = useMemo(() => construirArvore([...notasPorId.values()]), [notasPorId]);
+  const idsExistentes = useMemo(() => new Set(indexarNotas(itens).keys()), [itens]);
+  const idsLocais = useMemo(() => new Set(notasLocais.keys()), [notasLocais]);
+  const { estado, despachar } = useEspacoDeTrabalho(idsExistentes, idsLocais);
 
   const aba = abaAtiva(estado);
   const noGrafico = estado.ativa === ABA_DO_GRAFICO;
@@ -89,6 +99,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const abrirNota = useCallback(
     (id: IdDeNota, opcoes: { novaAba: boolean } = { novaAba: false }) => {
       despachar({ tipo: "abrir-nota", id, novaAba: opcoes.novaAba });
+      definirFocoPedido({ id, alvo: "nota" });
       setModo("notas");
       setMenuAberto(false);
       setPaletaAberta(false);
@@ -96,7 +107,44 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
     [despachar],
   );
 
-  /** No Gráfico a barra lateral serve para achar a nota no grafo; nas demais abas e no modo Bimo, para abri-la. */
+  /** Protege escritas recentes até uma listagem posterior confirmá-las. */
+  const registrarNota = useCallback((resumo: NotaParaArvore) => {
+    const criadoEm = Date.now();
+    const metadados = { id: resumo.id, titulo: resumo.titulo, pasta: resumo.pasta };
+    definirNotasLocais((locais) => new Map(locais).set(resumo.id, { resumo: metadados, criadoEm }));
+  }, []);
+  const criacao = useCriacaoDeNota({
+    capacidades, notas: [...notasPorId.values()], registrar: registrarNota,
+    abrir: (id, opcoes) => {
+      if (opcoes.criada && opcoes.alvo === "titulo") definirIdsComTituloEditavel((ids) => new Set(ids).add(id));
+      despachar({ tipo: "abrir-nota", id, novaAba: opcoes.novaAba, modo: opcoes.criada ? "edicao" : "leitura" });
+      definirFocoPedido({ id, alvo: opcoes.criada ? opcoes.alvo : "nota" });
+      setModo("notas"); setMenuAberto(false); setPaletaAberta(false);
+    },
+  });
+  const pastaAtual = idDaNotaAberta ? notasPorId.get(idDaNotaAberta)?.pasta ?? null : null;
+  const criarNova = () => criacao.criar({ pasta: pastaAtual });
+  const criarNovaAtual = useRef(criarNova);
+  useEffect(() => { criarNovaAtual.current = criarNova; });
+  useEffect(() => {
+    if (!focoPedido) return;
+    const timer = setTimeout(() => definirFocoPedido(null), 10000);
+    return () => clearTimeout(timer);
+  }, [focoPedido]);
+  useEffect(() => {
+    if (focoPedido && focoPedido.id !== idDaNotaAberta) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      definirFocoPedido(null);
+    }
+  }, [focoPedido, idDaNotaAberta, estado.ativa]);
+  const abertasAntes = useRef(new Set<string>());
+  useEffect(() => {
+    const abertas = new Set(estado.abas.flatMap((aba) => aba.tipo === "nota" ? aba.historico.pilha : []));
+    for (const id of abertasAntes.current) if (!abertas.has(id)) esquecerSemente(id);
+    abertasAntes.current = abertas;
+  }, [estado.abas]);
+
+  /** No Gráfico a barra lateral seleciona o nó; nas demais abas abre a nota. */
   function escolherNoMenu(id: IdDeNota) {
     if (emNotas && noGrafico) {
       setNotaFocada(id);
@@ -129,7 +177,11 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
       // A paleta é um diálogo modal: enquanto está aberta, o resto da página não reage a atalhos.
       if (paletaAberta) return;
 
-      if (combinaAtalho(evento, "mod+g")) {
+      if (combinaAtalho(evento, "alt+n")) {
+        const alvo = evento.target;
+        if (/Mac|iPhone|iPad/.test(navigator.platform) && alvo instanceof Element && alvo.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+        evento.preventDefault(); if (!evento.repeat) void criarNovaAtual.current();
+      } else if (combinaAtalho(evento, "mod+g")) {
         evento.preventDefault();
         despachar({ tipo: "ativar-aba", chave: ABA_DO_GRAFICO });
         setModo("notas");
@@ -143,7 +195,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
-  }, [despachar, paletaAberta]);
+  }, [paletaAberta, despachar]);
 
   /**
    * Sair de verdade: a rota apaga o cookie e recarregamos a página inteira.
@@ -199,7 +251,12 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
         </div>
       </header>
 
-      <AtualizadorDasNotas aoAtualizar={(dados) => definirAtualizacao({ origem: itensIniciais, dados })} />
+      <AtualizadorDasNotas aoAtualizar={(dados, iniciadoEm) => {
+        definirNotasLocais((locais) => podarNotasLocais(locais, indexarNotas(dados.itens), iniciadoEm));
+        definirAtualizacao({ origem: itensIniciais, dados });
+      }} />
+      <p role="status" className="sr-only"><span key={criacao.idAnuncio}>{criacao.anuncio}</span></p>
+      <p role="alert" className={criacao.erro ? "border-b border-borda bg-painel px-4 py-2 text-texto" : "sr-only"}><span key={criacao.idAnuncio}>{criacao.erro}</span></p>
       {(aviso || grafo.aviso) && (
         <p className="shrink-0 border-b border-destaque-suave-borda bg-destaque-suave px-4 py-1.5 text-center text-xs text-destaque-texto">
           {aviso ?? grafo.aviso}
@@ -211,7 +268,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
           className={`${menuAberto ? "block" : "hidden"} w-full shrink-0 md:block md:w-64 lg:w-72`}
         >
           <BarraLateral
-            itens={itens}
+            itens={arvore}
             notaSelecionada={emNotas && noGrafico ? notaFocada : idDaNotaAberta}
             onSelecionarNota={(nota) => escolherNoMenu(nota.id)}
           />
@@ -227,7 +284,13 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             conexoesPorNota={graus}
             totais={{ notas: notasPorId.size, conexoes: grafo.arestas.length }}
             aoAbrirNota={abrirNota}
-            aoCriarNota={NAO_CRIAR}
+            aoCriarNota={(titulo, pasta, opcoes) => criacao.criar({ titulo, pasta: pasta === undefined ? pastaAtual : pasta, novaAba: opcoes?.novaAba })}
+            aoNovaNota={criarNova}
+            criarDisponivel={capacidades.escrita}
+            focoPedido={focoPedido}
+            aoConsumirFoco={() => definirFocoPedido(null)}
+            idsComTituloEditavel={idsComTituloEditavel}
+            aoRenomear={registrarNota}
             aoPerguntarAoBimo={perguntarAoBimo}
             aoIrParaNota={() => setPaletaAberta(true)}
           >
@@ -250,6 +313,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             <div className="relative h-full" hidden={emNotas}>
               <Chat
                 ativo={!emNotas}
+                aoAbrirNota={(id, resumo) => { if (resumo && !notasPorId.has(id)) registrarNota({ id, ...resumo }); abrirNota(id); }}
+                aoNotaDoAgente={registrarNota}
                 rascunho={rascunho}
                 onRascunhoChange={setRascunho}
                 onRespostaAgente={() => setPulsoDoGrafo((n) => n + 1)}
@@ -291,12 +356,11 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
         aberta={paletaAberta}
         notas={[...notasPorId.values()]}
         recentes={estado.recentes}
-        // Criar notas chega com a edição (Fase 8b).
-        podeCriar={false}
+        podeCriar={capacidades.escrita}
         pastaDaCriacao={idDaNotaAberta ? (notasPorId.get(idDaNotaAberta)?.pasta ?? null) : null}
         aoFechar={() => setPaletaAberta(false)}
         aoAbrir={abrirNota}
-        aoCriar={NAO_CRIAR}
+        aoCriar={(titulo, pasta) => criacao.criar({ titulo, pasta })}
       />
     </div>
   );

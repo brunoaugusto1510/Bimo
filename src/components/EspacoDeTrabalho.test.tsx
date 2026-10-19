@@ -4,6 +4,7 @@ import { useState, type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ABA_DO_GRAFICO, ESTADO_INICIAL, reduzir, type EstadoDoEspaco } from "@/lib/espaco-de-trabalho/estado";
 import EspacoDeTrabalho from "./EspacoDeTrabalho";
+import { consultarSemente, semearNota } from "@/lib/cliente-de-notas";
 
 /** Um filho com estado próprio — faz o papel do chat (a conversa) e do grafo (o layout da simulação). */
 function Conversa() {
@@ -34,6 +35,16 @@ function propsBase(estado: EstadoDoEspaco = ESTADO_INICIAL): ComponentProps<type
 }
 
 describe("EspacoDeTrabalho", () => {
+  it("fechar uma aba invalida a semente mesmo com a nota no histórico de outra", async () => {
+    const primeira = reduzir(ESTADO_INICIAL, { tipo: "abrir-nota", id: "1" });
+    const segunda = reduzir(primeira, { tipo: "abrir-nota", id: "2" });
+    const ambas = reduzir(segunda, { tipo: "abrir-nota", id: "1", novaAba: true });
+    const nota = { id: "1", titulo: "Ler é uma conversa", conteudo: "", pasta: null, revisao: 1, tags: [], criadoEm: null, atualizadoEm: null };
+    render(<EspacoDeTrabalho {...propsBase({ ...ambas, ativa: ABA_DO_GRAFICO })} ativo />);
+    semearNota({ nota, capacidades: { escrita: true, datas: true } });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Fechar Ler é uma conversa" }));
+    expect(consultarSemente("1")).toBeUndefined();
+  });
   it("o que está em children continua montado ao alternar entre o modo Bimo e o modo Notas", async () => {
     const usuario = userEvent.setup();
     const { rerender } = render(<EspacoDeTrabalho {...propsBase()} />);

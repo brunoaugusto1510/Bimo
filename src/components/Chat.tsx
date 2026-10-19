@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import BimoPensando from "./BimoPensando";
 import MarcaBimo from "./MarcaBimo";
-import Mensagem, { AssinaturaDoBimo } from "./Mensagem";
+import { dividirCaminho } from "@/lib/caminho-da-nota";
+import type { NotaParaArvore } from "@/lib/arvore-de-notas";
+import Mensagem, { AssinaturaDoBimo, type AbrirNotaDoChat } from "./Mensagem";
 import type { Mensagem as TipoMensagem } from "@/lib/types";
 
 type Props = {
@@ -18,6 +20,8 @@ type Props = {
    * campo vem 0 — então rolagem e altura esperam o chat voltar a aparecer.
    */
   ativo?: boolean;
+  aoAbrirNota?: AbrirNotaDoChat;
+  aoNotaDoAgente?: (nota: NotaParaArvore) => void;
 };
 
 /** Até aqui o campo cresce com o texto; depois disso ele rola por dentro. */
@@ -30,7 +34,7 @@ const SUGESTOES = [
   "Aonde paramos sobre aquele assunto de ontem?",
 ];
 
-export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true }: Props) {
+export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente }: Props) {
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -107,6 +111,8 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
       onRespostaAgente?.();
       for (const ferramenta of (dados.ferramentas ?? []) as NonNullable<TipoMensagem["ferramentas"]>) {
         if (!ferramenta.erro && ferramenta.notaId && ["criar_nota", "editar_nota"].includes(ferramenta.nome)) {
+          const caminho = ferramenta.argumentos.caminho;
+          if (ferramenta.nome === "criar_nota" && typeof caminho === "string" && caminho.trim()) aoNotaDoAgente?.({ id: ferramenta.notaId, ...dividirCaminho(caminho) });
           window.dispatchEvent(new CustomEvent("bimo:nota-alterada-pelo-agente", { detail: { id: ferramenta.notaId } }));
         }
       }
@@ -143,7 +149,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
             <EstadoVazio onEscolher={onRascunhoChange} />
           ) : (
             mensagens.map((mensagem) => (
-              <Mensagem key={mensagem.id} mensagem={mensagem} />
+              <Mensagem key={mensagem.id} mensagem={mensagem} aoAbrirNota={aoAbrirNota} />
             ))
           )}
 

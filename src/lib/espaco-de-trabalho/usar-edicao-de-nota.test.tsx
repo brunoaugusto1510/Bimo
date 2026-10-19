@@ -3,7 +3,9 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useEdicaoDeNota } from "./usar-edicao-de-nota";
 const salvar = vi.hoisted(() => vi.fn());
-vi.mock("../cliente-de-notas", () => ({ salvarNota: salvar }));
+const renomear = vi.hoisted(() => vi.fn());
+const buscar = vi.hoisted(() => vi.fn());
+vi.mock("../cliente-de-notas", () => ({ salvarNota: salvar, renomearNota: renomear, buscarNota: buscar }));
 const nota = { id: "1", titulo: "Nota", pasta: null, tags: [], criadoEm: null, atualizadoEm: null, conteudo: "inicial", revisao: 1 };
 const dados = { nota, capacidades: { escrita: true, datas: true } };
 beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); salvar.mockReset().mockImplementation(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } })); });
@@ -108,4 +110,50 @@ it("beforeunload avisa no conflito mesmo com textos iguais e ouve storage", asyn
   expect(evento.defaultPrevented).toBe(true);
   act(() => window.dispatchEvent(new StorageEvent("storage", { key: "bimo_rascunho:1", newValue: "outro" })));
   expect(result.current.avisoLocal).toContain("Outra janela");
+});
+
+it("reconhece renomeação confirmada após resposta perdida sem conflito", async () => {
+  const atual = { ...nota, titulo: "Novo", revisao: 2 };
+  renomear.mockResolvedValue({ tipo: "conflito", atual });
+  const registrar = vi.fn();
+  const { result } = renderHook(() => useEdicaoDeNota("1", dados, true, registrar));
+  await act(async () => { expect(await result.current.renomear("Novo")).toEqual(atual); });
+  expect(result.current.estado).toBe("salvo");
+  expect(registrar).toHaveBeenCalledWith(atual, true);
+});
+it.each([false, true])("renomeação com autolink adota revisão sem conflito; digitou=%s", async (digitou) => {
+ const inicial = { ...dados, nota: { ...nota, conteudo: "[[Nota]]" } };
+ let concluir!: (valor: unknown) => void;
+ renomear.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", inicial, true));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.renomear("Novo"); });
+ if (digitou) act(() => result.current.aoMudar("texto durante pedido"));
+ await act(async () => { concluir({ tipo: "ok", nota: { ...nota, titulo: "Novo", conteudo: "[[Novo]]", revisao: 2 }, notasReescritas: 1 }); await pedido; });
+ expect(result.current.estado).not.toBe("conflito");
+ expect(result.current.texto).toBe(digitou ? "texto durante pedido" : "[[Novo]]");
+ if (digitou) {
+  await act(() => result.current.forcar({ checkpoint: true }));
+  expect(salvar).toHaveBeenCalledWith("1", { conteudo: "texto durante pedido" }, { revisaoBase: 2, checkpoint: true }, { keepalive: false });
+ }
+});
+it("revalida outra nota reescrita preservando digitação e usa a revisão nova", async () => {
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ buscar.mockResolvedValueOnce({ ...dados, nota: { ...nota, conteudo: "[[Novo]]", revisao: 3 } });
+ act(() => result.current.aoMudar("minha digitação"));
+ await act(async () => { window.dispatchEvent(new CustomEvent("bimo:notas-reescritas", { detail: { id: "outra" } })); });
+ expect(result.current.texto).toBe("minha digitação");
+ await act(() => result.current.forcar({ checkpoint: true }));
+ expect(salvar).toHaveBeenCalledWith("1", { conteudo: "minha digitação" }, { revisaoBase: 3, checkpoint: true }, { keepalive: false });
+});
+it("desmontar durante renomeação rejeitada ainda envia o texto pendente", async () => {
+ let rejeitar!: (erro: Error) => void;
+ renomear.mockImplementationOnce(() => new Promise((_, r) => { rejeitar = r; }));
+ const { result, unmount } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.renomear("Novo").catch(() => {}); });
+ act(() => result.current.aoMudar("antes de fechar"));
+ unmount();
+ await act(async () => { rejeitar(new Error("rede")); await pedido; });
+ expect(salvar).toHaveBeenCalledWith("1", { conteudo: "antes de fechar" }, { revisaoBase: 1, checkpoint: true }, { keepalive: false });
 });

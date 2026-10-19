@@ -36,14 +36,14 @@ export type EstadoDoEspaco = {
 };
 
 export type Acao =
-  | { tipo: "abrir-nota"; id: IdDeNota; novaAba?: boolean }
+  | { tipo: "abrir-nota"; id: IdDeNota; novaAba?: boolean; modo?: ModoDaNota }
   | { tipo: "fechar-aba"; chave: string }
   | { tipo: "ativar-aba"; chave: string }
   | { tipo: "nova-aba-vazia" }
   | { tipo: "voltar" }
   | { tipo: "avancar" }
   | { tipo: "alternar-modo"; chave: string }
-  | { tipo: "descartar-inexistentes"; existentes: ReadonlySet<IdDeNota> }
+  | { tipo: "descartar-inexistentes"; existentes: ReadonlySet<IdDeNota>; protegidos?: ReadonlySet<IdDeNota> }
   | { tipo: "restaurar"; estado: EstadoDoEspaco };
 
 export const LIMITE_DE_RECENTES = 20;
@@ -66,15 +66,15 @@ function lembrar(recentes: readonly IdDeNota[], id: IdDeNota): IdDeNota[] {
   return [id, ...recentes.filter((outro) => outro !== id)].slice(0, LIMITE_DE_RECENTES);
 }
 
-function novaAbaDeNota(chave: string, id: IdDeNota): AbaDeNota {
-  return { tipo: "nota", chave, historico: { pilha: [id], indice: 0 }, modo: "leitura" };
+function novaAbaDeNota(chave: string, id: IdDeNota, modo: ModoDaNota = "leitura"): AbaDeNota {
+  return { tipo: "nota", chave, historico: { pilha: [id], indice: 0 }, modo };
 }
 
-function abrirNota(estado: EstadoDoEspaco, id: IdDeNota, novaAba: boolean): EstadoDoEspaco {
+function abrirNota(estado: EstadoDoEspaco, id: IdDeNota, novaAba: boolean, modo?: ModoDaNota): EstadoDoEspaco {
   const recentes = lembrar(estado.recentes, id);
 
   const jaAberta = estado.abas.find((aba): aba is AbaDeNota => aba.tipo === "nota" && idAtual(aba) === id);
-  if (jaAberta) return { ...estado, ativa: jaAberta.chave, recentes };
+  if (jaAberta) return { ...estado, ativa: jaAberta.chave, recentes, abas: modo ? estado.abas.map((aba) => aba === jaAberta ? { ...jaAberta, modo } : aba) : estado.abas };
 
   const ativa = abaAtiva(estado);
 
@@ -82,20 +82,20 @@ function abrirNota(estado: EstadoDoEspaco, id: IdDeNota, novaAba: boolean): Esta
     if (ativa.tipo === "nota") {
       const { pilha, indice } = ativa.historico;
       const novaPilha = [...pilha.slice(0, indice + 1), id].slice(-LIMITE_DO_HISTORICO);
-      const navegada: AbaDeNota = { ...ativa, historico: { pilha: novaPilha, indice: novaPilha.length - 1 } };
+      const navegada: AbaDeNota = { ...ativa, modo: modo ?? ativa.modo, historico: { pilha: novaPilha, indice: novaPilha.length - 1 } };
       return { ...estado, abas: estado.abas.map((aba) => (aba === ativa ? navegada : aba)), recentes };
     }
     // Uma aba vazia existe para ser preenchida: a nota toma o lugar dela.
     return {
       ...estado,
-      abas: estado.abas.map((aba) => (aba === ativa ? novaAbaDeNota(ativa.chave, id) : aba)),
+      abas: estado.abas.map((aba) => (aba === ativa ? novaAbaDeNota(ativa.chave, id, modo) : aba)),
       recentes,
     };
   }
 
   const chave = `aba-${estado.proximaChave}`;
   const posicao = ativa ? estado.abas.indexOf(ativa) + 1 : estado.abas.length;
-  const abas = [...estado.abas.slice(0, posicao), novaAbaDeNota(chave, id), ...estado.abas.slice(posicao)];
+  const abas = [...estado.abas.slice(0, posicao), novaAbaDeNota(chave, id, modo), ...estado.abas.slice(posicao)];
   return { ...estado, abas, ativa: chave, proximaChave: estado.proximaChave + 1, recentes };
 }
 
@@ -148,9 +148,10 @@ function limparAba(aba: AbaDeNota, existentes: ReadonlySet<IdDeNota>): AbaDeNota
   return { ...aba, historico: { pilha: nova, indice: Math.max(destinoDe[indice], 0) } };
 }
 
-function descartarInexistentes(estado: EstadoDoEspaco, existentes: ReadonlySet<IdDeNota>): EstadoDoEspaco {
+function descartarInexistentes(estado: EstadoDoEspaco, base: ReadonlySet<IdDeNota>, protegidos?: ReadonlySet<IdDeNota>): EstadoDoEspaco {
   // Uma lista vazia quase sempre é "ainda não carregou" ou "falhou ao carregar", não "todas as notas sumiram".
-  if (existentes.size === 0) return estado;
+  if (base.size === 0) return estado;
+  const existentes = new Set([...base, ...(protegidos ?? [])]);
 
   const recentes = estado.recentes.filter((id) => existentes.has(id));
 
@@ -181,7 +182,7 @@ export function calcularProximaChave(abas: readonly Aba[]): number {
 export function reduzir(estado: EstadoDoEspaco, acao: Acao): EstadoDoEspaco {
   switch (acao.tipo) {
     case "abrir-nota":
-      return abrirNota(estado, acao.id, acao.novaAba ?? false);
+      return abrirNota(estado, acao.id, acao.novaAba ?? false, acao.modo);
 
     case "fechar-aba":
       return fecharAba(estado, acao.chave);
@@ -216,7 +217,7 @@ export function reduzir(estado: EstadoDoEspaco, acao: Acao): EstadoDoEspaco {
       };
 
     case "descartar-inexistentes":
-      return descartarInexistentes(estado, acao.existentes);
+      return descartarInexistentes(estado, acao.existentes, acao.protegidos);
 
     case "restaurar": {
       const { abas, ativa, proximaChave } = acao.estado;
