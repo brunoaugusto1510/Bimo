@@ -8,12 +8,12 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 
 ## Decisões
 
-- As notas moram no banco do Bimo (tabelas `nos`, `notas`, `versoes_nota`). O GitHub vira origem da importação e, depois do corte, arquivo.
+- As notas moram no banco do Bimo (tabelas `nos`, `notas`, `versoes_nota`). O repositório do GitHub foi a origem da importação (feita) e agora é só arquivo: o app não lê nem escreve nele.
 - Salvamento automático, sem botão de salvar.
-- Toda nota é identificada por um **id opaco** (string que a interface nunca interpreta), não pelo caminho. No banco é o `id` numérico da nota em texto; no adaptador do GitHub é o caminho em base64url.
+- Toda nota é identificada por um **id opaco** (string que a interface nunca interpreta), não pelo caminho. No banco é o `id` numérico da nota em texto.
 - As **ligações `[[x]]` são derivadas do texto na leitura**; nunca são espelhadas na tabela `relacoes`.
 - Concorrência otimista: toda gravação leva a `revisaoBase`; se a nota mudou desde então, a resposta é conflito com a versão salva.
-- Fonte das notas escolhida por `NOTAS_FONTE`: `github` (padrão até o corte, interface só leitura), `memoria` (dev e testes, recusada em produção) e `banco`.
+- Fonte das notas escolhida por `NOTAS_FONTE`: `banco` (padrão; exige `DATABASE_URL` e `USER_ID_PADRAO`) e `memoria` (dev e testes, recusada em produção). `github` foi removida e dá erro de configuração.
 - `SENHA_HASH` e `SEGREDO_SESSAO` falham fechado (503); as variáveis de notas falham suave (tela "falta configurar").
 - Tudo em pt-BR (código, comentários, interface). Em texto que uma pessoa lê, diz-se "notas", nunca "vault".
 
@@ -22,16 +22,16 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 | Fase | O que é | Situação |
 | --- | --- | --- |
 | 1 | Núcleo puro: caminho, Markdown, ligações, índice de ligações, grafo, árvore | Feita |
-| 2 | Contrato `RepositorioDeNotas`, repositório em memória, adaptador do GitHub, serviço com cache, suíte de contrato | Feita |
+| 2 | Contrato `RepositorioDeNotas`, repositório em memória, adaptador do GitHub (removido na 10c), serviço com cache, suíte de contrato | Feita |
 | 3 | Rotas `/api/notas`, `/api/grafo` e interface por id | Feita |
 | 4 | Repositório no banco (`banco.ts`) e migração `0006` | Feita |
-| 5 | Importador `npm run importar-notas` | Feita (importação real executada: 383 notas) |
+| 5 | Importador `npm run importar-notas` | Feita (importação real executada: 383 notas); o importador foi removido na 10c e segue no histórico do git |
 | 6 | Agente (Gemini) lendo e escrevendo pelo repositório configurado | Feita |
 | 7 | Espaço de trabalho de leitura: abas, navegação, Ctrl+O, painel lateral, prévia de ligação | Feita |
 | 8a | Edição com salvamento automático | Feita |
 | 8b | Nota nova: Alt+N, "Criar nota" pela paleta (Ctrl+Enter), criar pela ligação `[[x]]` | Feita |
-| 9 | Extras do editor: autocompletar `[[` e `#`, menu `/`, rascunho do Bimo; editar título (renomear), pasta e tags | A fazer |
-| 10 | Corte para o banco e limpeza | A fazer |
+| 9 | Extras do editor: autocompletar `[[` e `#`, menu `/`, rascunho do Bimo; editar título (renomear), pasta e tags | Feita (20/10/2026) |
+| 10 | Corte para o banco e limpeza | Feita (20/10/2026) |
 
 ### Fase 8a — edição e salvamento automático
 
@@ -213,27 +213,50 @@ acessibilidade (roteiro manual NVDA+Chrome e VoiceOver+Safari para
 `aria-activedescendant` em textarea); segurança da 9e (sem escrita, texto puro,
 limites de tamanho e frequência, mesma origem); vocabulário sem "vault".
 
-### Fase 10 — corte e limpeza (pede confirmação antes)
+### Fase 10 — corte e limpeza
 
-- `NOTAS_FONTE=banco` vira o padrão e a edição no Obsidian/GitHub para, para os dois lados não divergirem.
-- Remover `vault-real.ts`, o adaptador somente leitura do GitHub, a porta temporária de escrita do agente e `etapas-futuras/`.
-- Trocar as menções restantes a "vault" por "notas" nos nomes internos e renomear as variáveis `VAULT_*` com cuidado (quebram o `.env` já implantado).
-- Decidir se o GitHub vira só arquivo ou ganha uma exportação periódica.
+Subfases (cada uma commitada e verificada sozinha, branch `feat/corte-para-o-banco`):
+
+| Subfase | O que é | Situação |
+| --- | --- | --- |
+| 10a | `NOTAS_FONTE` passa a valer `banco`; `github` vira erro de configuração; prompt do agente sem depender da fonte; página inicial sem vazar o erro cru | Feita (20/10/2026) |
+| 10b | Sai a porta legada de escrita do agente, o `commitUrl` e o link de commit da pílula | Feita (20/10/2026) |
+| 10c | Apagados `vault-real.ts`, `github.ts`, o adaptador do GitHub, `etapas-futuras/`, o importador e `lerConfiguracaoDoGrafo` | Feita (20/10/2026) |
+| 10d | "vault" e "GitHub" saem dos comentários e nomes internos | Feita (20/10/2026) |
+| 10e | Documentação: `CLAUDE.md`, `AGENTS.md`, `README.md`, `.env.example` e este plano | Feita (20/10/2026) |
+
+*Como ficou:* o app só lê e escreve no banco. O repositório do GitHub é arquivo e a
+edição no Obsidian/GitHub deixou de chegar ao app. O grafo usa a configuração padrão
+(`CONFIGURACAO_PADRAO`), como já fazia no modo banco; o `.obsidian/graph.json` não é
+mais lido. O importador saiu: as 383 notas já estavam no banco e o código segue no
+histórico do git (para repetir a importação, recupere `scripts/importar-notas.ts`,
+`src/lib/importacao-de-notas.ts` e `src/lib/vault-real.ts` de um commit anterior a
+`a2cd2a6`). `tsx` deixou de ser dependência direta (continua como dependência do
+`drizzle-kit`). A regex de id (`esquemaDeIdDeNota`, até 1500 caracteres) ficou como
+estava: o teto folgado era para o id do GitHub, mas apertá-lo não traz ganho agora.
+
+**Checklist de produção (ação sua, na Vercel):** conferir que `DATABASE_URL` (porta
+6543), `USER_ID_PADRAO`, `SENHA_HASH`, `SEGREDO_SESSAO` e `GEMINI_API_KEY` existem e que
+não há `NOTAS_FONTE=github`; sem isso a página mostra a tela "falta configurar" e o chat
+responde 503. Depois do deploy, apagar `VAULT_REPO`, `VAULT_BRANCH`, `VAULT_SUBPATH` e
+`GITHUB_TOKEN` e **revogar o token do GitHub** (ele tinha permissão de escrita).
+
+**Decisão em aberto:** o repositório do GitHub vira só arquivo (assim está). Uma
+exportação periódica das notas para ele seria um recurso novo, a decidir depois.
 
 ## O que cada peça faz
 
-- `src/lib/repositorio-de-notas/` — contrato (`tipos.ts`), `banco.ts`, `memoria.ts`, `github-somente-leitura.ts`, `suite-de-contrato.ts` (qualquer repositório que aceita escrita precisa passar), `config.ts` e `index.ts` (escolhe a fonte).
+- `src/lib/repositorio-de-notas/` — contrato (`tipos.ts`), `banco.ts`, `memoria.ts`, `suite-de-contrato.ts` (qualquer repositório que aceita escrita precisa passar), `config.ts` e `index.ts` (escolhe a fonte).
 - `banco.ts` — escritas serializadas por usuário (lock consultivo na transação, com timeouts), gravação por revisão base, histórico em `versoes_nota` (o salvamento automático reaproveita a versão da sessão aberta do usuário; o checkpoint a fecha; edições do agente abrem versão própria), renomear e mover pasta reescrevem as ligações das outras notas na mesma transação, busca com `portugues_sem_acento`.
-- `scripts/importar-notas.ts` + `src/lib/importacao-de-notas.ts` — copia as notas do GitHub para o banco. Simula por padrão; só grava com `--executar`; repetir não duplica; divergentes só são sobrescritas com `--sobrescrever`.
 - `src/lib/agente.ts`, `ferramentas.ts`, `porta-de-escrita-do-agente.ts`, `resolver-nota-do-agente.ts` — o agente continua endereçando por caminho (`Pasta/Título.md`); `substituir` exige ter lido a nota na conversa; escrita nunca resolve por trecho do título.
 - `src/lib/espaco-de-trabalho/` e `src/components/` — estado das abas (reducer puro), persistência, hooks `useEspacoDeTrabalho`/`useNota`/`useLigacoes`, e os componentes do espaço de trabalho.
 
 ## Continuar em outro computador
 
-1. `git fetch && git checkout feat/notas-por-id && git pull`, depois `npm install`.
-2. Crie o `.env` a partir de `.env.example`. Valores que faltam num computador novo: `DATABASE_URL` (transaction pooler, porta 6543), `DATABASE_URL_MIGRATIONS` (session pooler, 5432), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (a chave secreta, não a publicável), `USER_ID_PADRAO`, `GITHUB_TOKEN`, `VAULT_REPO`, `SENHA_HASH` e `SEGREDO_SESSAO` (`npm run gerar-senha`, `npm run gerar-segredo`), `GEMINI_API_KEY`. Nada disso vai para o Git.
-3. Os dados já estão no Supabase: as migrações `0000` a `0006` estão aplicadas e as 383 notas foram importadas. A importação é idempotente, então repetir não duplica.
-4. Para ver as notas do banco: `NOTAS_FONTE=banco npm run dev` (ou ponha `NOTAS_FONTE=banco` no `.env`).
+1. `git fetch && git checkout main && git pull`, depois `npm install` (a Fase 10 está na `feat/corte-para-o-banco` até ser mergeada).
+2. Crie o `.env` a partir de `.env.example`. Valores que faltam num computador novo: `DATABASE_URL` (transaction pooler, porta 6543), `DATABASE_URL_MIGRATIONS` (session pooler, 5432), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (a chave secreta, não a publicável), `USER_ID_PADRAO`, `SENHA_HASH` e `SEGREDO_SESSAO` (`npm run gerar-senha`, `npm run gerar-segredo`), `GEMINI_API_KEY`. Nada disso vai para o Git.
+3. Os dados já estão no Supabase: as migrações `0000` a `0006` estão aplicadas e as 383 notas foram importadas.
+4. Para ver as notas do banco: `npm run dev` (o banco é o padrão; `NOTAS_FONTE=memoria` usa notas de exemplo).
 5. Conferir que está tudo certo: `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`. Os testes de `banco.test.ts` rodam contra o Postgres real: criam e apagam um usuário efêmero pela Admin API do Supabase.
 
 ## Pendências conhecidas

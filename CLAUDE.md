@@ -21,14 +21,11 @@ npm run build                          # production build
 npm run start                          # run the production build
 npm run lint                           # eslint (flat config, next/core-web-vitals + next/typescript)
 npm test                               # Vitest (also test:watch, test:coverage)
-npm run importar-notas -- --limite 3   # simulates importing notes from GitHub into the DB
 npm run gerar-senha                    # prints SENHA_HASH for a password read from stdin
 npm run gerar-segredo                  # prints a SEGREDO_SESSAO
 ```
 
 - Vitest runs in jsdom with the `@/*` alias; test files sit next to the code they cover.
-- `npm run importar-notas` is a dry run by default; it only writes with `--executar`.
-  Never run it with `--executar` or `--sobrescrever` without the user asking.
 - `scripts/gerar-senha.mjs` duplicates the scrypt parameters of `src/lib/senha.ts`; the
   "aceita um hash gerado com os mesmos parâmetros do script" test catches drift. Change
   both together.
@@ -41,8 +38,9 @@ Variables are documented in `.env.example`. Never print or read the `.env` value
 
 - `SENHA_HASH` uses `:` as separator (`scrypt:<salt>:<hash>`), not `$`, because
   `@next/env` runs the file through dotenv-expand, which eats `$...`.
-- `NOTAS_FONTE` picks the source: `github` (default, read-only), `memoria` (dev/tests,
-  refused in production) or `banco` (needs `DATABASE_URL` + `USER_ID_PADRAO`).
+- `NOTAS_FONTE` picks the source: `banco` (default; needs `DATABASE_URL` +
+  `USER_ID_PADRAO`) or `memoria` (dev/tests, refused in production). `github` was
+  removed and is a configuration error.
 - Missing/invalid notes config must fail **soft**: config errors become
   `ConfiguracaoNecessaria`, not a crash. Preserve this when touching config loading.
 - `SENHA_HASH`/`SEGREDO_SESSAO` fail **closed** on purpose (503 when missing or
@@ -119,10 +117,6 @@ relevant guide in `node_modules/next/dist/docs/` before using a Next API (see AG
   `responder` call and uses that read's revision, with no retry on conflict.
 - Unexpected tool errors are logged on the server and return a generic message — never
   SQL or note contents to the model or the UI.
-- The GitHub write adapter (`porta-de-escrita-do-agente.ts` + `vault-real.ts`) is
-  temporary; don't build new features on it.
-- `etapas-futuras/` is stale draft code, excluded from the build. Don't use it as a
-  reference; `src/lib/` is the source of truth.
 
 ## Design system
 
@@ -171,7 +165,6 @@ don't invent colors, radii or components it already defines.
   result instead of throwing across component boundaries (`carregarDadosDaPagina` in
   `page.tsx`).
 - **Vocabulary: say "notas", never "vault", in anything a person reads** — UI copy,
-  aria-labels, UI errors, the Gemini system prompt and tool descriptions. "vault" only
-  survives in internal names (`vault-real.ts`, `VAULT_*` env vars); don't rename the env
-  vars (it breaks the deployed `.env`). `BarraLateral.test.tsx` fails if the word
-  reappears in the sidebar.
+  aria-labels, UI errors, the Gemini system prompt and tool descriptions. Don't use it in
+  code or comments either. `BarraLateral.test.tsx`, `instrucao-do-agente.test.ts` and the
+  tool-declaration tests fail if the word reappears.
