@@ -13,8 +13,8 @@ import { carregarEstadoSalvo, salvarEstado } from "./persistencia";
  * Por isso nada é gravado antes de `pronto`: gravar o estado inicial por cima do que
  * estava guardado apagaria as abas da pessoa antes de elas voltarem.
  *
- * `existentes` são os ids que ainda existem: o que sumiu (nota apagada no GitHub, por
- * exemplo) sai das abas. Uma lista vazia é tratada pelo redutor como "ainda não sei".
+ * `existentes` são os ids que ainda existem: o que sumiu (nota apagada em outro
+ * dispositivo, por exemplo) sai das abas. Uma lista vazia é tratada pelo redutor como "ainda não sei".
  */
 export function useEspacoDeTrabalho(existentes: ReadonlySet<IdDeNota>, protegidos?: ReadonlySet<IdDeNota>): {
   estado: EstadoDoEspaco;

@@ -47,7 +47,7 @@ export type ControleDoGrafo = {
 type Props = {
   nos: NoDoGrafo[];
   arestas: ArestaDoGrafo[];
-  /** Vem do `.obsidian/graph.json` do vault — decide forças e tamanho dos nós. */
+  /** Decide forças e tamanho dos nós (hoje, sempre a configuração padrão). */
   configuracao: ConfiguracaoDoGrafo;
   /** Caminho da nota aberta no leitor agora, ou null — destacada no modo fundo. */
   notaAberta: string | null;

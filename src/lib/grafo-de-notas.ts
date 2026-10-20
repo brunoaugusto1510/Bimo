@@ -4,8 +4,8 @@
  * Obsidian, ligações para notas que ainda não existem viram nós "não
  * resolvidos" e, se a configuração pedir, tags viram nós.
  *
- * Pura: recebe as notas com o conteúdo já em mãos. De onde elas vêm (banco,
- * GitHub, memória) é assunto do repositório de notas.
+ * Pura: recebe as notas com o conteúdo já em mãos. De onde elas vêm (banco ou
+ * memória) é assunto do repositório de notas.
  */
 
 import { grupoDaPasta, normalizarTexto } from "./caminho-da-nota";

@@ -21,7 +21,7 @@ const FRACAO_MINIMA_DO_ENQUADRAMENTO = 0.5;
 /**
  * Piso do raio na tela, proporcional ao tamanho do nó. Com as forças do
  * Obsidian o layout ocupa milhares de unidades, e o enquadramento afasta
- * tanto (escala ~0,06 num vault de ~400 notas) que todo nó viraria um ponto de
+ * tanto (escala ~0,06 com ~400 notas) que todo nó viraria um ponto de
  * 1 px — os hubs sumiriam. Com o piso, afastado um nó de raio 8 fica com
  * ~1,4 px e um de raio 30 com ~5,4 px; de perto, vale a escala real.
  */

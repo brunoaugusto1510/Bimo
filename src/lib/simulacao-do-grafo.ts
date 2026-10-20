@@ -6,7 +6,7 @@
  * nó é puxado para a origem por forceX/Y — não `forceCenter`, que só desloca
  * o conjunto sem atrair nó nenhum —, os links são molas cuja força cai com o
  * grau das pontas, todos se repelem e ninguém se sobrepõe. As forças vêm do
- * `graph.json` do vault.
+ * configuração do grafo (`CONFIGURACAO_PADRAO`).
  */
 
 import {

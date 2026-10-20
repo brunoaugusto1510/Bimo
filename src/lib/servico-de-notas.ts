@@ -107,7 +107,7 @@ export async function obterTags(repositorio: RepositorioDeNotas): Promise<TagCon
 
 /**
  * Quem a nota cita, quem a cita e o que ela menciona sem ligar. Separado da leitura da nota
- * de propósito: isto precisa de todas as notas (no GitHub, centenas de downloads quando o
+ * de propósito: isto precisa de todas as notas (centenas de notas quando o
  * cache vence), e abrir uma nota não pode esperar por isso. O texto da própria nota vem
  * direto do repositório, sempre o mais novo.
  */

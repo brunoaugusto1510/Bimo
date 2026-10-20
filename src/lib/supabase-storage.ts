@@ -2,8 +2,7 @@
  * Fala com o Supabase Storage (bucket de Fontes).
  *
  * Nada aqui sabe o que é uma "Fonte" — isso fica em `fontes.ts`. Aqui só
- * existem bucket, caminho e bytes, o mesmo papel que `github.ts` tem para o
- * GitHub: um cliente fino, sem lógica de domínio.
+ * existem bucket, caminho e bytes: um cliente fino, sem lógica de domínio.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -36,8 +35,8 @@ export function getConfigStorage(): ConfigStorage {
 
 /**
  * A service role key ignora RLS/policies de Storage — é o mesmo nível de
- * confiança que `GITHUB_TOKEN` tem hoje: só usada no servidor, nunca chega
- * ao cliente.
+ * confiança que `DATABASE_URL`: só usada no servidor, nunca chega ao
+ * cliente.
  */
 function obterCliente(cfg: ConfigStorage) {
   return createClient(cfg.url, cfg.chaveServico, { auth: { persistSession: false } });

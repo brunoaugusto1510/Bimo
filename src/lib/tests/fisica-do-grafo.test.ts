@@ -16,8 +16,8 @@ describe("converterParaForcas", () => {
     expect(forcas.distanciaDoLink).toBe(250);
   });
 
-  it("reconhece a posição de slider gravada no graph.json de um vault com valores padrão", () => {
-    // Valor real do `.obsidian/graph.json` de um vault que nunca mexeu no slider.
+  it("reconhece a posição de slider do Obsidian com valores padrão", () => {
+    // Valor real do `.obsidian/graph.json` de quem nunca mexeu no slider.
     const forcas = converterParaForcas({ ...CONFIGURACAO_PADRAO, centerStrength: 0.518713248970312 });
     expect(forcas.centralizacao).toBeCloseTo(0.1, 6);
   });

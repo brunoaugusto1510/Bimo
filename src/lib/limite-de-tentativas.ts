@@ -1,7 +1,7 @@
 /**
  * Freio de força bruta no login.
  *
- * A URL do Bimo é pública e a senha é a única coisa entre o mundo e o vault,
+ * A URL do Bimo é pública e a senha é a única coisa entre o mundo e as notas,
  * então deixar o endpoint aceitar tentativas infinitas seria ingênuo.
  *
  * Limitação que precisa estar clara: o contador vive na memória do processo. Em
