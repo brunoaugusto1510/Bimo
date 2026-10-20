@@ -55,6 +55,12 @@ describe("sugerirComandos", () => {
   it("sem resultado devolve vazio", () => {
     expect(sugerirComandos("zzz")).toEqual([]);
   });
+  it("o /continuar do Bimo só existe quando o editor tem o Bimo", () => {
+    expect(sugerirComandos("cont").map((s) => s.id)).toEqual([]);
+    expect(sugerirComandos("cont", true).map((s) => s.id)).toEqual(["bimo-continuar"]);
+    expect(sugerirComandos("", true)).toHaveLength(11);
+    expect(sugerirComandos("", true).at(-1)).toMatchObject({ id: "bimo-continuar", titulo: "Bimo: continuar o texto" });
+  });
 });
 
 describe("sugerirParaGatilho", () => {
@@ -106,6 +112,12 @@ describe("planejarInsercao", () => {
     const edicao = planejarInsercao(texto, { tipo: "tag", inicio: 5, consulta: "ide" }, 9, { tipo: "tag", id: "ideia", intervalos: [] });
     expect(texto.slice(0, edicao.de) + edicao.texto + texto.slice(edicao.ate)).toBe("nota #ideia aqui");
     expect(edicao.cursor).toBe("nota #ideia".length);
+  });
+  it("/continuar: só apaga o que foi digitado (o pedido ao Bimo parte depois)", () => {
+    const texto = "Frase\n/cont";
+    const edicao = planejarInsercao(texto, { tipo: "comando", inicio: 6, consulta: "cont" }, 11, { tipo: "comando", id: "bimo-continuar", titulo: "Bimo: continuar o texto", detalhe: "✦", intervalos: [] });
+    expect(texto.slice(0, edicao.de) + edicao.texto + texto.slice(edicao.ate)).toBe("Frase\n");
+    expect(edicao.cursor).toBe(6);
   });
   it("comando: aplica a formatação e apaga o /consulta", () => {
     const texto = "/tit";

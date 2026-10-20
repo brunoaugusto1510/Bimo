@@ -13,29 +13,17 @@
  */
 
 import {
-  GoogleGenAI,
   type Content,
   type Part,
 } from "@google/genai";
 import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
+import { criarClienteGemini, MODELO } from "./gemini";
 import { gerarInstrucaoDoSistema } from "./instrucao-do-agente";
 import { lerConfiguracaoDeNotas } from "./repositorio-de-notas/config";
 import type { IdDeNota, Mensagem, UsoDeFerramenta } from "./types";
 
 /** Trava de segurança: sem isso um modelo confuso pediria ferramentas para sempre. */
 const MAX_VOLTAS = 5;
-
-const MODELO = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-
-function getClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "GEMINI_API_KEY não está definida. Pegue uma chave em https://aistudio.google.com/apikey e coloque no .env.local",
-    );
-  }
-  return new GoogleGenAI({ apiKey });
-}
 
 /** Converte o histórico do nosso formato para o formato do Gemini. */
 function paraContents(mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>): Content[] {
@@ -54,7 +42,7 @@ export type ResultadoAgente = {
 export async function responder(
   mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>,
 ): Promise<ResultadoAgente> {
-  const ai = getClient();
+  const ai = criarClienteGemini();
   const instrucao = gerarInstrucaoDoSistema(lerConfiguracaoDeNotas().fonte);
   const contents = paraContents(mensagens);
   const ferramentasUsadas: UsoDeFerramenta[] = [];

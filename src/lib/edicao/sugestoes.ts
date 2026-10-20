@@ -5,11 +5,17 @@ import type { Gatilho } from "./gatilho-do-editor";
 import { planejarInsercaoDeLigacao, type Edicao } from "./insercao-no-editor";
 import { sugerirLigacoes, type SugestaoDeLigacao } from "./sugestoes-de-ligacao";
 
-/** Uma opção de qualquer das três listas do editor: ligação (`[[`), tag (`#`) ou comando de formatação (`/`). */
+/** Comandos que não formatam o texto, mas pedem algo ao Bimo: o `/continuar` só apaga o que foi digitado e dispara o pedido. */
+export type IdDoComandoDoBimo = "bimo-continuar";
+const COMANDOS_DO_BIMO: readonly { id: IdDoComandoDoBimo; titulo: string; detalhe: string }[] = [
+  { id: "bimo-continuar", titulo: "Bimo: continuar o texto", detalhe: "✦" },
+];
+
+/** Uma opção de qualquer das três listas do editor: ligação (`[[`), tag (`#`) ou comando (`/`). */
 export type Sugestao =
   | ({ tipo: "ligacao" } & SugestaoDeLigacao)
   | { tipo: "tag"; id: string; intervalos: Intervalo[] }
-  | { tipo: "comando"; id: IdDoComando; titulo: string; detalhe: string; intervalos: Intervalo[] };
+  | { tipo: "comando"; id: IdDoComando | IdDoComandoDoBimo; titulo: string; detalhe: string; intervalos: Intervalo[] };
 
 type SugestaoDeTag = Extract<Sugestao, { tipo: "tag" }>;
 type SugestaoDeComando = Extract<Sugestao, { tipo: "comando" }>;
@@ -44,13 +50,14 @@ export function sugerirTags({ nomes, daNota, consulta, limite = LIMITE_PADRAO }:
   return resultado.length === 1 && resultado[0].id.toLowerCase() === consulta.toLowerCase() ? [] : resultado;
 }
 
-/** Sem consulta, todos na ordem do menu; com ela, os que combinam, do melhor para o pior. */
-export function sugerirComandos(consulta: string): SugestaoDeComando[] {
-  const comoSugestao = (comando: (typeof COMANDOS)[number], intervalos: Intervalo[]): SugestaoDeComando => ({ tipo: "comando", id: comando.id, titulo: comando.titulo, detalhe: comando.detalhe, intervalos });
-  if (!consulta.trim()) return COMANDOS.map((comando) => comoSugestao(comando, []));
-  const notas = COMANDOS.map((comando): NotaParaBusca => ({ id: comando.id, titulo: comando.titulo, pasta: null }));
-  return buscarPorTitulo(notas, consulta, [], COMANDOS.length).flatMap(({ nota, intervalos }) => {
-    const comando = COMANDOS.find((candidato) => candidato.id === nota.id);
+/** Sem consulta, todos na ordem do menu; com ela, os que combinam, do melhor para o pior. `comBimo` inclui os comandos do Bimo. */
+export function sugerirComandos(consulta: string, comBimo = false): SugestaoDeComando[] {
+  const todos: readonly { id: IdDoComando | IdDoComandoDoBimo; titulo: string; detalhe: string }[] = comBimo ? [...COMANDOS, ...COMANDOS_DO_BIMO] : COMANDOS;
+  const comoSugestao = (comando: (typeof todos)[number], intervalos: Intervalo[]): SugestaoDeComando => ({ tipo: "comando", id: comando.id, titulo: comando.titulo, detalhe: comando.detalhe, intervalos });
+  if (!consulta.trim()) return todos.map((comando) => comoSugestao(comando, []));
+  const notas = todos.map((comando): NotaParaBusca => ({ id: comando.id, titulo: comando.titulo, pasta: null }));
+  return buscarPorTitulo(notas, consulta, [], todos.length).flatMap(({ nota, intervalos }) => {
+    const comando = todos.find((candidato) => candidato.id === nota.id);
     return comando ? [comoSugestao(comando, intervalos)] : [];
   });
 }
@@ -64,12 +71,14 @@ export type ContextoDasSugestoes = {
   tagsDasNotas: readonly string[];
   /** As tags da coluna da nota aberta. */
   tagsDaNota: readonly string[];
+  /** O editor tem o "Bimo sugere": o menu `/` inclui `/continuar`. */
+  comBimo?: boolean;
 };
 
 /** A lista certa para o que a pessoa está digitando. */
 export function sugerirParaGatilho(gatilho: Gatilho, contexto: ContextoDasSugestoes): Sugestao[] {
   if (gatilho.tipo === "tag") return sugerirTags({ nomes: contexto.tagsDasNotas, daNota: contexto.tagsDaNota, consulta: gatilho.consulta });
-  if (gatilho.tipo === "comando") return sugerirComandos(gatilho.consulta);
+  if (gatilho.tipo === "comando") return sugerirComandos(gatilho.consulta, contexto.comBimo);
   const { notas, idAtual, pastaAtual, resolver } = contexto;
   return sugerirLigacoes({ notas, consulta: gatilho.consulta, idAtual, pastaAtual, resolver }).map((sugestao) => ({ tipo: "ligacao", ...sugestao }));
 }
@@ -103,7 +112,8 @@ export function avisoDeAbertura(tipo: Gatilho["tipo"], quantidade: number): stri
 }
 
 /** Os comandos de bloco dizem onde o cursor ficou: quem usa leitor de tela não vê a cerca, a tabela ou o divisor. */
-const AVISO_DO_COMANDO: Partial<Record<IdDoComando, string>> = {
+const AVISO_DO_COMANDO: Partial<Record<IdDoComando | IdDoComandoDoBimo, string>> = {
+  "bimo-continuar": "Pedido enviado ao Bimo.",
   codigo: "Bloco de código inserido. Cursor dentro do bloco.",
   divisor: "Divisor inserido. Cursor na linha seguinte.",
   tabela: "Tabela 2 por 2 inserida. Cabeçalho da primeira coluna selecionado.",
@@ -121,6 +131,10 @@ export function planejarInsercao(texto: string, gatilho: Gatilho, cursor: number
     const inserido = `#${sugestao.id}`;
     return { de: gatilho.inicio, ate: cursor, texto: inserido, cursor: gatilho.inicio + inserido.length };
   }
-  if (sugestao.tipo === "comando") return aplicarComando(texto, gatilho.inicio, cursor, sugestao.id);
+  if (sugestao.tipo === "comando") {
+    // `/continuar` só apaga o que foi digitado; o pedido ao Bimo parte depois, de quem aplicou a troca.
+    if (sugestao.id === "bimo-continuar") return { de: gatilho.inicio, ate: cursor, texto: "", cursor: gatilho.inicio };
+    return aplicarComando(texto, gatilho.inicio, cursor, sugestao.id);
+  }
   return planejarInsercaoDeLigacao(texto, gatilho, cursor, sugestao.alvo);
 }

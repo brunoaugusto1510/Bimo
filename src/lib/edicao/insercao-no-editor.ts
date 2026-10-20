@@ -20,10 +20,15 @@ export function aplicarEdicaoNoCampo(campo: HTMLTextAreaElement, edicao: Edicao)
   // `setRangeText` ignora o `readOnly`: sem esta guarda, uma renomeação em voo teria o texto alterado por baixo.
   if (campo.readOnly) return;
   campo.focus();
+  const esperado = campo.value.slice(0, edicao.de) + edicao.texto + campo.value.slice(edicao.ate);
   campo.setSelectionRange(edicao.de, edicao.ate);
   const aplicado = typeof document.execCommand === "function"
     && document.execCommand("insertText", false, edicao.texto);
-  if (!aplicado) {
+  if (aplicado && campo.value !== esperado) {
+    // Alguns navegadores devolvem `true` sem aplicar (ou aplicam só parte): vale o resultado planejado.
+    campo.value = esperado;
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+  } else if (!aplicado) {
     campo.setRangeText(edicao.texto, edicao.de, edicao.ate, "end");
     campo.dispatchEvent(new Event("input", { bubbles: true }));
   }

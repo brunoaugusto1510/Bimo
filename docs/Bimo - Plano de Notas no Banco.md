@@ -74,7 +74,7 @@ rascunho do Bimo pode buscar em outras notas (só leitura, sem ferramentas de es
 | 9b | Pasta e tags pela interface | Feita (20/10/2026) |
 | 9c | Base do autocompletar + `[[` | Feita (20/10/2026) |
 | 9d | `#` e menu `/` | Feita (20/10/2026) |
-| 9e | Rascunho do Bimo | A fazer |
+| 9e | Rascunho do Bimo | Feita (20/10/2026) |
 
 **9a — renomear qualquer nota.** `CampoDeTitulo` em toda nota com escrita e modo
 Edição; `idsComTituloEditavel` sai (o foco da criação já vem de `focoPedido`).
@@ -181,6 +181,30 @@ UI: barra "Bimo sugere" (Continuar no cursor; Resumir/Melhorar na seleção), co
 (trecho igual ao original) e insere pelo helper da 9c (autosave normal); nada vai ao
 servidor de notas antes de aceitar. Sem streaming na v1. À parte: `/api/chat` não
 chama `exigirMesmaOrigem` e devolve `erro.message` cru — corrigir.
+
+*Como ficou (9e):* servidor: `src/lib/gemini.ts` (cliente e modelo compartilhados com o agente),
+`rascunho-do-bimo.ts` (somente leitura: só `buscar_notas`, `listar_notas` e `ler_nota`, até 4
+consultas por rodada e 6 no total, textos cortados em 12 mil caracteres, resultado marcado como dado
+não confiável, erro de consulta volta ao modelo, 25 s de limite, saída sem imagens Markdown),
+`limite-de-uso.ts` (20 por minuto, uma chave só: o app tem um usuário), `validacao-do-rascunho.ts`
+e a rota `POST /api/bimo/rascunho` (sessão, mesma origem, corpo de até 64 KB lido em stream, erros
+genéricos). `/api/chat` ganhou `exigirMesmaOrigem` e erro genérico (configuração faltando segue
+explicada com 503). Cliente: barra "Bimo sugere" (Continuar, Resumir seleção, Melhorar seleção) e
+`/continuar` no menu `/`; `useRascunhoDoBimo` guarda a proposta sem tocar no texto; o cartão mostra
+texto puro (nunca Markdown) com Aceitar, Descartar e Tentar de novo. Aceitar confere a âncora: o
+tamanho do texto, o que vem antes, depois e a seleção precisam ser os do pedido (senão "Peça de
+novo"), tira imagens Markdown e entra pelo mesmo caminho da digitação. O foco só vai ao cartão
+se estava na barra, no cartão ou perdido (nunca é roubado do texto); Esc cancela o pedido.
+Respostas do agente no chat também não criam mais `<img>`.
+
+**Pendências conhecidas depois da 9e (decisão do usuário):** (1) CSP em `next.config.ts` (hoje não
+há; `img-src 'self' data:` e `connect-src 'self'` fechariam de vez a exfiltração por imagem, mas
+exigem testar o script de tema e o Next em desenvolvimento); (2) `/api/chat` ainda sem limite de
+corpo, de mensagens, de uso nem cancelamento, e o agente tem ferramentas de ESCRITA que leem texto
+de notas (uma injeção numa nota pode gerar `editar_nota` sem aprovação: considerar confirmação);
+(3) roteiro manual de leitor de tela (NVDA+Chrome, VoiceOver+Safari) para `aria-activedescendant`
+em `<textarea>` e para o cartão do Bimo; (4) avisos falados ao filtrar/fechar a lista de sugestões;
+(5) contraste da borda dos campos (`--borda`, decisão de design).
 
 **Riscos a testar:** fila única (digitação durante operação exclusiva; mover que
 reescreve o próprio texto); inserção nunca perde caracteres (recalcula o gatilho no

@@ -25,6 +25,28 @@ describe("planejarInsercaoDeLigacao", () => {
   });
 });
 
+describe("aplicarEdicaoNoCampo (execCommand que diz sim e não faz)", () => {
+  it("se o comando devolve true mas o texto não ficou como planejado, grava o resultado planejado e avisa o React", () => {
+    const campo = document.createElement("textarea");
+    campo.value = "[[abc]] resto";
+    document.body.append(campo);
+    const eventos = vi.fn();
+    campo.addEventListener("input", eventos);
+    Object.defineProperty(document, "execCommand", { configurable: true, value: vi.fn(() => true) });
+    aplicarEdicaoNoCampo(campo, { de: 2, ate: 7, texto: "Nota]]", cursor: 8 });
+    expect(campo.value).toBe("[[Nota]] resto");
+    expect(eventos).toHaveBeenCalledTimes(1);
+    expect([campo.selectionStart, campo.selectionEnd]).toEqual([8, 8]);
+  });
+  it("seleciona o trecho pedido (selecaoAte) depois de aplicar", () => {
+    const campo = document.createElement("textarea");
+    campo.value = "/tab";
+    document.body.append(campo);
+    aplicarEdicaoNoCampo(campo, { de: 0, ate: 4, texto: "| Coluna 1 |", cursor: 2, selecaoAte: 10 });
+    expect(campo.value.slice(campo.selectionStart, campo.selectionEnd)).toBe("Coluna 1");
+  });
+});
+
 describe("aplicarEdicaoNoCampo", () => {
   it("não escreve num campo somente leitura (o setRangeText ignoraria o readOnly)", () => {
     const campo = document.createElement("textarea");

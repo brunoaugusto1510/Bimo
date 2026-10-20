@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { detectarGatilho, type Gatilho } from "../edicao/gatilho-do-editor";
 import { aplicarEdicaoNoCampo } from "../edicao/insercao-no-editor";
+import type { AcaoDoRascunho } from "../edicao/pedido-de-rascunho";
 import { posicaoDoCursor } from "../edicao/posicao-do-cursor";
 import { avisoDeAbertura, avisoDeInsercao, planejarInsercao, type Sugestao } from "../edicao/sugestoes";
 
@@ -24,6 +25,8 @@ type Entrada = {
   sugerir?: (gatilho: Gatilho) => Sugestao[];
   /** Somente leitura (recuperação de rascunho, renomeação em voo): nada de sugestões. */
   bloqueado: boolean;
+  /** Chamado depois de aplicar um comando do Bimo (`/continuar`): o editor faz o pedido. */
+  aoComandoDoBimo?: (acao: AcaoDoRascunho) => void;
 };
 
 /** O id de uma opção é o dela, não a posição: ao digitar, o topo muda e `aria-activedescendant` precisa mudar junto. */
@@ -61,7 +64,7 @@ function calcularPosicao(campo: HTMLTextAreaElement, indice: number): PosicaoDaL
  * A lista só ABRE por digitação; mover o cursor apenas a atualiza ou fecha (senão passar com as setas por
  * uma ligação já escrita a abriria e sequestraria ↑/↓/Enter).
  */
-export function useSugestoesDoEditor({ campo, sugerir, bloqueado }: Entrada) {
+export function useSugestoesDoEditor({ campo, sugerir, bloqueado, aoComandoDoBimo }: Entrada) {
   const [aberto, definirAberto] = useState<Aberto | null>(null);
   const [aviso, definirAviso] = useState({ id: 0, texto: "" });
   const atual = useRef<Aberto | null>(null);
@@ -115,6 +118,8 @@ export function useSugestoesDoEditor({ campo, sugerir, bloqueado }: Entrada) {
     dispensado.current = { tipo: gatilho.tipo, inicio: gatilho.inicio };
     aplicarEdicaoNoCampo(elemento, edicao);
     falar(avisoDeInsercao(sugestao));
+    // `/continuar`: o texto digitado já saiu (acima); agora o pedido ao Bimo parte do cursor.
+    if (sugestao.tipo === "comando" && sugestao.id === "bimo-continuar") aoComandoDoBimo?.("continuar");
   }
 
   /** `true` quando a tecla foi da lista (e já foi tratada). Durante composição de texto (IME) não toca em nada. */

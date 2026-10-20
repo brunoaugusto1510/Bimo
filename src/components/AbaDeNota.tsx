@@ -347,7 +347,7 @@ export default function AbaDeNota({
               aoAbrirNota={aoAbrirNota}
               aoCriarNota={aoCriarNota}
             >
-              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerir={(gatilho) => sugerirParaGatilho(gatilho, { notas: listaDeNotas, idAtual: id, pastaAtual: pasta, resolver, tagsDasNotas: sugestoesDeTags, tagsDaNota: edicao.nota?.tags ?? [] })} texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
+              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerir={(gatilho) => sugerirParaGatilho(gatilho, { notas: listaDeNotas, idAtual: id, pastaAtual: pasta, resolver, tagsDasNotas: sugestoesDeTags, tagsDaNota: edicao.nota?.tags ?? [], comBimo: true })} rascunhoDoBimo texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
             </VisaoDaNota>
           )}
         </div>

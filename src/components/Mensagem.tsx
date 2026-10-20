@@ -38,7 +38,8 @@ export default function Mensagem({ mensagem, aoAbrirNota }: { mensagem: TipoMens
             </p>
           ) : (
             <div className="text-sm leading-normal [&_a]:text-destaque-texto [&_a]:underline [&_code]:rounded [&_code]:bg-painel-alt [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {/* Imagem vira só o texto alternativo: uma URL montada pelo modelo (que lê as notas) faria o navegador enviar dados para fora ao renderizar. */}
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: ({ alt }) => <span>{alt ? `[imagem: ${alt}]` : ""}</span> }}>
                 {mensagem.conteudo}
               </ReactMarkdown>
             </div>
