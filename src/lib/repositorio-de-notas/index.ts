@@ -1,14 +1,13 @@
 /**
  * O ponto de entrada do resto do app: devolve o repositório da fonte
  * configurada em `NOTAS_FONTE`. Quem usa notas (páginas, rotas, serviço) chama
- * só `obterRepositorio()` e nunca sabe se por trás há banco, GitHub ou memória.
+ * só `obterRepositorio()` e nunca sabe se por trás há banco ou memória.
  *
  * A instância é guardada: o cache do serviço é por repositório, e uma instância
  * nova a cada chamada o inutilizaria.
  */
 
 import { lerConfiguracaoDeNotas, type ConfiguracaoDeNotas } from "./config";
-import { criarRepositorioDoGithub } from "./github-somente-leitura";
 import { obterRepositorioEmMemoriaCompartilhado } from "./memoria";
 import type { RepositorioDeNotas } from "./tipos";
 
@@ -23,8 +22,6 @@ function chaveDaConfiguracao(config: ConfiguracaoDeNotas): string {
 
 async function criar(config: ConfiguracaoDeNotas): Promise<RepositorioDeNotas> {
   switch (config.fonte) {
-    case "github":
-      return criarRepositorioDoGithub();
     case "memoria":
       return obterRepositorioEmMemoriaCompartilhado();
     case "banco": {

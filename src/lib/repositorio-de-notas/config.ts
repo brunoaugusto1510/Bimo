@@ -9,7 +9,6 @@
  */
 
 export type ConfiguracaoDeNotas =
-  | { fonte: "github" }
   | { fonte: "memoria" }
   | { fonte: "banco"; userId: string };
 
@@ -24,19 +23,27 @@ export class ErroDeConfiguracao extends Error {
   }
 }
 
-const FONTES = ["github", "banco", "memoria"] as const;
+const FONTES = ["banco", "memoria"] as const;
 export const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * `NOTAS_FONTE` escolhe a fonte; ausente, vale `github` (o app como era antes
- * da migração para o banco). `memoria` só existe para testes e desenvolvimento.
+ * `NOTAS_FONTE` escolhe a fonte; ausente, vale `banco`. `memoria` só existe
+ * para testes e desenvolvimento. A fonte `github` foi removida: dá erro claro
+ * em vez de cair em outra fonte sem avisar.
  */
 export function lerConfiguracaoDeNotas(env: NodeJS.ProcessEnv = process.env): ConfiguracaoDeNotas {
-  const fonte = (env.NOTAS_FONTE ?? "").trim().toLowerCase() || "github";
+  const fonte = (env.NOTAS_FONTE ?? "").trim().toLowerCase() || "banco";
+
+  if (fonte === "github") {
+    throw new ErroDeConfiguracao(
+      "A fonte GitHub foi removida: as notas agora ficam no banco. Troque NOTAS_FONTE por banco (ou apague a variável).",
+      ["NOTAS_FONTE"],
+    );
+  }
 
   if (!(FONTES as readonly string[]).includes(fonte)) {
     throw new ErroDeConfiguracao(
-      `NOTAS_FONTE="${env.NOTAS_FONTE}" não existe. Use github, banco ou memoria.`,
+      "NOTAS_FONTE tem um valor que não existe. Use banco ou memoria.",
       ["NOTAS_FONTE"],
     );
   }
@@ -51,21 +58,17 @@ export function lerConfiguracaoDeNotas(env: NodeJS.ProcessEnv = process.env): Co
     return { fonte: "memoria" };
   }
 
-  if (fonte === "banco") {
-    const userId = env.USER_ID_PADRAO?.trim();
-    const faltando = [!env.DATABASE_URL?.trim() && "DATABASE_URL", !userId && "USER_ID_PADRAO"].filter(
-      (nome): nome is string => Boolean(nome),
-    );
-    if (faltando.length > 0) {
-      throw new ErroDeConfiguracao(`Para guardar as notas no banco, falta configurar: ${faltando.join(", ")}.`, faltando);
-    }
-    if (!REGEX_UUID.test(userId!)) {
-      throw new ErroDeConfiguracao("USER_ID_PADRAO precisa ser o UUID de um usuário do Supabase Auth.", [
-        "USER_ID_PADRAO",
-      ]);
-    }
-    return { fonte: "banco", userId: userId! };
+  const userId = env.USER_ID_PADRAO?.trim();
+  const faltando = [!env.DATABASE_URL?.trim() && "DATABASE_URL", !userId && "USER_ID_PADRAO"].filter(
+    (nome): nome is string => Boolean(nome),
+  );
+  if (faltando.length > 0) {
+    throw new ErroDeConfiguracao(`Para guardar as notas no banco, falta configurar: ${faltando.join(", ")}.`, faltando);
   }
-
-  return { fonte: "github" };
+  if (!REGEX_UUID.test(userId!)) {
+    throw new ErroDeConfiguracao("USER_ID_PADRAO precisa ser o UUID de um usuário do Supabase Auth.", [
+      "USER_ID_PADRAO",
+    ]);
+  }
+  return { fonte: "banco", userId: userId! };
 }

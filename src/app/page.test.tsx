@@ -50,13 +50,17 @@ describe("página inicial", () => {
     expect(screen.queryByTestId("principal")).not.toBeInTheDocument();
   });
 
-  it("qualquer outro erro também vira a tela de configuração, com a mensagem", async () => {
+  it("qualquer outro erro também vira a tela de configuração, mas sem vazar o detalhe (host, usuário do banco) — o detalhe vai para o log do servidor", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(obterRepositorio).mockResolvedValue({} as never);
-    vi.mocked(obterDadosDaPagina).mockRejectedValue(new Error("Token sem permissão."));
+    vi.mocked(obterDadosDaPagina).mockRejectedValue(new Error("password authentication failed for user postgres.abc"));
 
     render(await Pagina());
 
-    expect(screen.getByText("Token sem permissão.")).toBeInTheDocument();
+    expect(screen.getByText(/Não consegui carregar as notas agora/)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("postgres");
     expect(screen.queryByTestId("principal")).not.toBeInTheDocument();
+    expect(log).toHaveBeenCalledWith(expect.any(String), "Error: password authentication failed for user postgres.abc");
+    log.mockRestore();
   });
 });

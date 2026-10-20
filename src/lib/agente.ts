@@ -19,7 +19,6 @@ import {
 import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
 import { criarClienteGemini, MODELO } from "./gemini";
 import { gerarInstrucaoDoSistema } from "./instrucao-do-agente";
-import { lerConfiguracaoDeNotas } from "./repositorio-de-notas/config";
 import type { IdDeNota, Mensagem, UsoDeFerramenta } from "./types";
 
 /** Trava de segurança: sem isso um modelo confuso pediria ferramentas para sempre. */
@@ -43,7 +42,7 @@ export async function responder(
   mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>,
 ): Promise<ResultadoAgente> {
   const ai = criarClienteGemini();
-  const instrucao = gerarInstrucaoDoSistema(lerConfiguracaoDeNotas().fonte);
+  const instrucao = gerarInstrucaoDoSistema();
   const contents = paraContents(mensagens);
   const ferramentasUsadas: UsoDeFerramenta[] = [];
   const leituras = new Map<IdDeNota, number>();

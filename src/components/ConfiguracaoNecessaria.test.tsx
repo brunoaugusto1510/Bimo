@@ -4,10 +4,10 @@ import ConfiguracaoNecessaria from "./ConfiguracaoNecessaria";
 
 describe("ConfiguracaoNecessaria", () => {
   it("mostra a mensagem de erro que explica o problema", () => {
-    render(<ConfiguracaoNecessaria mensagem="Falta configurar GITHUB_TOKEN." />);
+    render(<ConfiguracaoNecessaria mensagem="Falta configurar DATABASE_URL." />);
 
     expect(screen.getByRole("heading", { name: "Não consegui ler as suas notas" })).toBeInTheDocument();
-    expect(screen.getByText("Falta configurar GITHUB_TOKEN.")).toBeInTheDocument();
+    expect(screen.getByText("Falta configurar DATABASE_URL.")).toBeInTheDocument();
   });
 
   it("lista exatamente as variáveis que a fonte configurada pede", () => {
@@ -20,12 +20,13 @@ describe("ConfiguracaoNecessaria", () => {
     ]);
   });
 
-  it("sem variáveis específicas, lembra as do repositório do GitHub", () => {
+  it("sem variáveis específicas, lembra as do banco", () => {
     render(<ConfiguracaoNecessaria mensagem="Erro." />);
 
     const itens = screen.getAllByRole("listitem").map((item) => item.textContent ?? "");
-    expect(itens.some((texto) => texto.includes("VAULT_REPO"))).toBe(true);
-    expect(itens.some((texto) => texto.includes("GITHUB_TOKEN"))).toBe(true);
+    expect(itens.some((texto) => texto.includes("DATABASE_URL"))).toBe(true);
+    expect(itens.some((texto) => texto.includes("USER_ID_PADRAO"))).toBe(true);
+    expect(itens.join(" ")).not.toMatch(/VAULT|GITHUB/);
   });
 
   it("aponta para o .env e para o .env.example (e não para um .env.local.example que não existe)", () => {
