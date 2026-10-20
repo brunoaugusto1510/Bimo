@@ -1,4 +1,3 @@
-import { codificarIdDoGithub } from "../repositorio-de-notas/github-somente-leitura";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { declaracoesDeFerramentas, executarFerramenta } from "../ferramentas";
 import { criarRepositorioEmMemoria } from "../repositorio-de-notas/memoria";
@@ -78,6 +77,18 @@ describe("ferramentas com repositório de notas", () => {
     expect(saida.erro).toBe(true);
     expect(saida.resumo).toMatch(/modo leitura/);
   });
+  it.each(["criar_nota", "editar_nota"])("repositório sem capacidade de escrita explica o modo leitura em %s", async (nome) => {
+    const repo = semear();
+    const repositorio: RepositorioDeNotas = {
+      ...repo,
+      capacidades: { escrita: false, datas: false },
+      criarNota: async () => ({ tipo: "somente-leitura" }),
+      atualizarNota: async () => ({ tipo: "somente-leitura" }),
+    };
+    const saida = await executar(repositorio, nome, { caminho: "Estudos/Redes/TCP.md", conteudo: "x" });
+    expect(saida.erro).toBe(true);
+    expect(saida.resumo).toMatch(/modo leitura/);
+  });
   it.each(["acrescentar", "substituir", undefined, "invalido"])("edita no modo %s com checkpoint e revisão lida", async (modo) => {
     const repo = semear();
     const atualizarNota = vi.fn(repo.atualizarNota);
@@ -115,24 +126,6 @@ describe("ferramentas com repositório de notas", () => {
       expect((await repo.obterNota(saida.notaId!))?.conteudo).toBe("Concorrente 1\n\nNovo\n");
     }
   });
-  it.each(["criar_nota", "editar_nota"])("porta temporária chama legado só sem capacidade de escrita: %s", async (nome) => {
-    const repo = semear();
-    const criarNota = vi.fn(async () => ({ caminho: "Estudos/Redes/TCP.md", commitUrl: "https://github.com/teste/notas/commit/abc" }));
-    const editarNota = vi.fn(criarNota);
-    const legado = { criarNota, editarNota };
-    const args = { caminho: "Estudos/Redes/TCP.md", conteudo: "Novo", modo: "substituir" };
-    const notas = await repo.listarResumos();
-    const repositorio = { ...repo, listarResumos: async () => notas.map((n) => ({ ...n, id: codificarIdDoGithub(`${n.pasta}/${n.titulo}.md`) })), capacidades: { escrita: false, datas: false } };
-    const leituras = new Map<string, number>([[codificarIdDoGithub(args.caminho), 1]]);
-    const saida = await executarFerramenta(nome, args, { repositorio, legado, leituras });
-    expect(nome === "criar_nota" ? criarNota : editarNota).toHaveBeenCalledWith(...(nome === "criar_nota" ? [args.caminho, "Novo"] : [args.caminho, "Novo", "substituir"]));
-    expect(saida.resposta.commit).toContain("/commit/abc");
-    expect(saida.notaId).toBe(codificarIdDoGithub(args.caminho));
-    vi.clearAllMocks();
-    await executarFerramenta(nome, { ...args, caminho: nome === "criar_nota" ? "Nova.md" : "TCP" }, { repositorio: repo, legado });
-    expect(criarNota).not.toHaveBeenCalled();
-    expect(editarNota).not.toHaveBeenCalled();
-  });
   it("erro de configuração vira resultado normal", async () => {
     vi.stubEnv("NOTAS_FONTE", "inexistente");
     const saida = await executarFerramenta("listar_notas", {});
@@ -152,7 +145,7 @@ describe("ferramentas com repositório de notas", () => {
     expect(declaracoesDeFerramentas.map((d) => d.name)).toEqual(["buscar_notas", "listar_notas", "ler_nota", "criar_nota", "editar_nota"]);
     expect(JSON.stringify(declaracoesDeFerramentas)).not.toMatch(/vault|commit/i);
     expect(declaracoesDeFerramentas[0].description).toContain("título e no conteúdo");
-    expect(declaracoesDeFerramentas[0].description).toContain("tags no banco");
-    expect(declaracoesDeFerramentas[0].description).toContain("caminho no GitHub");
+    expect(declaracoesDeFerramentas[0].description).toContain("tags e no caminho");
+    expect(JSON.stringify(declaracoesDeFerramentas)).not.toMatch(/github/i);
   });
 });

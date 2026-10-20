@@ -89,33 +89,14 @@ function FerramentaUsada({ uso, aoAbrirNota }: { uso: UsoDeFerramenta; aoAbrirNo
     ? "border-erro/30 bg-erro-suave text-erro"
     : "border-borda bg-painel-alt text-suave";
 
-  // Escritas (criar_nota/editar_nota bem-sucedidas) viram link pro commit —
-  // é a única ação aqui que gera uma mudança real e permanente no vault.
+  // Escritas bem-sucedidas (criar_nota/editar_nota) viram um botão que abre a
+  // nota gravada — é a única ação aqui que gera uma mudança real e permanente.
   // Por isso ganham o roxo suave das "sugestões do Bimo" em vez do cinza.
   if (uso.notaId && !uso.erro && aoAbrirNota) {
     const caminho = uso.argumentos.caminho;
     const resumo = typeof caminho === "string" && caminho.trim() ? dividirCaminho(caminho) : undefined;
-    return <span className="inline-flex items-center gap-1">
-      <button type="button" aria-label={`${uso.resumo}. Abrir nota`} onClick={() => aoAbrirNota(uso.notaId!, resumo)}
-        className="min-h-10 rounded-full border border-destaque-suave-borda bg-destaque-suave px-3 text-meta text-destaque-texto transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]">{uso.resumo}</button>
-      {uso.commitUrl && <a href={uso.commitUrl} target="_blank" rel="noopener noreferrer" aria-label={`Abrir commit de «${resumo?.titulo ?? uso.resumo}» (nova aba)`} className="inline-flex h-10 min-w-10 items-center justify-center rounded-full text-destaque-texto"><span aria-hidden="true">↗</span></a>}
-    </span>;
-  }
-
-  if (uso.commitUrl) {
-    const corDoLink = uso.erro
-      ? classes
-      : "border-destaque-suave-borda bg-destaque-suave text-destaque-texto";
-    return (
-      <a
-        href={uso.commitUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`rounded-full border px-2 py-0.5 text-xs font-medium hover:underline ${corDoLink}`}
-      >
-        {uso.resumo} ↗
-      </a>
-    );
+    return <button type="button" aria-label={`${uso.resumo}. Abrir nota`} onClick={() => aoAbrirNota(uso.notaId!, resumo)}
+      className="min-h-10 rounded-full border border-destaque-suave-borda bg-destaque-suave px-3 text-meta text-destaque-texto transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]">{uso.resumo}</button>;
   }
 
   return (

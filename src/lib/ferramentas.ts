@@ -8,10 +8,9 @@ import type { LeiturasDoAgente } from "./porta-de-escrita-do-agente";
  * Isso é o coração do function calling: cada ferramenta tem uma *declaração*
  * (o que o modelo lê para decidir se e como usá-la) e uma *execução* (o código
  * que roda de verdade quando ele decide chamar). O modelo nunca toca no
- * GitHub — ele só pede, e este arquivo decide o que acontece.
+ * banco — ele só pede, e este arquivo decide o que acontece.
  *
  * Escritas passam pela porta do repositório, com histórico e revisão otimista.
- * Durante a transição, a porta temporária mantém os commits da fonte GitHub.
  *
  * As descrições abaixo são prompt: quanto mais claras, menos o modelo erra.
  */
@@ -21,13 +20,13 @@ import { normalizarPasta, normalizarTexto } from "./caminho-da-nota";
 import { obterRepositorio } from "./repositorio-de-notas";
 import type { RepositorioDeNotas } from "./repositorio-de-notas/tipos";
 import { caminhoDaNota, resolverNotaDoAgente } from "./resolver-nota-do-agente";
-import { escolherPortaDeEscrita, type LegadoDeEscrita } from "./porta-de-escrita-do-agente";
+import { escolherPortaDeEscrita } from "./porta-de-escrita-do-agente";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "buscar_notas",
     description:
-      "Busca notas por palavras-chave no título e no conteúdo, também nas tags no banco e no caminho no GitHub. " +
+      "Busca notas por palavras-chave no título e no conteúdo, também nas tags e no caminho. " +
       "Use esta ferramenta PRIMEIRO, quase sempre, quando a pergunta for sobre o que o usuário estudou ou anotou. " +
       "Devolve trechos, não a nota inteira — se um resultado parecer relevante, chame ler_nota para ver tudo.",
     parametersJsonSchema: {
@@ -155,7 +154,7 @@ type Args = Record<string, unknown>;
 export async function executarFerramenta(
   nome: string,
   args: Args,
-  opcoes: { repositorio?: RepositorioDeNotas; legado?: LegadoDeEscrita; leituras?: LeiturasDoAgente } = {},
+  opcoes: { repositorio?: RepositorioDeNotas; leituras?: LeiturasDoAgente } = {},
 ): Promise<SaidaFerramenta> {
   try {
     const repositorio = opcoes.repositorio ?? await obterRepositorio();
@@ -167,9 +166,9 @@ export async function executarFerramenta(
       case "ler_nota":
         return await execLer(args, repositorio, opcoes.leituras);
       case "criar_nota":
-        return await execCriar(args, repositorio, opcoes.legado);
+        return await execCriar(args, repositorio);
       case "editar_nota":
-        return await execEditar(args, repositorio, opcoes.legado, opcoes.leituras);
+        return await execEditar(args, repositorio, opcoes.leituras);
       default:
         return {
           resposta: { erro: `Ferramenta desconhecida: ${nome}` },
@@ -261,36 +260,34 @@ async function execLer(args: Args, repositorio: RepositorioDeNotas, leituras?: L
   };
 }
 
-async function execCriar(args: Args, repositorio: RepositorioDeNotas, legado?: LegadoDeEscrita): Promise<SaidaFerramenta> {
+async function execCriar(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
   const caminho = texto(args.caminho, "caminho");
   const conteudo = texto(args.conteudo, "conteudo");
 
-  const resultado = await escolherPortaDeEscrita(repositorio, legado).criar(caminho, conteudo);
+  const resultado = await escolherPortaDeEscrita(repositorio).criar(caminho, conteudo);
 
   return {
     resposta: {
       sucesso: true,
       caminho: resultado.caminho,
-      ...(resultado.commitUrl ? { commit: resultado.commitUrl } : {}),
     },
     resumo: `Criou a nota "${resultado.caminho}"`,
     notaId: resultado.notaId,
   };
 }
 
-async function execEditar(args: Args, repositorio: RepositorioDeNotas, legado?: LegadoDeEscrita, leituras?: LeiturasDoAgente): Promise<SaidaFerramenta> {
+async function execEditar(args: Args, repositorio: RepositorioDeNotas, leituras?: LeiturasDoAgente): Promise<SaidaFerramenta> {
   const caminho = texto(args.caminho, "caminho");
   const conteudo = texto(args.conteudo, "conteudo");
   const modo = args.modo === "substituir" ? "substituir" : "acrescentar";
 
-  const resultado = await escolherPortaDeEscrita(repositorio, legado).editar(caminho, conteudo, modo, leituras);
+  const resultado = await escolherPortaDeEscrita(repositorio).editar(caminho, conteudo, modo, leituras);
 
   return {
     resposta: {
       sucesso: true,
       caminho: resultado.caminho,
       modo,
-      ...(resultado.commitUrl ? { commit: resultado.commitUrl } : {}),
     },
     resumo: `${modo === "substituir" ? "Reescreveu" : "Complementou"} a nota "${resultado.caminho}"`,
     notaId: resultado.notaId,

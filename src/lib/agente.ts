@@ -89,10 +89,6 @@ export async function responder(
         resumo: saida.resumo,
         erro: saida.erro,
         ...(saida.notaId ? { notaId: saida.notaId } : {}),
-        // As ferramentas de escrita devolvem o commit em `resposta.commit`
-        // (ver ferramentas.ts); as demais simplesmente não têm essa chave.
-        commitUrl:
-          typeof saida.resposta.commit === "string" ? saida.resposta.commit : undefined,
       });
 
       partesDeResposta.push({

@@ -18,9 +18,8 @@ export type Mensagem = {
 
 /**
  * Identidade de uma nota para a interface, as rotas e o grafo. É opaca: quem
- * recebe um id não deve interpretá-lo. Hoje é o id da linha no banco ou, na
- * transição, o caminho do arquivo no GitHub codificado — nunca contém `:`, então
- * não colide com os ids especiais do grafo (`tag:x`, `nao-resolvida:x`).
+ * recebe um id não deve interpretá-lo. É o id da linha no banco — nunca contém
+ * `:`, então não colide com os ids especiais do grafo (`tag:x`, `nao-resolvida:x`).
  */
 export type IdDeNota = string;
 
@@ -49,8 +48,6 @@ export type UsoDeFerramenta = {
   /** Frase curta para exibir na UI, ex: 'Buscou "TCP" — 3 nota(s)' */
   resumo: string;
   erro?: boolean;
-  /** Presente só nas ferramentas de escrita bem-sucedidas (criar_nota/editar_nota). */
-  commitUrl?: string;
-  /** Nota gravada; permite abri-la mesmo quando a escrita não gera commit. */
+  /** Nota gravada (criar_nota/editar_nota bem-sucedidas); permite abri-la pela pílula. */
   notaId?: IdDeNota;
 };
