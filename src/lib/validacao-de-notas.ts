@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { normalizarPasta, profundidadeDaPasta, validarTitulo } from "./caminho-da-nota";
+import { normalizarTags } from "./tags-da-nota";
 
 /** O corpo da requisição já é limitado em 1 MB; isto é o teto do texto de uma nota. */
 export const TAMANHO_MAXIMO_DO_CONTEUDO = 1_000_000;
@@ -45,16 +46,7 @@ const conteudo = z.string().max(TAMANHO_MAXIMO_DO_CONTEUDO, "A nota é grande de
 const tags = z
   .array(z.string().max(TAMANHO_MAXIMO_DA_TAG))
   .max(MAXIMO_DE_TAGS, `Use no máximo ${MAXIMO_DE_TAGS} tags.`)
-  .transform((lista) => {
-    const vistas = new Set<string>();
-    return lista
-      .map((tag) => tag.trim().replace(/^#/, "").trim())
-      .filter((tag) => {
-        if (tag === "" || vistas.has(tag.toLowerCase())) return false;
-        vistas.add(tag.toLowerCase());
-        return true;
-      });
-  })
+  .transform(normalizarTags)
   .optional();
 
 const revisaoBase = z.number().int().min(0);

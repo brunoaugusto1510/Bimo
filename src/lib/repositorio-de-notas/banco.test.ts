@@ -59,6 +59,23 @@ describe.skipIf(!process.env.DATABASE_URL?.trim() || !process.env.SUPABASE_URL?.
 
   executarContratoDoRepositorio("banco", fabrica);
 
+  it("mover de pasta conta só outras notas e versiona também a autoligação", async () => {
+    const repo = await fabrica();
+    const alvo = await repo.criarNota({ titulo: "Título", pasta: "Pasta", conteudo: "[[Pasta/Título]]" }, AUTOR);
+    if (alvo.tipo !== "ok") throw new Error("Falha ao criar nota alvo");
+    const outra = await criarNota(repo, "Outra", "[[Pasta/Título]] e [[Pasta/Título|apelido]]");
+
+    const resultado = await repo.atualizarNota(alvo.nota.id, { pasta: "Destino" }, { ...OPCOES, checkpoint: true });
+
+    expect(resultado).toMatchObject({ tipo: "ok", notasReescritas: 1, nota: { conteudo: "[[Destino/Título]]", revisao: 2 } });
+    expect((await repo.obterNota(outra.id))?.conteudo).toBe("[[Destino/Título]] e [[Destino/Título|apelido]]");
+    for (const id of [alvo.nota.id, outra.id]) {
+      const historico = await versoes(id);
+      expect(historico).toHaveLength(2);
+      expect(historico[1]).toMatchObject({ sessaoAberta: false });
+    }
+  });
+
   it("isola leituras, busca e escritas de outro usuário", async () => {
     const repo = await fabrica();
     const nota = await criarNota(repo, "Privada", "segredo");

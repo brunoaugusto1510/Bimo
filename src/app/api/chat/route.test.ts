@@ -29,10 +29,14 @@ function requisicao(corpo: unknown, autenticado = true): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.SEGREDO_SESSAO = SEGREDO;
+  vi.stubEnv("GEMINI_API_KEY", "teste");
+  vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   delete process.env.SEGREDO_SESSAO;
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 describe("POST /api/chat", () => {
@@ -86,7 +90,7 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(400);
   });
 
-  it("devolve 500 com a mensagem de erro quando responder() lança exceção", async () => {
+  it("devolve 500 genérico quando responder() lança exceção", async () => {
     vi.mocked(responder).mockRejectedValue(
       new Error("GEMINI_API_KEY não está definida."),
     );
@@ -97,8 +101,23 @@ describe("POST /api/chat", () => {
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({
-      erro: "GEMINI_API_KEY não está definida.",
+      erro: "Não consegui responder agora. Tente de novo.",
     });
+  });
+
+  it("recusa outra origem antes de chamar o agente", async () => {
+    const pedido = requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] });
+    pedido.headers.set("origin", "http://outro");
+    expect((await POST(pedido)).status).toBe(403);
+    expect(responder).not.toHaveBeenCalled();
+  });
+
+  it("recusa configuração ausente com 503 genérico", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const resposta = await POST(requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] }));
+    expect(resposta.status).toBe(503);
+    expect(JSON.stringify(await resposta.json())).not.toContain("GEMINI_API_KEY");
+    expect(responder).not.toHaveBeenCalled();
   });
 
   /*

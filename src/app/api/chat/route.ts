@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { responder } from "@/lib/agente";
 import { exigirSessao } from "@/lib/autenticacao";
+import { exigirMesmaOrigem, respostaDeErro, tratarErroDeRepositorio } from "@/lib/http-de-notas";
+import { ErroDeConfiguracao } from "@/lib/repositorio-de-notas/config";
 import type { Mensagem } from "@/lib/types";
 
 /**
@@ -16,6 +18,8 @@ export async function POST(request: Request) {
   // sem ninguém notar — e esta gasta cota do Gemini, além de ler o vault.
   const semSessao = exigirSessao(request);
   if (semSessao) return semSessao;
+  const outraOrigem = exigirMesmaOrigem(request);
+  if (outraOrigem) return outraOrigem;
 
   let corpo: unknown;
   try {
@@ -39,12 +43,15 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!process.env.GEMINI_API_KEY) return respostaDeErro(503, "O Bimo está indisponível no momento. Tente mais tarde.");
   try {
     const resultado = await responder(mensagens);
     return NextResponse.json(resultado);
   } catch (erro) {
-    const mensagem = erro instanceof Error ? erro.message : "Erro desconhecido.";
-    return NextResponse.json({ erro: mensagem }, { status: 500 });
+    // Configuração das notas faltando continua sendo explicada (503 com as variáveis); o resto é genérico e só vai ao log.
+    if (erro instanceof ErroDeConfiguracao) return tratarErroDeRepositorio(erro, "POST /api/chat");
+    console.error("[POST /api/chat] Falha ao responder à conversa.");
+    return respostaDeErro(500, "Não consegui responder agora. Tente de novo.");
   }
 }
 

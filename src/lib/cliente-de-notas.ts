@@ -33,12 +33,17 @@ export async function salvarNota(
     throw new ErroDoCliente("Não consegui falar com o servidor.");
   }
   const corpo = await resposta.json().catch(() => null);
-  if (resposta.ok && corpo?.nota) { esquecerPrevias(); return { tipo: "ok", nota: corpo.nota }; }
+  if (resposta.ok && corpo?.nota) {
+    esquecerPrevias();
+    return typeof corpo.notasReescritas === "number" ? { tipo: "ok", nota: corpo.nota, notasReescritas: corpo.notasReescritas } : { tipo: "ok", nota: corpo.nota };
+  }
   if (resposta.status === 409 && corpo?.tipo === "conflito" && corpo.atual) return { tipo: "conflito", atual: corpo.atual };
   if (resposta.status === 409 && corpo?.tipo === "titulo-em-uso") return { tipo: "titulo-em-uso", idExistente: corpo.idExistente };
   if (resposta.status === 404) return { tipo: "nao-encontrada" };
   if (resposta.status === 413) return { tipo: "grande-demais" };
   if (resposta.status === 403 && corpo?.tipo === "somente-leitura") return { tipo: "somente-leitura" };
+  // Uma recusa de validação (mais de 30 tags, pasta funda demais) diz o motivo; repetir o pedido não ajudaria.
+  if (resposta.status === 400 && typeof corpo?.erro === "string") throw new ErroDoCliente(corpo.erro, 400);
   throw new ErroDoCliente("Não foi possível salvar. Tente de novo.", resposta.status);
 }
 
@@ -97,6 +102,14 @@ export async function buscarNoConteudo(consulta: string, limite = 10, sinal?: Ab
     sinal,
   );
   return resultados;
+}
+
+export type TagDasNotas = { nome: string; quantidade: number };
+
+/** Todas as tags em uso (coluna e texto), da mais usada para a menos usada: alimenta as sugestões. */
+export async function buscarTags(sinal?: AbortSignal): Promise<TagDasNotas[]> {
+  const { tags } = await pedir<{ tags: TagDasNotas[] }>("/api/notas/tags", sinal);
+  return tags;
 }
 
 /** As prévias já pedidas (ou em andamento), por id. Uma falha sai daqui para a próxima tentativa refazer. */

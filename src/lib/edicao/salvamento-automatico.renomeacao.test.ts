@@ -55,3 +55,20 @@ it("checkpoint espera revalidação de uma nota reescrita", async () => {
  expect(salvar).toHaveBeenCalledWith("digitado durante revalidação", 2, { checkpoint: true, keepalive: false });
  maquina.destruir();
 });
+
+it("recusa segunda operação exclusiva simultânea com mensagem genérica", async () => {
+ const maquina = criarSalvamentoAutomatico({ nota: nota("a", 1), salvar: vi.fn() });
+ let concluir!: () => void;
+ const operacao = maquina.executarExclusivo(() => new Promise<void>((r) => { concluir = r; }));
+ const segunda = vi.fn();
+ await expect(maquina.executarExclusivo(segunda)).rejects.toThrow("Já há uma operação em andamento nesta nota.");
+ expect(segunda).not.toHaveBeenCalled();
+ concluir(); await operacao; maquina.destruir();
+});
+it("conflito recusa operação exclusiva com mensagem genérica", async () => {
+ const maquina = criarSalvamentoAutomatico({ nota: nota("a", 1), salvar: vi.fn() });
+ maquina.recuperarConflito("local", nota("remoto", 2));
+ const operacao = vi.fn();
+ await expect(maquina.executarExclusivo(operacao)).rejects.toThrow("Salve ou resolva o conflito antes de continuar.");
+ expect(operacao).not.toHaveBeenCalled(); maquina.destruir();
+});

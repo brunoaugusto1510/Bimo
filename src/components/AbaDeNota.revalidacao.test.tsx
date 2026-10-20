@@ -20,7 +20,7 @@ it("hooks reais mantêm painel e contador durante recarga debounced por checkpoi
   });
   vi.stubGlobal("fetch", fetchFalso); render(<AbaDeNota aba={aba} {...props} />); await act(async () => {});
   expect(screen.getByText("1 conexão")).toBeInTheDocument(); expect(screen.getByText("Vizinha")).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "sem novas ligações" } }); await act(() => vi.advanceTimersByTimeAsync(3600));
+  fireEvent.change(screen.getByRole("textbox", { name: /Texto da nota/ }), { target: { value: "sem novas ligações" } }); await act(() => vi.advanceTimersByTimeAsync(3600));
   expect(pedidosLigacoes).toBe(1);
   fireEvent.click(screen.getByRole("button", { name: "Salvar agora" })); await act(async () => {});
   await act(() => vi.advanceTimersByTimeAsync(600)); expect(pedidosLigacoes).toBe(2);
@@ -33,12 +33,12 @@ it("ativa revalida revisão nova; agente atualiza só a aba ativa sem pendência
     : Response.json({ nota: { ...nota, revisao, conteudo: `texto ${revisao}` }, capacidades: { escrita: true, datas: true } }));
   vi.stubGlobal("fetch", fetchFalso);
   const { rerender } = render(<AbaDeNota aba={aba} {...props} ativa={false} />); expect(fetchFalso).not.toHaveBeenCalled();
-  rerender(<AbaDeNota aba={aba} {...props} ativa />); await act(async () => {}); expect(screen.getByRole("textbox")).toHaveValue("texto 1");
+  rerender(<AbaDeNota aba={aba} {...props} ativa />); await act(async () => {}); expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toHaveValue("texto 1");
   rerender(<AbaDeNota aba={aba} {...props} ativa={false} />); await act(async () => {}); revisao = 4;
-  rerender(<AbaDeNota aba={aba} {...props} ativa />); await act(async () => {}); expect(screen.getByRole("textbox")).toHaveValue("texto 4");
+  rerender(<AbaDeNota aba={aba} {...props} ativa />); await act(async () => {}); expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toHaveValue("texto 4");
   revisao = 5; await act(async () => { window.dispatchEvent(new CustomEvent("bimo:nota-alterada-pelo-agente", { detail: { id: "1" } })); });
-  expect(screen.getByRole("textbox")).toHaveValue("texto 5");
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "local" } }); const antes = fetchFalso.mock.calls.length;
+  expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toHaveValue("texto 5");
+  fireEvent.change(screen.getByRole("textbox", { name: /Texto da nota/ }), { target: { value: "local" } }); const antes = fetchFalso.mock.calls.length;
   await act(async () => { window.dispatchEvent(new CustomEvent("bimo:nota-alterada-pelo-agente", { detail: { id: "1" } })); });
-  expect(fetchFalso).toHaveBeenCalledTimes(antes); expect(screen.getByRole("textbox")).toHaveValue("local");
+  expect(fetchFalso).toHaveBeenCalledTimes(antes); expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toHaveValue("local");
 });

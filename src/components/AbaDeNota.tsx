@@ -14,6 +14,8 @@ import VisaoDaNota from "./VisaoDaNota";
 import EditorDeNota from "./EditorDeNota";
 import ControlesDaEdicao from "./ControlesDaEdicao";
 import { useEdicaoDeNota } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
+import { useTagsDasNotas } from "@/lib/espaco-de-trabalho/usar-tags-das-notas";
+import { sugerirParaGatilho } from "@/lib/edicao/sugestoes";
 
 import CampoDeTitulo from "./CampoDeTitulo";
 import type { FocoPedido, ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
@@ -31,7 +33,8 @@ type Props = {
   aoCriarNota: (titulo: string, pasta?: string | null, opcoes?: { novaAba: boolean }) => Promise<ResultadoDaAbertura> | void;
   focoPedido?: FocoPedido | null;
   aoConsumirFoco?: () => void;
-  tituloEditavel?: boolean;
+  confirmarTituloAoSair?: boolean;
+  aoSairDoTitulo?: () => void;
   aoRenomear?: (nota: NotaParaArvore) => void;
   escritaDisponivel?: boolean;
   aoPerguntarAoBimo: (id: IdDeNota) => void;
@@ -61,12 +64,14 @@ export default function AbaDeNota({
   aoCriarNota,
   aoPerguntarAoBimo,
   ativa = true,
-  aoMudarPendencia, focoPedido, aoConsumirFoco, tituloEditavel = false, aoRenomear, escritaDisponivel,
+  aoMudarPendencia, focoPedido, aoConsumirFoco, confirmarTituloAoSair = false, aoSairDoTitulo, aoRenomear, escritaDisponivel,
 }: Props) {
   const id = idAtual(aba);
   const pendenciaAtual = useRef(false);
   const tituloPendente = useRef(false);
-  const [avisoDeTitulo, definirAvisoDeTitulo] = useState("");
+  // O contador faz o leitor de tela repetir o aviso a cada tentativa, mesmo com o mesmo texto.
+  const [avisoDeTitulo, definirAvisoDeTitulo] = useState({ n: 0, texto: "" });
+  const focoNoTextoPendente = useRef(false);
   const [abertura, definirAbertura] = useState({ id: "", texto: "" });
   const nota = useNota(id, ativa, () => !pendenciaAtual.current);
   const ligacoes = useLigacoes(ativa ? id : null);
@@ -87,6 +92,11 @@ export default function AbaDeNota({
     }
   });
   useEffect(() => { pendenciaAtual.current = edicao.pendente; }, [edicao.pendente]);
+  useEffect(() => {
+    if (edicao.ocupado || !focoNoTextoPendente.current) return;
+    focoNoTextoPendente.current = false;
+    artigo.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
+  }, [edicao.ocupado]);
   useEffect(() => { ultimoConjunto.current = undefined; return () => clearTimeout(timerLigacoes.current); }, [id, ativa]);
   useEffect(() => {
     function aoAgente(evento: Event) {
@@ -99,6 +109,15 @@ export default function AbaDeNota({
   const [focarAoEntrar, definirFocarAoEntrar] = useState(false);
   const [anuncioManual, definirAnuncioManual] = useState(0);
   useEffect(() => { const timer = setTimeout(() => definirFocarAoEntrar(false), 0); return () => clearTimeout(timer); }, [ativa, aba.modo, id]);
+  function avisarSobreOTitulo(texto: string) { definirAvisoDeTitulo((atual) => ({ n: atual.n + 1, texto })); }
+  function focarTitulo() { artigo.current?.querySelector<HTMLElement>("input[aria-label='Título da nota']")?.focus({ preventScroll: true }); }
+  /** O texto só recebe o foco quando aceita digitação: uma renomeação em voo o mantém somente leitura. */
+  function irAoTexto() {
+    const campo = artigo.current?.querySelector<HTMLTextAreaElement>("textarea");
+    if (!campo) return;
+    if (campo.readOnly) { focoNoTextoPendente.current = true; return; }
+    campo.focus({ preventScroll: true });
+  }
   async function salvarAgora() { await edicao.forcar({ checkpoint: true }); definirAnuncioManual((n) => n + 1); }
   useEffect(() => { aoMudarPendencia?.(id, edicao.pendente); }, [id, edicao.pendente, aoMudarPendencia]);
   const artigo = useRef<HTMLElement>(null);
@@ -121,7 +140,7 @@ export default function AbaDeNota({
   const resolver = useMemo(() => criarResolvedor([...notas.values()]), [notas]);
   const resumo = notas.get(id);
   const titulo = edicao.nota?.titulo ?? nota.dados?.nota.titulo ?? resumo?.titulo ?? "Nota";
-  const pasta = nota.dados?.nota.pasta ?? resumo?.pasta ?? null;
+  const pasta = edicao.nota?.pasta ?? nota.dados?.nota.pasta ?? resumo?.pasta ?? null;
   const carregada = nota.dados !== undefined;
 
   const conteudo = edicao.texto;
@@ -136,6 +155,18 @@ export default function AbaDeNota({
       ? new Set([...entradas.map((entrada) => entrada.id), ...saidas.flatMap((destino) => (destino.tipo === "nota" ? [destino.id] : []))]).size
       : null;
   const escrita = (escritaDisponivel ?? true) && (nota.dados?.capacidades.escrita ?? false);
+  const editandoPropriedades = escrita && aba.modo === "edicao";
+  const sugestoesDeTags = useTagsDasNotas(ativa && editandoPropriedades);
+  const listaDeNotas = useMemo(() => [...notas.values()], [notas]);
+  // Também as pastas-pai: com só "A/B" existindo, "A" é um destino válido.
+  const pastasExistentes = useMemo(() => {
+    const todas = new Set<string>();
+    for (const outra of notas.values()) {
+      const partes = outra.pasta?.split("/") ?? [];
+      partes.forEach((_, indice) => todas.add(partes.slice(0, indice + 1).join("/")));
+    }
+    return [...todas].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [notas]);
 
   useEffect(() => { tituloPendente.current = false; }, [id]);
   useEffect(() => {
@@ -232,7 +263,11 @@ export default function AbaDeNota({
             edicaoDisponivel={escrita}
             aoVoltar={aoVoltar}
             aoAvancar={aoAvancar}
-            aoAlternarModo={() => { if (tituloPendente.current) { definirAvisoDeTitulo("Confirme o título com Enter ou desfaça com Esc antes de mudar para Leitura."); return; } definirFocarAoEntrar(aba.modo === "leitura"); aoAlternarModo(); }}
+            aoAlternarModo={() => {
+              if (edicao.ocupado) { avisarSobreOTitulo("Aguarde a atualização terminar antes de mudar para Leitura."); return; }
+              if (tituloPendente.current) { avisarSobreOTitulo("Confirme o título com Enter ou desfaça com Esc antes de mudar para Leitura."); focarTitulo(); return; }
+              definirFocarAoEntrar(aba.modo === "leitura"); aoAlternarModo();
+            }}
             aoCopiarLigacao={copiarLigacao}
             aoAbrirEmNovaAba={() => aoAbrirNota(id, { novaAba: true })}
             aoPerguntarAoBimo={() => aoPerguntarAoBimo(id)}
@@ -245,7 +280,7 @@ export default function AbaDeNota({
           role="region"
           aria-label="Conteúdo da nota"
           tabIndex={0}
-          className="lg:min-h-0 lg:overflow-y-auto"
+          className="relative lg:min-h-0 lg:overflow-y-auto"
         >
           {nota.estado === "carregando" && (
             <p role="status" className="px-8 py-10 text-sm text-suave">
@@ -285,23 +320,34 @@ export default function AbaDeNota({
               alvo?.focus({ preventScroll: true });
             }} />
           {edicao.avisoLocal && <p role="alert" className="px-5 py-3 text-texto">{edicao.avisoLocal}</p>}
-          <p role="status" className={avisoDeTitulo ? "px-5 py-3 text-texto" : "sr-only"}>{avisoDeTitulo}</p>
+          <p role="status" className={avisoDeTitulo.texto ? "px-5 py-3 text-texto" : "sr-only"}><span key={avisoDeTitulo.n}>{avisoDeTitulo.texto}</span></p>
           {nota.dados && (
             <VisaoDaNota
               ref={artigo}
               nota={{ ...(edicao.nota ?? nota.dados.nota), conteudo }}
-              campoDeTitulo={tituloEditavel && escrita && aba.modo === "edicao" ? <CampoDeTitulo key={id} titulo={titulo}
-                aoMudarPendencia={(pendente) => { tituloPendente.current = pendente; if (!pendente) definirAvisoDeTitulo(""); }}
+              campoDeTitulo={escrita && aba.modo === "edicao" ? <CampoDeTitulo key={id} titulo={titulo} confirmarAoSair={confirmarTituloAoSair}
+                aoMudarPendencia={(pendente) => { tituloPendente.current = pendente; if (!pendente) definirAvisoDeTitulo((atual) => ({ ...atual, texto: "" })); }}
+                aoSair={aoSairDoTitulo}
                 focar={ativa && focoPedido?.id === id && focoPedido.alvo === "titulo"} aoConsumirFoco={aoConsumirFoco}
-                aoTexto={() => artigo.current?.querySelector("textarea")?.focus({ preventScroll: true })}
-                aoConfirmar={async (novo) => { const salva = await edicao.renomear(novo); aoRenomear?.(salva); }} /> : undefined}
+                aoTexto={irAoTexto}
+                aoConfirmar={async (novo) => { const { nota, notasReescritas } = await edicao.renomear(novo); aoRenomear?.(nota); return { notasReescritas }; }} /> : undefined}
+              edicaoDePropriedades={editandoPropriedades ? {
+                chave: id, pastas: pastasExistentes, sugestoesDeTags, ocupado: edicao.ocupado,
+                aoMudarPasta: async (pastaNova) => {
+                  const resposta = await edicao.atualizarMetadados({ pasta: pastaNova });
+                  aoRenomear?.(resposta.nota);
+                  // A pasta gravada pode ter outra grafia da digitada (o servidor adota a que já existe).
+                  return { notasReescritas: resposta.notasReescritas, pasta: resposta.nota.pasta };
+                },
+                aoMudarTags: async (tags) => { const resposta = await edicao.atualizarMetadados({ tags }); aoRenomear?.(resposta.nota); return resposta; },
+              } : undefined}
               conexoes={conexoes}
               resolver={resolver}
               podeCriar={escrita}
               aoAbrirNota={aoAbrirNota}
               aoCriarNota={aoCriarNota}
             >
-              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
+              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerir={(gatilho) => sugerirParaGatilho(gatilho, { notas: listaDeNotas, idAtual: id, pastaAtual: pasta, resolver, tagsDasNotas: sugestoesDeTags, tagsDaNota: edicao.nota?.tags ?? [], comBimo: true })} rascunhoDoBimo texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
             </VisaoDaNota>
           )}
         </div>

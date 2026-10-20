@@ -117,6 +117,43 @@ export function executarContratoDoRepositorio(nome: string, fabrica: Fabrica): v
     });
 
     describe("atualizarNota", () => {
+      it("conta outras notas reescritas ao mover, excluindo autoligações e contando cada nota uma vez", async () => {
+        const repo = await fabrica();
+        const alvo = await criarOk(repo, { titulo: "Título", pasta: "Pasta", conteudo: "[[Pasta/Título]]" });
+        const uma = await criarOk(repo, { titulo: "Uma", conteudo: "[[Pasta/Título]] e [[Pasta/Título|apelido]]" });
+        const duas = await criarOk(repo, { titulo: "Duas", conteudo: "[[Pasta/Título]]" });
+        const intacta = await criarOk(repo, { titulo: "Intacta", conteudo: "sem ligação" });
+
+        const resultado = await repo.atualizarNota(alvo.id, { pasta: "Destino" }, { revisaoBase: 1, autor: USUARIO });
+
+        expect(resultado).toMatchObject({ tipo: "ok", notasReescritas: 2, nota: { conteudo: "[[Destino/Título]]" } });
+        expect((await repo.obterNota(uma.id))?.conteudo).toBe("[[Destino/Título]] e [[Destino/Título|apelido]]");
+        expect((await repo.obterNota(duas.id))?.conteudo).toBe("[[Destino/Título]]");
+        expect(await repo.obterNota(intacta.id)).toEqual(intacta);
+      });
+
+      it("informa zero ao mover sem ligações de outras notas", async () => {
+        const repo = await fabrica();
+        const alvo = await criarOk(repo, { titulo: "Título", pasta: "Pasta", conteudo: "[[Pasta/Título]]" });
+
+        expect(await repo.atualizarNota(alvo.id, { pasta: null }, { revisaoBase: 1, autor: USUARIO }))
+          .toMatchObject({ tipo: "ok", notasReescritas: 0 });
+      });
+
+      it("omite a contagem e preserva outras notas quando só tags ou texto mudam", async () => {
+        const repo = await fabrica();
+        const alvo = await criarOk(repo, { titulo: "Título", pasta: "Pasta" });
+        const outra = await criarOk(repo, { titulo: "Outra", conteudo: "[[Pasta/Título]]" });
+        let revisaoBase = alvo.revisao;
+        for (const mudancas of [{ tags: ["nova"] }, { conteudo: "novo texto" }, { pasta: "Pasta" }]) {
+          const resultado = await repo.atualizarNota(alvo.id, mudancas, { revisaoBase, autor: USUARIO });
+          expect(resultado.tipo).toBe("ok");
+          expect(resultado).not.toHaveProperty("notasReescritas");
+          if (resultado.tipo === "ok") revisaoBase = resultado.nota.revisao;
+          expect(await repo.obterNota(outra.id)).toEqual(outra);
+        }
+      });
+
       it("grava o novo conteúdo e sobe a revisão", async () => {
         const repo = await fabrica();
         const nota = await criarOk(repo, { titulo: "A", conteudo: "antes" });

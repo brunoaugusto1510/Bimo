@@ -8,7 +8,7 @@ const buscar = vi.hoisted(() => vi.fn());
 vi.mock("../cliente-de-notas", () => ({ salvarNota: salvar, renomearNota: renomear, buscarNota: buscar }));
 const nota = { id: "1", titulo: "Nota", pasta: null, tags: [], criadoEm: null, atualizadoEm: null, conteudo: "inicial", revisao: 1 };
 const dados = { nota, capacidades: { escrita: true, datas: true } };
-beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); salvar.mockReset().mockImplementation(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } })); });
+beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); renomear.mockReset(); salvar.mockReset().mockImplementation(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } })); });
 afterEach(() => vi.useRealTimers());
 it("salva após 3 segundos; sair da edição preserva texto e fecha checkpoint", async () => {
   const { result, rerender } = renderHook(({ modo }) => useEdicaoDeNota("1", dados, modo), { initialProps: { modo: true } });
@@ -117,7 +117,7 @@ it("reconhece renomeação confirmada após resposta perdida sem conflito", asyn
   renomear.mockResolvedValue({ tipo: "conflito", atual });
   const registrar = vi.fn();
   const { result } = renderHook(() => useEdicaoDeNota("1", dados, true, registrar));
-  await act(async () => { expect(await result.current.renomear("Novo")).toEqual(atual); });
+  await act(async () => { expect(await result.current.renomear("Novo")).toEqual({ nota: atual, notasReescritas: 0 }); });
   expect(result.current.estado).toBe("salvo");
   expect(registrar).toHaveBeenCalledWith(atual, true);
 });
@@ -156,4 +156,113 @@ it("desmontar durante renomeação rejeitada ainda envia o texto pendente", asyn
  unmount();
  await act(async () => { rejeitar(new Error("rede")); await pedido; });
  expect(salvar).toHaveBeenCalledWith("1", { conteudo: "antes de fechar" }, { revisaoBase: 1, checkpoint: true }, { keepalive: false });
+});
+
+it.each([undefined, 0, 2])("renomear devolve nota e contagem %s e libera ocupado", async (notasReescritas) => {
+ let concluir!: (valor: unknown) => void;
+ renomear.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ expect(result.current.ocupado).toBe(false);
+ let pedido!: ReturnType<typeof result.current.renomear>;
+ await act(async () => { pedido = result.current.renomear("Novo"); });
+ expect(result.current.ocupado).toBe(true);
+ const salva = { ...nota, titulo: "Novo", revisao: 2 };
+ await act(async () => {
+  concluir({ tipo: "ok", nota: salva, notasReescritas });
+  expect(await pedido).toEqual({ nota: salva, notasReescritas: notasReescritas ?? 0 });
+ });
+ expect(result.current.ocupado).toBe(false);
+});
+it.each(["erro", "conflito", "rede"])("renomeação libera ocupado após %s", async (tipo) => {
+ let concluir!: (valor: unknown) => void, rejeitar!: (erro: Error) => void;
+ renomear.mockImplementationOnce(() => new Promise((r, j) => { concluir = r; rejeitar = j; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.renomear("Novo").catch((erro) => erro); });
+ expect(result.current.ocupado).toBe(true);
+ await act(async () => {
+  if (tipo === "rede") rejeitar(new Error("rede"));
+  else concluir(tipo === "erro" ? { tipo, mensagem: "falhou" } : { tipo, atual: { ...nota, titulo: "Outro", revisao: 2 } });
+  expect(await pedido).toBeInstanceOf(Error);
+ });
+ expect(result.current.ocupado).toBe(false);
+});
+it("recusar uma segunda renomeação mantém ocupado até a primeira terminar", async () => {
+ let concluir!: (valor: unknown) => void;
+ renomear.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.renomear("Novo"); });
+ await act(async () => {
+  await expect(result.current.renomear("Outro")).rejects.toThrow("Já há uma operação em andamento nesta nota.");
+ });
+ expect(result.current.ocupado).toBe(true); expect(renomear).toHaveBeenCalledTimes(1);
+ await act(async () => { concluir({ tipo: "ok", nota: { ...nota, titulo: "Novo", revisao: 2 } }); await pedido; });
+ expect(result.current.ocupado).toBe(false);
+});
+it("atualizarMetadados envia pasta e tags normalizadas como checkpoint e devolve a contagem", async () => {
+ salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, pasta: "A/B", tags: ["a", "b"], revisao: 2 }, notasReescritas: 2 });
+ const registrar = vi.fn(), reescritas = vi.fn();
+ window.addEventListener("bimo:notas-reescritas", reescritas);
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true, registrar));
+ await act(async () => {
+  expect(await result.current.atualizarMetadados({ pasta: "A/B", tags: ["#a", "A", " b "] })).toEqual({ nota: { ...nota, pasta: "A/B", tags: ["a", "b"], revisao: 2 }, notasReescritas: 2 });
+ });
+ expect(salvar).toHaveBeenCalledWith("1", { pasta: "A/B", tags: ["a", "b"] }, { revisaoBase: 1, checkpoint: true });
+ expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ pasta: "A/B" }), true);
+ expect(reescritas).toHaveBeenCalledTimes(1); expect(result.current.ocupado).toBe(false);
+ window.removeEventListener("bimo:notas-reescritas", reescritas);
+});
+it("atualizarMetadados só com tags não avisa reescrita e não manda pasta", async () => {
+ salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, tags: ["x"], revisao: 2 } });
+ const reescritas = vi.fn(); window.addEventListener("bimo:notas-reescritas", reescritas);
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ await act(async () => { await result.current.atualizarMetadados({ tags: ["x"] }); });
+ expect(salvar).toHaveBeenCalledWith("1", { tags: ["x"] }, { revisaoBase: 1, checkpoint: true });
+ expect(reescritas).not.toHaveBeenCalled(); window.removeEventListener("bimo:notas-reescritas", reescritas);
+});
+it("atualizarMetadados explica título repetido na pasta de destino", async () => {
+ salvar.mockResolvedValueOnce({ tipo: "titulo-em-uso", idExistente: "9" });
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ await act(async () => { await expect(result.current.atualizarMetadados({ pasta: "Outra" })).rejects.toThrow("Já existe «Nota» nessa pasta."); });
+ expect(result.current.ocupado).toBe(false); expect(result.current.estado).not.toBe("conflito");
+});
+it("atualizarMetadados reconhece resposta perdida (conflito com o que foi pedido já salvo)", async () => {
+ const atual = { ...nota, pasta: "A", revisao: 2 };
+ salvar.mockResolvedValueOnce({ tipo: "conflito", atual });
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ await act(async () => { expect(await result.current.atualizarMetadados({ pasta: "a" })).toEqual({ nota: atual, notasReescritas: 0 }); });
+ expect(result.current.estado).toBe("salvo");
+});
+it("operação em voo que termina depois de ir a outra nota e voltar atualiza a revisão da máquina nova", async () => {
+ let concluir!: (valor: unknown) => void;
+ salvar.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ const outra = { ...dados, nota: { ...nota, id: "2", titulo: "Outra" } };
+ const { result, rerender } = renderHook(({ id }) => useEdicaoDeNota(id, id === "1" ? dados : outra, true), { initialProps: { id: "1" } });
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.atualizarMetadados({ tags: ["a"] }).catch(() => {}); });
+ rerender({ id: "2" }); await act(async () => {});
+ rerender({ id: "1" }); await act(async () => {});
+ await act(async () => { concluir({ tipo: "ok", nota: { ...nota, tags: ["a"], revisao: 2 } }); await pedido; });
+ expect(result.current.nota?.revisao).toBe(2); expect(result.current.estado).toBe("salvo");
+});
+it("atualizarMetadados com conflito real abre o conflito e rejeita", async () => {
+ salvar.mockResolvedValueOnce({ tipo: "conflito", atual: { ...nota, pasta: "Outra", conteudo: "de outra aba", revisao: 5 } });
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ await act(async () => { await expect(result.current.atualizarMetadados({ pasta: "A" })).rejects.toThrow(); });
+ expect(result.current.estado).toBe("conflito");
+});
+it("atualizarMetadados salva antes o texto pendente e recusa durante outra operação", async () => {
+ let concluir!: (valor: unknown) => void;
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ act(() => result.current.aoMudar("texto novo"));
+ salvar.mockImplementationOnce(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } }));
+ salvar.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.atualizarMetadados({ tags: ["a"] }); });
+ expect(salvar.mock.calls[0][1]).toEqual({ conteudo: "texto novo" });
+ expect(salvar.mock.calls[1][2]).toEqual({ revisaoBase: 2, checkpoint: true });
+ await act(async () => { await expect(result.current.atualizarMetadados({ tags: ["b"] })).rejects.toThrow("Já há uma operação em andamento nesta nota."); });
+ await act(async () => { concluir({ tipo: "ok", nota: { ...nota, conteudo: "texto novo", tags: ["a"], revisao: 3 } }); await pedido; });
+ expect(result.current.ocupado).toBe(false);
 });

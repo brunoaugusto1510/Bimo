@@ -142,12 +142,12 @@ export function criarSalvamentoAutomatico(deps: Dependencias) {
       finally { if (exclusiva === pedido) exclusiva = null; if (sujo() && !bloqueado()) programar(3000); }
     },
     async executarExclusivo<T>(fn: (revisao: number) => Promise<T>): Promise<T> {
-      if (exclusividadePedida) throw new Error("Uma renomeação já está em andamento.");
+      if (exclusividadePedida) throw new Error("Já há uma operação em andamento nesta nota.");
       exclusividadePedida = true;
       let pedido: Promise<T> | undefined;
       try {
         await forcar({ checkpoint: true });
-        if (bloqueado() || retrato.estado === "erro" || sujo()) throw new Error("Salve ou resolva o conflito antes de renomear.");
+        if (bloqueado() || retrato.estado === "erro" || sujo()) throw new Error("Salve ou resolva o conflito antes de continuar.");
         limparTimer();
         pedido = Promise.resolve().then(() => fn(retrato.nota.revisao));
         exclusiva = pedido;

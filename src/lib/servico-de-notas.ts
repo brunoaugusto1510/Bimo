@@ -10,6 +10,7 @@
 
 import { montarGrafoDeNotas, type Grafo } from "./grafo-de-notas";
 import { construirArvore } from "./arvore-de-notas";
+import { extrairTags } from "./markdown-da-nota";
 import {
   construirIndiceDeLigacoes,
   encontrarMencoesSemLigacao,
@@ -40,7 +41,25 @@ export type LigacoesDaNota = {
   mencoesSemLigacao: MencaoSemLigacao[];
 };
 
-type Montado = { notas: NotaCompleta[]; indice: IndiceDeLigacoes; dados: DadosDaPagina };
+type TagContada = { nome: string; quantidade: number };
+/** `tags` é preenchido no primeiro pedido de tags: quem só quer a página ou o grafo não paga por contá-las. */
+type Montado = { notas: NotaCompleta[]; indice: IndiceDeLigacoes; dados: DadosDaPagina; tags?: TagContada[] };
+
+function contarTags(notas: NotaCompleta[]): TagContada[] {
+  const contagens = new Map<string, TagContada>();
+  for (const nota of notas) {
+    const vistas = new Set<string>();
+    for (const nome of [...nota.tags, ...extrairTags(nota.conteudo)]) {
+      const chave = nome.toLowerCase();
+      if (vistas.has(chave)) continue;
+      vistas.add(chave);
+      const existente = contagens.get(chave);
+      if (existente) existente.quantidade++;
+      else contagens.set(chave, { nome, quantidade: 1 });
+    }
+  }
+  return [...contagens.values()].sort((a, b) => b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, "pt-BR"));
+}
 
 const caches = new WeakMap<RepositorioDeNotas, { marca: string; montado: Promise<Montado> }>();
 
@@ -78,6 +97,12 @@ async function obterMontado(repositorio: RepositorioDeNotas): Promise<Montado> {
 
 export async function obterDadosDaPagina(repositorio: RepositorioDeNotas): Promise<DadosDaPagina> {
   return (await obterMontado(repositorio)).dados;
+}
+
+/** Tags da coluna e do texto, contadas por nota sobre a mesma leitura usada pela página. */
+export async function obterTags(repositorio: RepositorioDeNotas): Promise<TagContada[]> {
+  const montado = await obterMontado(repositorio);
+  return (montado.tags ??= contarTags(montado.notas));
 }
 
 /**

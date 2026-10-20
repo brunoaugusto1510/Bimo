@@ -1,10 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buscarNota, renomearNota, salvarNota, type RespostaDeNota } from "../cliente-de-notas";
+import { buscarNota, renomearNota, salvarNota, type RespostaDeNota, type ResultadoDoSalvamento } from "../cliente-de-notas";
 import { criarSalvamentoAutomatico, type RetratoDaEdicao, type SalvamentoAutomatico } from "../edicao/salvamento-automatico";
 import { criarRascunhoLocal, decidirRascunho, type RascunhoLocal } from "../edicao/rascunho-local";
 import type { NotaCompleta } from "../repositorio-de-notas/tipos";
+import { normalizarPasta } from "../caminho-da-nota";
+import { mesmasTags, normalizarTags } from "../tags-da-nota";
+
+type PedidoExclusivo = {
+  verbo: string;
+  substantivo: string;
+  falha: string;
+  chamar: (revisao: number) => Promise<ResultadoDoSalvamento | { tipo: "erro"; mensagem: string }>;
+  /** Um conflito cujo salvo já é o que se pediu é só uma resposta perdida, não um conflito. */
+  jaAplicado: (salva: NotaCompleta) => boolean;
+  tituloEmUso: (nota: NotaCompleta) => string;
+};
 
 export type EscolhaDaEdicao = "manter" | "usar" | "copiar" | "restaurar" | "descartar" | "tentar";
 export const EVENTO_NOTA_SALVA = "bimo:nota-salva";
@@ -14,6 +26,14 @@ const LIMITE_KEEPALIVE = 64 * 1024;
 export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, editando: boolean, aoSalvar?: (nota: NotaCompleta, checkpoint: boolean) => void) {
   const [vista, definirVista] = useState<(RetratoDaEdicao & { id: string }) | null>(null);
   const [recuperacao, definirRecuperacao] = useState<{ id: string; rascunho: RascunhoLocal } | null>(null);
+  // A aba reaproveita o hook ao navegar: cada nota tem a sua própria contagem de operações em voo.
+  const [ocupadas, definirOcupadas] = useState<ReadonlyMap<string, number>>(new Map());
+  const ocupado = (ocupadas.get(id) ?? 0) > 0;
+  const marcarOcupada = useCallback((alvo: string, delta: 1 | -1) => definirOcupadas((atuais) => {
+    const proximas = new Map(atuais), total = (atuais.get(alvo) ?? 0) + delta;
+    if (total > 0) proximas.set(alvo, total); else proximas.delete(alvo);
+    return proximas;
+  }), []);
   const [avisoLocal, definirAvisoLocal] = useState("");
   const controle = useRef<{ id: string; maquina: SalvamentoAutomatico; copia: ReturnType<typeof criarRascunhoLocal> } | null>(null);
   const callback = useRef(aoSalvar);
@@ -159,33 +179,69 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
     const retrato = atual.maquina.obter();
     if (escolha !== "manter") { atual.copia.limpar(); callback.current?.(retrato.nota, false); }
   }
-  const retrato = vista?.id === id ? vista : null;
-  return {
-    texto: retrato?.texto ?? dados?.nota.conteudo ?? "", nota: retrato?.nota ?? dados?.nota,
-    estado: retrato?.estado ?? "salvo", aoMudar, forcar, resolverConflito,
-    async renomear(titulo: string): Promise<NotaCompleta> {
-      const atual = controle.current;
-      if (!escrita || !atual || atual.id !== id || recuperacao?.id === id) throw new Error("A nota não está disponível para renomear.");
-      return atual.maquina.executarExclusivo(async (revisao) => {
+  /**
+   * Uma escrita que não pode correr junto do autosave (renomear, pasta, tags): salva o texto pendente,
+   * ocupa a fila, adota a nota devolvida e avisa as outras abas se ligações foram reescritas.
+   */
+  async function escreverExclusivo(pedido: PedidoExclusivo): Promise<{ nota: NotaCompleta; notasReescritas: number }> {
+    const atual = controle.current;
+    if (!escrita || !atual || atual.id !== id || recuperacao?.id === id) throw new Error(`A nota não está disponível para ${pedido.verbo}.`);
+    marcarOcupada(id, 1);
+    try {
+      return await atual.maquina.executarExclusivo(async (revisao) => {
         const textoEnviado = atual.maquina.obter().texto;
-        const resultado = await renomearNota(id, titulo, revisao);
-        if (resultado.tipo === "ok" || (resultado.tipo === "conflito" && resultado.atual.titulo === titulo && resultado.atual.conteudo === atual.maquina.obter().nota.conteudo)) {
+        const resultado = await pedido.chamar(revisao);
+        const respostaPerdida = resultado.tipo === "conflito" && pedido.jaAplicado(resultado.atual) && resultado.atual.conteudo === atual.maquina.obter().nota.conteudo;
+        if (resultado.tipo === "ok" || respostaPerdida) {
           const salva = resultado.tipo === "ok" ? resultado.nota : resultado.atual;
           atual.maquina.rebasear(salva, textoEnviado);
           const retrato = atual.maquina.obter();
-          if (retrato.estado === "conflito") throw new Error("O conteúdo mudou durante a renomeação. Resolva o conflito.");
-          if (controle.current !== atual) return salva;
+          if (retrato.estado === "conflito") throw new Error(`O conteúdo mudou durante a ${pedido.substantivo}. Resolva o conflito.`);
+          const notasReescritas = resultado.tipo === "ok" ? resultado.notasReescritas ?? 0 : 0;
+          const resposta = { nota: salva, notasReescritas };
+          // As outras abas precisam revalidar mesmo que esta máquina já tenha sido trocada (navegou e voltou).
+          const reescreveu = resultado.tipo === "conflito" || notasReescritas > 0;
+          const avisarReescrita = () => window.dispatchEvent(new CustomEvent(EVENTO_NOTAS_REESCRITAS, { detail: { id } }));
+          if (controle.current !== atual) {
+            if (reescreveu) avisarReescrita();
+            // Navegou para outra nota e voltou enquanto o pedido corria: a máquina nova adota a revisão devolvida.
+            if (controle.current?.id === id) controle.current.maquina.adotar({ ...salva, conteudo: salva.conteudo.replace(/\r\n/g, "\n") });
+            window.dispatchEvent(new CustomEvent(EVENTO_NOTA_SALVA, { detail: { id, checkpoint: true } }));
+            return resposta;
+          }
           atual.copia.confirmar(salva.conteudo);
           if (retrato.texto !== salva.conteudo) atual.copia.guardar(retrato.texto, salva.revisao);
           callback.current?.(salva, true);
           window.dispatchEvent(new CustomEvent(EVENTO_NOTA_SALVA, { detail: { id, checkpoint: true } }));
-          if (resultado.tipo === "conflito" || (resultado.notasReescritas ?? 0) > 0) {
-            window.dispatchEvent(new CustomEvent(EVENTO_NOTAS_REESCRITAS, { detail: { id } }));
-          }
-          return salva;
+          if (reescreveu) avisarReescrita();
+          return resposta;
         }
         if (resultado.tipo === "conflito") atual.maquina.recuperarConflito(atual.maquina.obter().texto, resultado.atual);
-        throw new Error(resultado.tipo === "erro" ? resultado.mensagem : resultado.tipo === "titulo-em-uso" ? "Já existe uma nota com esse título nessa pasta." : resultado.tipo === "somente-leitura" ? "As notas estão em modo somente leitura." : "Não foi possível renomear a nota.");
+        throw new Error(resultado.tipo === "erro" ? resultado.mensagem : resultado.tipo === "titulo-em-uso" ? pedido.tituloEmUso(atual.maquina.obter().nota) : resultado.tipo === "somente-leitura" ? "As notas estão em modo somente leitura." : pedido.falha);
+      });
+    } finally {
+      marcarOcupada(id, -1);
+    }
+  }
+  const retrato = vista?.id === id ? vista : null;
+  return {
+    texto: retrato?.texto ?? dados?.nota.conteudo ?? "", nota: retrato?.nota ?? dados?.nota,
+    estado: retrato?.estado ?? "salvo", ocupado, aoMudar, forcar, resolverConflito,
+    renomear: (titulo: string) => escreverExclusivo({
+      verbo: "renomear", substantivo: "renomeação", falha: "Não foi possível renomear a nota.",
+      chamar: (revisao) => renomearNota(id, titulo, revisao),
+      jaAplicado: (salva) => salva.titulo === titulo,
+      tituloEmUso: () => "Já existe uma nota com esse título nessa pasta.",
+    }),
+    /** Pasta e tags passam pela mesma fila da renomeação: o texto pendente é salvo antes e vira checkpoint. */
+    atualizarMetadados(mudancas: { pasta?: string | null; tags?: string[] }) {
+      const pasta = mudancas.pasta === undefined ? undefined : normalizarPasta(mudancas.pasta);
+      const tags = mudancas.tags === undefined ? undefined : normalizarTags(mudancas.tags);
+      return escreverExclusivo({
+        verbo: "alterar", substantivo: "alteração", falha: "Não foi possível salvar a pasta e as tags.",
+        chamar: (revisao) => salvarNota(id, { ...(pasta !== undefined && { pasta }), ...(tags && { tags }) }, { revisaoBase: revisao, checkpoint: true }),
+        jaAplicado: (salva) => (pasta === undefined || (salva.pasta ?? "").toLowerCase() === (pasta ?? "").toLowerCase()) && (tags === undefined || mesmasTags(salva.tags, tags)),
+        tituloEmUso: (nota) => `Já existe «${nota.titulo}» nessa pasta.`,
       });
     },
     mensagem: retrato?.mensagem, avisoLocal,

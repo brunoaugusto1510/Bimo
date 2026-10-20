@@ -27,7 +27,7 @@ function preparar() {
   return fetch;
 }
 
-it("paleta cria pelo caminho com foco no texto e sem liberar renomeação", async () => {
+it("paleta cria pelo caminho com foco no texto e título editável", async () => {
   const fetch = preparar();
   fireEvent.keyDown(window, { key: "o", ctrlKey: true });
   const campo = screen.getByRole("combobox");
@@ -35,7 +35,7 @@ it("paleta cria pelo caminho com foco no texto e sem liberar renomeação", asyn
   fireEvent.keyDown(campo, { key: "Enter", ctrlKey: true });
   // A transição atravessa POST, fechamento da paleta e efeitos de foco.
   await waitFor(() => expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toHaveFocus(), { timeout: 5000 });
-  expect(screen.queryByRole("textbox", { name: "Título da nota" })).not.toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Título da nota" })).toBeInTheDocument();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   const post = fetch.mock.calls.find(([, opcoes]) => opcoes?.method === "POST")!;
   expect(JSON.parse(post[1]!.body as string)).toMatchObject({ titulo: "Nova", pasta: "Outra" });
@@ -51,7 +51,7 @@ it("ligação cria na mesma aba, herda a pasta e permite voltar à origem", asyn
   expect(screen.getByRole("tab", { name: "Nova" })).toBeInTheDocument();
   const post = fetch.mock.calls.find(([, opcoes]) => opcoes?.method === "POST")!;
   expect(JSON.parse(post[1]!.body as string)).toMatchObject({ titulo: "Nova", pasta: "P" });
-  expect(screen.queryByRole("textbox", { name: "Título da nota" })).not.toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Título da nota" })).toBeInTheDocument();
   await act(async () => fireEvent.click(screen.getByRole("button", { name: /Voltar/ })));
   expect(screen.getByRole("tab", { name: "Origem" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
@@ -81,8 +81,10 @@ it("título pendente mantém edição e erro após clicar em Leitura", async () 
  fetch.mockImplementationOnce(async () => Response.json({ erro: "Falha ao renomear" }, { status: 500 }));
  fireEvent.change(titulo, { target: { value: "Pendente" } });
  fireEvent.blur(titulo); fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
- await waitFor(() => expect(titulo).toHaveAttribute("aria-invalid", "true"));
+ await waitFor(() => expect(titulo).toHaveAttribute("aria-invalid", "true"), { timeout: 5000 });
  expect(titulo).toHaveValue("Pendente");
  expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
  expect(screen.getByText(/Confirme o título com Enter/)).toBeVisible();
+ expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toBeInTheDocument();
 });

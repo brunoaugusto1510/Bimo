@@ -49,7 +49,7 @@ it("Option N e tecla morta em campo no Mac preservam digitação sem criar", () 
  } finally { plataforma.mockRestore(); }
 });
 
-it("renomear atualiza aba e árvore; preserva texto digitado durante o POST e encadeia revisão", async () => {
+it("renomear atualiza aba e árvore; bloqueia texto durante o POST e encadeia revisão", async () => {
  const nota = { id: "renomeada", titulo: "Sem título", pasta: null, conteudo: "", revisao: 1, tags: [], criadoEm: null, atualizadoEm: null };
  let concluir!: (r: Response) => void;
  const fetch = vi.fn(async (url: string, opcoes?: RequestInit): Promise<Response> => {
@@ -63,22 +63,28 @@ it("renomear atualiza aba e árvore; preserva texto digitado durante o POST e en
   return Response.json({ ligacoes: { entrada: [], saida: [] }, mencoesSemLigacao: [] });
  }); vi.stubGlobal("fetch", fetch);
  render(<PaginaPrincipal itens={itens} grafo={grafo} capacidades={capacidades} />);
+ const chat = screen.getByPlaceholderText("Digite sua mensagem..."), montagens = contagem.montagens;
  fireEvent.keyDown(window, { key: "n", altKey: true });
  const titulo = await screen.findByRole("textbox", { name: "Título da nota" });
  const editor = screen.getByRole("textbox", { name: /Texto da nota/ });
  fireEvent.change(editor, { target: { value: "antes" } });
  fireEvent.change(titulo, { target: { value: "Meu título" } }); fireEvent.keyDown(titulo, { key: "Enter" });
- await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/renomear"))).toBe(true));
+ // Antes do pedido de renomear sai o salvamento do texto pendente: sob a carga da suíte completa passa de 1 s.
+ await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/renomear"))).toBe(true), { timeout: 5000 });
  expect(JSON.parse(fetch.mock.calls.find(([url]) => url.endsWith("/renomear"))![1]!.body as string)).toMatchObject({ revisaoBase: 2 });
- fireEvent.change(editor, { target: { value: "durante" } });
+ expect(editor).toHaveAttribute("readonly");
+ expect(editor).toHaveAttribute("aria-busy", "true");
  await act(async () => concluir(Response.json({ nota: { ...nota, titulo: "Meu título", conteudo: "antes", revisao: 3 } })));
- expect(editor).toHaveValue("durante"); expect(editor).toHaveFocus();
+ expect(editor).toHaveValue("antes"); expect(editor).toHaveFocus();
+ expect(editor).not.toHaveAttribute("readonly");
+ fireEvent.change(editor, { target: { value: "depois" } });
  expect(screen.getByRole("tab", { name: /Meu título/ })).toBeInTheDocument();
  expect(screen.getByRole("navigation", { name: "Pastas e notas" })).toHaveTextContent("Meu título");
+ expect(screen.getByPlaceholderText("Digite sua mensagem...")).toBe(chat); expect(contagem.montagens).toBe(montagens);
  fireEvent.keyDown(editor, { key: "s", ctrlKey: true });
  await waitFor(() => expect(fetch.mock.calls.filter(([, op]) => op?.method === "PATCH")).toHaveLength(2));
  const ultimo = fetch.mock.calls.filter(([, op]) => op?.method === "PATCH")[1];
- expect(JSON.parse(ultimo[1]!.body as string)).toMatchObject({ conteudo: "durante", revisaoBase: 3 });
+ expect(JSON.parse(ultimo[1]!.body as string)).toMatchObject({ conteudo: "depois", revisaoBase: 3 });
 });
 
 it("capacidades atualizadas bloqueiam o botão Nova nota sem POST", async () => {
