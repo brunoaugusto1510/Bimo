@@ -56,10 +56,89 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 - Notas vazias permanecem. Durante o POST há anúncio “Criando nota…”; teclas
   digitadas antes da chegada do foco podem se perder (limitação aceita).
 
-### Fase 9 — extras do editor
+### Fase 9 — extras do editor e metadados
 
-- Autocompletar ao digitar `[[` (notas) e `#` (tags), menu `/`, rascunho do Bimo dentro da nota.
-- Editar título (rota de renomear já existe e reescreve as ligações das outras notas), pasta e tags pela interface.
+Plano do planejador do ECC (20/10/2026). Editor continua um `<textarea>` com popover
+posicionado pelo cursor (CodeMirror fica para uma fase própria, se realce virar
+objetivo). Cinco subfases, cada uma commitada sozinha, nesta ordem, com Codex +
+revisão do ECC + verificação completa + commit e push, sem parar entre elas.
+
+**Decisões do usuário:** renomear direto e anunciar depois quantas notas tiveram
+ligações atualizadas (só Enter confirma em nota já existente; sair do campo não
+renomeia); tags escritas no texto (`#x`, frontmatter) são só leitura no painel; o
+rascunho do Bimo pode buscar em outras notas (só leitura, sem ferramentas de escrita).
+
+| Subfase | Escopo | Situação |
+| --- | --- | --- |
+| 9a | Renomear qualquer nota | A fazer |
+| 9b | Pasta e tags pela interface | A fazer |
+| 9c | Base do autocompletar + `[[` | A fazer |
+| 9d | `#` e menu `/` | A fazer |
+| 9e | Rascunho do Bimo | A fazer |
+
+**9a — renomear qualquer nota.** `CampoDeTitulo` em toda nota com escrita e modo
+Edição; `idsComTituloEditavel` sai (o foco da criação já vem de `focoPedido`).
+`edicao.renomear` devolve `{ nota, notasReescritas }`; anúncio "Título alterado para
+«X»; N notas tiveram ligações atualizadas". Editor `readOnly` + `aria-busy` durante
+`executarExclusivo` (a renomeação reescreve autoligações da própria nota; digitar no
+meio faria o autosave apagar essa reescrita). Mensagem da fila exclusiva genérica.
+Arquivos: `AbaDeNota`, `EspacoDeTrabalho`, `PaginaPrincipal`, `CampoDeTitulo`,
+`EditorDeNota` (prop `ocupado`), `usar-edicao-de-nota.ts`, `salvamento-automatico.ts`.
+
+**9b — pasta e tags.** `atualizarNota` passa a devolver `notasReescritas` quando a
+pasta muda (`tipos.ts`, `banco.ts`, `memoria.ts`, `suite-de-contrato.ts`; `salvarNota`
+repassa). `edicao.atualizarMetadados({ pasta?, tags? })` pela fila exclusiva, com
+checkpoint e `rebasear`; depois `registrarNota` e `bimo:notas-reescritas` se
+`notasReescritas > 0`. Só em modo Edição. Tags: só as da coluna são editáveis; as do
+texto aparecem marcadas "no texto". Pasta: combobox com pastas existentes + Raiz +
+texto livre (`normalizarPasta`; `titulo-em-uso` → "Já existe «X» nessa pasta").
+Nova rota `GET /api/notas/tags` (`exigirSessao`; `{ tags: { nome, quantidade }[] }`,
+calculada em `servico-de-notas.ts` sobre o cache por `marcaDeVersao`).
+
+**9c — base do autocompletar + `[[`.** Puros em `src/lib/edicao/`:
+`gatilho-do-editor.ts` (`detectarGatilho(texto, cursor)` → ligação/tag/comando, sem
+disparar em código nem frontmatter; `[[` cancela com `]`, quebra de linha, `|` ou
+`\[[`), `insercao-no-editor.ts` (não duplica `]]`; no DOM `setSelectionRange` +
+`execCommand("insertText")` para preservar o Ctrl+Z, fallback `setRangeText`),
+`posicao-do-cursor.ts` (div espelho). Alvo: só o título quando o resolvedor resolve
+para aquela nota, senão `juntarCaminho(pasta, titulo)`. Ranking com `buscarPorTitulo`
+(8 itens, sem rede). `SugestoesDoEditor.tsx` (listbox dentro do `<article>` relativo;
+inverte perto da borda; largura total no celular; opções `min-h-10` com `onMouseDown`
+`preventDefault`). Teclado: ↑/↓, Enter/Tab inserem, Esc fecha; com popover fechado
+Tab/Enter normais; ignora composição IME; não abre durante recuperação de rascunho.
+ARIA: textarea continua textbox; aberto ganha `aria-autocomplete="list"`,
+`aria-controls`, `aria-activedescendant`; região `status` ao abrir e ao inserir.
+`[[Título#` com seções da nota alvo é opcional no fim.
+
+**9d — `#` e `/`.** `#` só no começo da linha ou após espaço, seguido de caractere
+de tag (`# ` e `##` nunca abrem); sugestões de `GET /api/notas/tags` (cache até
+`bimo:nota-salva`) + tags da nota. `/` no começo da linha (após recuo) ou após
+espaço, consulta só letras, fecha com espaço ou sem resultado. `aplicarComando`
+puro: título 1–3 (troca prefixo existente), lista, numerada, tarefa, citação, bloco
+de código (cursor no meio), divisor `---` (com linha em branco antes), tabela 2×2.
+
+**9e — rascunho do Bimo.** Rota nova `POST /api/bimo/rascunho` (não reaproveitar
+`/api/chat`, que tem ferramentas de escrita e até 5 voltas): `exigirSessao` +
+`exigirMesmaOrigem` + `lerJsonComLimite`; zod `{ acao: continuar|resumir|melhorar,
+trecho ≤ 8k, antes ≤ 4k, depois ≤ 2k, titulo }` (o cliente manda o texto do editor,
+inclusive o não salvo); limite em memória ~20/min; Gemini sem ferramentas de escrita
+(pode usar busca/leitura de notas só leitura, por decisão do usuário), saída curta,
+timeout; instrução de sistema fixa trata o texto entre delimitadores como dado; erro
+→ 500 genérico. Extrair `getClient`/`MODELO` de `agente.ts` para `src/lib/gemini.ts`.
+UI: barra "Bimo sugere" (Continuar no cursor; Resumir/Melhorar na seleção), comandos
+`/continuar` etc.; `BimoPensando` + Cancelar durante a geração; proposta num cartão
+`bg-destaque-suave` com Aceitar/Descartar/Tentar de novo, texto puro
+(`whitespace-pre-wrap`, nunca o renderizador de Markdown). Aceitar confere a âncora
+(trecho igual ao original) e insere pelo helper da 9c (autosave normal); nada vai ao
+servidor de notas antes de aceitar. Sem streaming na v1. À parte: `/api/chat` não
+chama `exigirMesmaOrigem` e devolve `erro.message` cru — corrigir.
+
+**Riscos a testar:** fila única (digitação durante operação exclusiva; mover que
+reescreve o próprio texto); inserção nunca perde caracteres (recalcula o gatilho no
+`selectionStart` atual); desempenho de `mascararCodigo` por tecla em nota de 1 MB;
+acessibilidade (roteiro manual NVDA+Chrome e VoiceOver+Safari para
+`aria-activedescendant` em textarea); segurança da 9e (sem escrita, texto puro,
+limites de tamanho e frequência, mesma origem); vocabulário sem "vault".
 
 ### Fase 10 — corte e limpeza (pede confirmação antes)
 
