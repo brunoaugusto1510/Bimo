@@ -69,7 +69,8 @@ it("renomear atualiza aba e árvore; bloqueia texto durante o POST e encadeia re
  const editor = screen.getByRole("textbox", { name: /Texto da nota/ });
  fireEvent.change(editor, { target: { value: "antes" } });
  fireEvent.change(titulo, { target: { value: "Meu título" } }); fireEvent.keyDown(titulo, { key: "Enter" });
- await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/renomear"))).toBe(true));
+ // Antes do pedido de renomear sai o salvamento do texto pendente: sob a carga da suíte completa passa de 1 s.
+ await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/renomear"))).toBe(true), { timeout: 5000 });
  expect(JSON.parse(fetch.mock.calls.find(([url]) => url.endsWith("/renomear"))![1]!.body as string)).toMatchObject({ revisaoBase: 2 });
  expect(editor).toHaveAttribute("readonly");
  expect(editor).toHaveAttribute("aria-busy", "true");

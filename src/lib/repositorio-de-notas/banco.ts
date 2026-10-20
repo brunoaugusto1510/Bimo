@@ -214,7 +214,10 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
           const gravacao = await gravarNota(tx, { ...todas.find((n) => n.id === reescrita.id)!, conteudo: reescrita.conteudo }, autor, false);
           if (gravacao.tipo !== "ok") throw new Error("Falha interna ao reescrever ligações da nota; transação cancelada.");
         }
-        return resultado;
+        return {
+          ...resultado,
+          ...(pasta !== nota.pasta ? { notasReescritas: reescritas.filter((r) => r.id !== id).length } : {}),
+        };
       });
     },
 

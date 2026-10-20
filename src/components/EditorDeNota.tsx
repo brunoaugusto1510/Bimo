@@ -24,8 +24,8 @@ export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false
     return () => observador?.disconnect();
   }, [texto]);
   return <>
-    {/* Enquanto a renomeação reescreve as ligações o texto não aceita digitação: o aviso explica por quê. */}
-    <p id={idOcupado} role="status" className={ocupado ? "mb-2 text-meta text-texto" : "sr-only"}>{ocupado ? "Renomeando a nota…" : ""}</p>
+    {/* Enquanto renomear ou mover a nota reescreve ligações o texto não aceita digitação: o aviso explica por quê. */}
+    <p id={idOcupado} role="status" className={ocupado ? "mb-2 text-meta text-texto" : "sr-only"}>{ocupado ? "Atualizando a nota…" : ""}</p>
     <textarea ref={campo} value={texto} maxLength={1_000_000} readOnly={aguardandoRecuperacao || ocupado} aria-busy={ocupado}
       aria-describedby={ocupado ? idOcupado : aguardandoRecuperacao ? descricaoRecuperacao : undefined} onChange={(evento) => aoMudar(evento.target.value)}
       aria-label={`Texto da nota ${titulo}, Markdown`} aria-keyshortcuts="Control+S Meta+S" spellCheck lang="pt-BR"

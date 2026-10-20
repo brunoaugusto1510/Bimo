@@ -9,6 +9,34 @@ import {
   tratarErroDeRepositorio,
 } from "./http-de-notas";
 import type { NotaCompleta } from "./repositorio-de-notas/tipos";
+import { criarRepositorioEmMemoria } from "./repositorio-de-notas/memoria";
+import { contextoComId, pedido as pedidoDeNota, SEGREDO_DE_TESTE } from "@/app/api/notas/apoio-de-teste";
+
+const estadoDaRota = vi.hoisted(() => ({ obterRepositorio: vi.fn() }));
+vi.mock("@/lib/repositorio-de-notas", () => estadoDaRota);
+import { PATCH } from "@/app/api/notas/[id]/route";
+
+describe("PATCH /api/notas/[id] ao mudar pasta", () => {
+  it("devolve a nota e a contagem das outras notas reescritas", async () => {
+    vi.stubEnv("SEGREDO_SESSAO", SEGREDO_DE_TESTE);
+    try {
+      const repo = criarRepositorioEmMemoria([
+        { titulo: "Título", pasta: "Pasta" },
+        { titulo: "Outra", conteudo: "[[Pasta/Título]]" },
+      ]);
+      estadoDaRota.obterRepositorio.mockResolvedValue(repo);
+      const nota = (await repo.listarResumos()).find((n) => n.titulo === "Título")!;
+      const resposta = await PATCH(pedidoDeNota(`/api/notas/${nota.id}`, {
+        metodo: "PATCH", corpo: { pasta: "Destino", revisaoBase: nota.revisao, checkpoint: true },
+      }), contextoComId(nota.id));
+
+      expect(resposta.status).toBe(200);
+      expect(await resposta.json()).toMatchObject({ nota: { id: nota.id, pasta: "Destino" }, notasReescritas: 1 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
 
 const NOTA: NotaCompleta = {
   id: "1",

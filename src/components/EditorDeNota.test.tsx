@@ -23,6 +23,6 @@ it("ocupado: somente leitura, aria-busy e aviso falado ligado ao campo", () => {
   expect(editor).not.toHaveAttribute("readonly"); expect(editor).toHaveAttribute("aria-busy", "false");
   rerender(<EditorDeNota texto="texto" titulo="Nota" ocupado aoMudar={vi.fn()} forcar={vi.fn()} />);
   expect(editor).toHaveAttribute("readonly"); expect(editor).toHaveAttribute("aria-busy", "true");
-  expect(editor).toHaveAccessibleDescription("Renomeando a nota…");
-  expect(screen.getByRole("status")).toHaveTextContent("Renomeando a nota…");
+  expect(editor).toHaveAccessibleDescription("Atualizando a nota…");
+  expect(screen.getByRole("status")).toHaveTextContent("Atualizando a nota…");
 });

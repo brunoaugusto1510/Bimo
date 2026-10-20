@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AbaDeNota as EstadoDaAba } from "@/lib/espaco-de-trabalho/estado";
-const mocks = vi.hoisted(() => ({ salvar: vi.fn(), recarregar: vi.fn(), renomear: vi.fn() }));
-vi.mock("@/lib/cliente-de-notas", async (importar) => ({ ...await importar<object>(), salvarNota: mocks.salvar, renomearNota: mocks.renomear }));
+const mocks = vi.hoisted(() => ({ salvar: vi.fn(), recarregar: vi.fn(), renomear: vi.fn(), tags: vi.fn() }));
+vi.mock("@/lib/cliente-de-notas", async (importar) => ({ ...await importar<object>(), salvarNota: mocks.salvar, renomearNota: mocks.renomear, buscarTags: mocks.tags }));
 const nota = { id: "1", titulo: "Nota", pasta: null, tags: [], conteudo: "inicial", revisao: 1, criadoEm: null, atualizadoEm: null };
 vi.mock("@/lib/espaco-de-trabalho/usar-nota", () => ({
   useNota: () => ({ estado: "pronto", dados: { nota, capacidades: { escrita: true, datas: true } }, recarregar: mocks.recarregar }),
@@ -13,7 +13,7 @@ const aba: EstadoDaAba = { tipo: "nota", chave: "aba-1", historico: { pilha: ["1
 const props = { notas: new Map(), aoVoltar: vi.fn(), aoAvancar: vi.fn(), aoAlternarModo: vi.fn(), aoAbrirNota: vi.fn(), aoCriarNota: vi.fn(), aoPerguntarAoBimo: vi.fn() };
 beforeEach(() => {
   vi.useFakeTimers(); localStorage.clear(); mocks.salvar.mockReset().mockImplementation(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } }));
-  mocks.recarregar.mockClear();
+  mocks.recarregar.mockClear(); mocks.tags.mockReset().mockResolvedValue([{ nome: "estudo", quantidade: 2 }]);
 });
 afterEach(() => vi.useRealTimers());
 it("digitar salva após 3s, anuncia status e refaz ligações; Leitura mantém texto", async () => {
@@ -80,12 +80,12 @@ it.each([0, 2])("renomear bloqueia editor e anuncia contagem %s sem remontá-lo"
  fireEvent.change(campo, { target: { value: "Novo" } });
  await act(async () => { fireEvent.keyDown(campo, { key: "Enter" }); });
  expect(editor).toHaveAttribute("readonly"); expect(editor).not.toHaveAttribute("aria-readonly"); expect(editor).toHaveAttribute("aria-busy", "true");
- expect(editor).toHaveAccessibleDescription("Renomeando a nota…");
+ expect(editor).toHaveAccessibleDescription("Atualizando a nota…");
  const salva = { ...nota, titulo: "Novo", conteudo: "[[Novo]]", revisao: 2 };
  await act(async () => concluir({ tipo: "ok", nota: salva, notasReescritas }));
  expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toBe(editor);
  expect(editor).not.toHaveAttribute("readonly"); expect(editor).toHaveAttribute("aria-busy", "false");
- expect(editor).not.toHaveAccessibleDescription("Renomeando a nota…");
+ expect(editor).not.toHaveAccessibleDescription("Atualizando a nota…");
  expect(editor).toHaveValue("[[Novo]]"); expect(registrar).toHaveBeenCalledWith(salva);
  expect(screen.getByText(`Título alterado para «Novo»${notasReescritas ? "; 2 notas tiveram ligações atualizadas" : ""}`)).toBeInTheDocument();
 });
@@ -111,7 +111,7 @@ it("não deixa mudar para Leitura enquanto renomeia e leva o foco ao título", a
  await act(async () => { fireEvent.keyDown(campo, { key: "Enter" }); });
  fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
  expect(alternar).not.toHaveBeenCalled();
- expect(screen.getByText("Aguarde a renomeação terminar antes de mudar para Leitura.")).toBeInTheDocument();
+ expect(screen.getByText("Aguarde a atualização terminar antes de mudar para Leitura.")).toBeInTheDocument();
  await act(async () => concluir({ tipo: "ok", nota: { ...nota, titulo: "Novo", revisao: 2 }, notasReescritas: 0 }));
  fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
  expect(alternar).toHaveBeenCalledTimes(1);
@@ -124,6 +124,51 @@ it("título pendente bloqueia a troca de modo e leva o foco ao campo", () => {
  fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
  expect(alternar).not.toHaveBeenCalled(); expect(campo).toHaveFocus();
  expect(screen.getByText(/Confirme o título com Enter/)).toBeInTheDocument();
+});
+it("em Edição, mover a nota de pasta salva como checkpoint, registra a nota e anuncia a contagem", async () => {
+ mocks.salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, pasta: "Ideias", revisao: 2 }, notasReescritas: 2 });
+ const registrar = vi.fn();
+ render(<AbaDeNota aba={aba} {...props} notas={new Map([["9", { id: "9", titulo: "Outra", pasta: "Ideias", tags: [] }]])} aoRenomear={registrar} />);
+ const campo = screen.getByRole("combobox", { name: "Pasta" });
+ expect(campo).toHaveValue("Raiz");
+ campo.focus(); fireEvent.change(campo, { target: { value: "Ideias" } });
+ await act(async () => { fireEvent.keyDown(campo, { key: "Enter" }); });
+ expect(mocks.salvar).toHaveBeenCalledWith("1", { pasta: "Ideias" }, { revisaoBase: 1, checkpoint: true });
+ expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ pasta: "Ideias" }));
+ expect(screen.getByText("Pasta alterada para «Ideias»; 2 notas tiveram ligações atualizadas")).toBeInTheDocument();
+});
+it("em Edição, adicionar uma tag salva só as tags e sugere as de outras notas", async () => {
+ mocks.salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, tags: ["estudo"], revisao: 2 } });
+ const { container } = render(<AbaDeNota aba={aba} {...props} />);
+ await act(async () => {});
+ expect([...container.querySelectorAll("datalist option")].map((o) => o.getAttribute("value"))).toContain("estudo");
+ const campo = screen.getByRole("combobox", { name: "Adicionar tag" });
+ fireEvent.change(campo, { target: { value: "#estudo" } });
+ await act(async () => { fireEvent.keyDown(campo, { key: "Enter" }); });
+ expect(mocks.salvar).toHaveBeenCalledWith("1", { tags: ["estudo"] }, { revisaoBase: 1, checkpoint: true });
+ expect(screen.getByText("Tag «estudo» adicionada")).toBeInTheDocument();
+});
+it("depois de mover, o caminho da nota mostra a pasta nova", async () => {
+ mocks.salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, pasta: "Ideias", revisao: 2 }, notasReescritas: 0 });
+ render(<AbaDeNota aba={aba} {...props} />);
+ const campo = screen.getByRole("combobox", { name: "Pasta" });
+ campo.focus(); fireEvent.change(campo, { target: { value: "Ideias" } });
+ await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Mover" })); });
+ expect(screen.getByRole("navigation", { name: "Caminho da nota" })).toHaveTextContent("Ideias");
+});
+it("ao navegar para outra nota na mesma aba, pasta e tags recomeçam do zero", async () => {
+ const { rerender } = render(<AbaDeNota aba={aba} {...props} />);
+ fireEvent.change(screen.getByRole("combobox", { name: "Pasta" }), { target: { value: "Rascunho" } });
+ fireEvent.change(screen.getByRole("combobox", { name: "Adicionar tag" }), { target: { value: "pendente" } });
+ rerender(<AbaDeNota aba={{ ...aba, historico: { pilha: ["1", "2"], indice: 1 } }} {...props} />);
+ await act(async () => {});
+ expect(screen.getByRole("combobox", { name: "Pasta" })).toHaveValue("Raiz");
+ expect(screen.getByRole("combobox", { name: "Adicionar tag" })).toHaveValue("");
+});
+it("em Leitura pasta e tags são só texto", () => {
+ render(<AbaDeNota aba={{ ...aba, modo: "leitura" }} {...props} />);
+ expect(screen.queryByRole("combobox", { name: "Pasta" })).not.toBeInTheDocument();
+ expect(screen.queryByRole("combobox", { name: "Adicionar tag" })).not.toBeInTheDocument();
 });
 it("a renomeação em voo de uma nota não trava o editor de outra na mesma aba", async () => {
  mocks.renomear.mockImplementationOnce(() => new Promise(() => {}));

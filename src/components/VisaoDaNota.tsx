@@ -5,7 +5,7 @@ import type { Resolvedor } from "@/lib/ligacoes";
 import { extrairTags } from "@/lib/markdown-da-nota";
 import type { NotaCompleta } from "@/lib/repositorio-de-notas/tipos";
 import type { IdDeNota } from "@/lib/types";
-import PropriedadesDaNota from "./PropriedadesDaNota";
+import PropriedadesDaNota, { type EdicaoDePropriedades } from "./PropriedadesDaNota";
 import RenderizadorDeMarkdown from "./RenderizadorDeMarkdown";
 
 type Props = {
@@ -18,6 +18,8 @@ type Props = {
   aoCriarNota: (alvo: string, pastaDeOrigem?: string | null, opcoes?: { novaAba: boolean }) => Promise<import("@/lib/espaco-de-trabalho/usar-criacao-de-nota").ResultadoDaAbertura> | void;
   children?: ReactNode;
   campoDeTitulo?: ReactNode;
+  /** Em modo Edição, pasta e tags viram campos; as tags da coluna vêm da própria nota. */
+  edicaoDePropriedades?: Omit<EdicaoDePropriedades, "tagsDaColuna">;
 };
 
 /**
@@ -26,7 +28,7 @@ type Props = {
  * (`[data-linha]`) quando a pessoa clica nele na "Estrutura" do painel lateral.
  */
 const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
-  { nota, conexoes, resolver, podeCriar, aoAbrirNota, aoCriarNota, children, campoDeTitulo },
+  { nota, conexoes, resolver, podeCriar, aoAbrirNota, aoCriarNota, children, campoDeTitulo, edicaoDePropriedades },
   referencia,
 ) {
   // As tags valem de dois lugares: as da própria nota (coluna do banco) e as escritas no texto.
@@ -47,6 +49,7 @@ const VisaoDaNota = forwardRef<HTMLElement, Props>(function VisaoDaNota(
 
       <div className="mb-7">
         <PropriedadesDaNota
+          edicao={edicaoDePropriedades && { ...edicaoDePropriedades, tagsDaColuna: nota.tags }}
           tags={tags}
           pasta={nota.pasta}
           criadoEm={nota.criadoEm}

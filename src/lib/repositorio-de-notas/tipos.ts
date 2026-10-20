@@ -72,7 +72,7 @@ export type OpcoesDeAtualizacao = {
 };
 
 export type ResultadoDeEscrita =
-  | { tipo: "ok"; nota: NotaCompleta }
+  | { tipo: "ok"; nota: NotaCompleta; notasReescritas?: number }
   /** Outra escrita aconteceu desde `revisaoBase`; `atual` é o que está salvo agora. */
   | { tipo: "conflito"; atual: NotaCompleta }
   /** Já existe nota com esse título nessa pasta. */

@@ -197,7 +197,11 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       };
       notas.set(id, atualizada);
       versao++;
-      return { tipo: "ok", nota: copiar(atualizada) };
+      return {
+        tipo: "ok",
+        nota: copiar(atualizada),
+        ...(pasta !== nota.pasta ? { notasReescritas: reescritas.filter((r) => r.id !== id).length } : {}),
+      };
     },
 
     async renomearNota(id, novoTitulo, { revisaoBase }): Promise<ResultadoDeRenomeacao> {

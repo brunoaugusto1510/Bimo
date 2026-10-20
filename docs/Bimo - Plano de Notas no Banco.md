@@ -71,7 +71,7 @@ rascunho do Bimo pode buscar em outras notas (só leitura, sem ferramentas de es
 | Subfase | Escopo | Situação |
 | --- | --- | --- |
 | 9a | Renomear qualquer nota | Feita (20/10/2026) |
-| 9b | Pasta e tags pela interface | A fazer |
+| 9b | Pasta e tags pela interface | Feita (20/10/2026) |
 | 9c | Base do autocompletar + `[[` | A fazer |
 | 9d | `#` e menu `/` | A fazer |
 | 9e | Rascunho do Bimo | A fazer |
@@ -104,6 +104,19 @@ texto aparecem marcadas "no texto". Pasta: combobox com pastas existentes + Raiz
 texto livre (`normalizarPasta`; `titulo-em-uso` → "Já existe «X» nessa pasta").
 Nova rota `GET /api/notas/tags` (`exigirSessao`; `{ tags: { nome, quantidade }[] }`,
 calculada em `servico-de-notas.ts` sobre o cache por `marcaDeVersao`).
+
+*Como ficou (9b):* `CampoDePasta` (input + datalist com as pastas e as pastas-pai, botão
+**Mover** visível, Enter também move; sair do campo não descarta, Esc descarta e avisa;
+mostra a grafia que o servidor gravou) e `EditorDeTags` (chips da coluna removíveis, as do
+texto marcadas "no texto"; Enter ou vírgula adiciona, lista colada vira várias; rejeita
+espaço e os limites de 30 tags / 100 caracteres antes de enviar; foco vai ao chip vizinho
+ao remover). Ambos recomeçam a cada nota (`chave`), ficam somente leitura enquanto a fila
+exclusiva trabalha e usam `edicao.atualizarMetadados`, que divide com `renomear` o helper
+`escreverExclusivo`. O hook `useTagsDasNotas` guarda as sugestões e só as refaz depois de um
+checkpoint. As tags são contadas sob demanda no servidor. `salvarNota` repassa
+`notasReescritas` e a mensagem de validação em 400. Fora de escopo, por decisão de design:
+contraste da borda dos campos (`--borda`). Conhecido: uma resposta perdida de "mover" em
+nota com autoligação por caminho vira um conflito falso (sem perda de texto).
 
 **9c — base do autocompletar + `[[`.** Puros em `src/lib/edicao/`:
 `gatilho-do-editor.ts` (`detectarGatilho(texto, cursor)` → ligação/tag/comando, sem

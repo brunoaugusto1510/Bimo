@@ -1,9 +1,45 @@
 import { describe, expect, it, vi } from "vitest";
 import { criarRepositorioEmMemoria } from "./repositorio-de-notas/memoria";
 import type { RepositorioDeNotas } from "./repositorio-de-notas/tipos";
-import { buscarConteudo, obterDadosDaPagina, obterLigacoesDaNota } from "./servico-de-notas";
+import { buscarConteudo, obterDadosDaPagina, obterLigacoesDaNota, obterTags } from "./servico-de-notas";
 
 const USUARIO = { criadoPor: "usuario" } as const;
+
+describe("obterTags", () => {
+  it("conta por nota, unindo coluna, frontmatter e corpo sem diferenciar caixa, e ordena por quantidade e nome", async () => {
+    const repo = criarRepositorioEmMemoria([
+      { titulo: "A", tags: ["Bimo", "BIMO", "zebra"], conteudo: "---\ntags: [bimo, Alpha]\n---\n#BIMO #texto #texto `#codigo`" },
+      { titulo: "B", tags: ["bimo"], conteudo: "#alpha #outra" },
+      { titulo: "C", conteudo: "#bimo" },
+    ]);
+
+    expect(await obterTags(repo)).toEqual([
+      { nome: "Bimo", quantidade: 3 }, { nome: "Alpha", quantidade: 2 },
+      { nome: "outra", quantidade: 1 }, { nome: "texto", quantidade: 1 }, { nome: "zebra", quantidade: 1 },
+    ]);
+  });
+
+  it("devolve vazio quando não há tags", async () => {
+    expect(await obterTags(criarRepositorioEmMemoria([{ titulo: "Sem tags" }]))).toEqual([]);
+  });
+
+  it("compartilha o cache com a página em ambas as ordens e atualiza após escrita", async () => {
+    for (const tagsPrimeiro of [true, false]) {
+      const repo = criarRepositorioEmMemoria([{ titulo: "A", tags: ["antiga"] }]);
+      const listar = vi.spyOn(repo, "listarComConteudo");
+      if (tagsPrimeiro) await obterTags(repo);
+      await obterDadosDaPagina(repo);
+      expect(await obterTags(repo)).toEqual([{ nome: "antiga", quantidade: 1 }]);
+      await obterTags(repo);
+      expect(listar).toHaveBeenCalledTimes(1);
+      const [nota] = await repo.listarResumos();
+      await repo.atualizarNota(nota.id, { tags: ["nova"], conteudo: "#nova #texto" }, { revisaoBase: nota.revisao, autor: USUARIO });
+      expect(await obterTags(repo)).toEqual([{ nome: "nova", quantidade: 1 }, { nome: "texto", quantidade: 1 }]);
+      await obterDadosDaPagina(repo);
+      expect(listar).toHaveBeenCalledTimes(2);
+    }
+  });
+});
 
 function repositorio() {
   return criarRepositorioEmMemoria([

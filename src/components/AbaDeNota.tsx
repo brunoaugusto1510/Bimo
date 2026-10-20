@@ -14,6 +14,7 @@ import VisaoDaNota from "./VisaoDaNota";
 import EditorDeNota from "./EditorDeNota";
 import ControlesDaEdicao from "./ControlesDaEdicao";
 import { useEdicaoDeNota } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
+import { useTagsDasNotas } from "@/lib/espaco-de-trabalho/usar-tags-das-notas";
 
 import CampoDeTitulo from "./CampoDeTitulo";
 import type { FocoPedido, ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
@@ -138,7 +139,7 @@ export default function AbaDeNota({
   const resolver = useMemo(() => criarResolvedor([...notas.values()]), [notas]);
   const resumo = notas.get(id);
   const titulo = edicao.nota?.titulo ?? nota.dados?.nota.titulo ?? resumo?.titulo ?? "Nota";
-  const pasta = nota.dados?.nota.pasta ?? resumo?.pasta ?? null;
+  const pasta = edicao.nota?.pasta ?? nota.dados?.nota.pasta ?? resumo?.pasta ?? null;
   const carregada = nota.dados !== undefined;
 
   const conteudo = edicao.texto;
@@ -153,6 +154,17 @@ export default function AbaDeNota({
       ? new Set([...entradas.map((entrada) => entrada.id), ...saidas.flatMap((destino) => (destino.tipo === "nota" ? [destino.id] : []))]).size
       : null;
   const escrita = (escritaDisponivel ?? true) && (nota.dados?.capacidades.escrita ?? false);
+  const editandoPropriedades = escrita && aba.modo === "edicao";
+  const sugestoesDeTags = useTagsDasNotas(ativa && editandoPropriedades);
+  // Também as pastas-pai: com só "A/B" existindo, "A" é um destino válido.
+  const pastasExistentes = useMemo(() => {
+    const todas = new Set<string>();
+    for (const outra of notas.values()) {
+      const partes = outra.pasta?.split("/") ?? [];
+      partes.forEach((_, indice) => todas.add(partes.slice(0, indice + 1).join("/")));
+    }
+    return [...todas].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [notas]);
 
   useEffect(() => { tituloPendente.current = false; }, [id]);
   useEffect(() => {
@@ -250,7 +262,7 @@ export default function AbaDeNota({
             aoVoltar={aoVoltar}
             aoAvancar={aoAvancar}
             aoAlternarModo={() => {
-              if (edicao.ocupado) { avisarSobreOTitulo("Aguarde a renomeação terminar antes de mudar para Leitura."); return; }
+              if (edicao.ocupado) { avisarSobreOTitulo("Aguarde a atualização terminar antes de mudar para Leitura."); return; }
               if (tituloPendente.current) { avisarSobreOTitulo("Confirme o título com Enter ou desfaça com Esc antes de mudar para Leitura."); focarTitulo(); return; }
               definirFocarAoEntrar(aba.modo === "leitura"); aoAlternarModo();
             }}
@@ -317,6 +329,16 @@ export default function AbaDeNota({
                 focar={ativa && focoPedido?.id === id && focoPedido.alvo === "titulo"} aoConsumirFoco={aoConsumirFoco}
                 aoTexto={irAoTexto}
                 aoConfirmar={async (novo) => { const { nota, notasReescritas } = await edicao.renomear(novo); aoRenomear?.(nota); return { notasReescritas }; }} /> : undefined}
+              edicaoDePropriedades={editandoPropriedades ? {
+                chave: id, pastas: pastasExistentes, sugestoesDeTags, ocupado: edicao.ocupado,
+                aoMudarPasta: async (pastaNova) => {
+                  const resposta = await edicao.atualizarMetadados({ pasta: pastaNova });
+                  aoRenomear?.(resposta.nota);
+                  // A pasta gravada pode ter outra grafia da digitada (o servidor adota a que já existe).
+                  return { notasReescritas: resposta.notasReescritas, pasta: resposta.nota.pasta };
+                },
+                aoMudarTags: async (tags) => { const resposta = await edicao.atualizarMetadados({ tags }); aoRenomear?.(resposta.nota); return resposta; },
+              } : undefined}
               conexoes={conexoes}
               resolver={resolver}
               podeCriar={escrita}
