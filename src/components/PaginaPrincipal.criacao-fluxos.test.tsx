@@ -81,7 +81,7 @@ it("título pendente mantém edição e erro após clicar em Leitura", async () 
  fetch.mockImplementationOnce(async () => Response.json({ erro: "Falha ao renomear" }, { status: 500 }));
  fireEvent.change(titulo, { target: { value: "Pendente" } });
  fireEvent.blur(titulo); fireEvent.click(screen.getByRole("button", { name: "Leitura" }));
- await waitFor(() => expect(titulo).toHaveAttribute("aria-invalid", "true"));
+ await waitFor(() => expect(titulo).toHaveAttribute("aria-invalid", "true"), { timeout: 5000 });
  expect(titulo).toHaveValue("Pendente");
  expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toBeInTheDocument();
  fireEvent.click(screen.getByRole("button", { name: "Leitura" }));

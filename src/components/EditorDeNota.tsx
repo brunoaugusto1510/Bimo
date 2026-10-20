@@ -1,11 +1,20 @@
 "use client";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { combinaAtalho } from "@/lib/atalhos";
+import type { SugestaoDeLigacao } from "@/lib/edicao/sugestoes-de-ligacao";
+import { useSugestoesDoEditor } from "@/lib/espaco-de-trabalho/usar-sugestoes-do-editor";
+import SugestoesDoEditor from "./SugestoesDoEditor";
 
-type Props = { texto: string; titulo?: string; focarAoEntrar?: boolean; descricaoRecuperacao?: string; aguardandoRecuperacao?: boolean; ocupado?: boolean; aoMudar(texto: string): void; forcar(opcoes: { checkpoint: boolean }): unknown };
-export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false, descricaoRecuperacao, aoMudar, forcar, aguardandoRecuperacao = false, ocupado = false }: Props) {
+type Props = {
+  texto: string; titulo?: string; focarAoEntrar?: boolean; descricaoRecuperacao?: string; aguardandoRecuperacao?: boolean; ocupado?: boolean;
+  /** As notas que combinam com o que foi digitado depois de `[[`; sem ela, o autocompletar fica desligado. */
+  sugerirLigacoes?: (consulta: string) => SugestaoDeLigacao[];
+  aoMudar(texto: string): void; forcar(opcoes: { checkpoint: boolean }): unknown;
+};
+export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false, descricaoRecuperacao, aoMudar, forcar, sugerirLigacoes, aguardandoRecuperacao = false, ocupado = false }: Props) {
   const campo = useRef<HTMLTextAreaElement>(null);
   const idOcupado = useId();
+  const sugestoes = useSugestoesDoEditor({ campo, sugerir: sugerirLigacoes, bloqueado: aguardandoRecuperacao || ocupado });
   useEffect(() => { if (focarAoEntrar && !aguardandoRecuperacao) campo.current?.focus({ preventScroll: true }); }, [focarAoEntrar, aguardandoRecuperacao]);
   useLayoutEffect(() => {
     const elemento = campo.current;
@@ -27,10 +36,18 @@ export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false
     {/* Enquanto renomear ou mover a nota reescreve ligações o texto não aceita digitação: o aviso explica por quê. */}
     <p id={idOcupado} role="status" className={ocupado ? "mb-2 text-meta text-texto" : "sr-only"}>{ocupado ? "Atualizando a nota…" : ""}</p>
     <textarea ref={campo} value={texto} maxLength={1_000_000} readOnly={aguardandoRecuperacao || ocupado} aria-busy={ocupado}
-      aria-describedby={ocupado ? idOcupado : aguardandoRecuperacao ? descricaoRecuperacao : undefined} onChange={(evento) => aoMudar(evento.target.value)}
+      aria-describedby={ocupado ? idOcupado : aguardandoRecuperacao ? descricaoRecuperacao : undefined}
+      aria-autocomplete={sugerirLigacoes ? "list" : undefined} aria-controls={sugestoes.aberto ? sugestoes.idLista : undefined}
+      aria-activedescendant={sugestoes.idDaOpcaoAtiva}
+      onChange={(evento) => { aoMudar(evento.target.value); sugestoes.atualizar(true); }}
+      onSelect={() => sugestoes.atualizar(false)} onBlur={sugestoes.fechar}
+      onCompositionStart={sugestoes.aoComporInicio} onCompositionEnd={sugestoes.aoComporFim}
       aria-label={`Texto da nota ${titulo}, Markdown`} aria-keyshortcuts="Control+S Meta+S" spellCheck lang="pt-BR"
       onKeyDown={(evento) => {
+        if (sugestoes.aoTeclar(evento)) return;
         if (combinaAtalho(evento.nativeEvent, "mod+s")) { evento.preventDefault(); evento.stopPropagation(); if (!aguardandoRecuperacao) void forcar({ checkpoint: true }); }
       }} className="block min-h-64 w-full resize-none overflow-hidden rounded-bloco border border-borda bg-painel p-2 text-base leading-relaxed text-texto outline-offset-2 [field-sizing:content] read-only:bg-painel-alt focus-visible:border-destaque md:text-corpo" />
+    {sugestoes.aberto && <SugestoesDoEditor id={sugestoes.idLista} sugestoes={sugestoes.aberto.sugestoes} indiceAtivo={sugestoes.aberto.indice} posicao={sugestoes.aberto.posicao} aoEscolher={sugestoes.escolher} />}
+    <p role="status" className="sr-only"><span key={sugestoes.aviso.id}>{sugestoes.aviso.texto}</span></p>
   </>;
 }

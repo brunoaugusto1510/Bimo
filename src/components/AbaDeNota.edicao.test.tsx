@@ -165,6 +165,26 @@ it("ao navegar para outra nota na mesma aba, pasta e tags recomeçam do zero", a
  expect(screen.getByRole("combobox", { name: "Pasta" })).toHaveValue("Raiz");
  expect(screen.getByRole("combobox", { name: "Adicionar tag" })).toHaveValue("");
 });
+it("em Edição, [[ sugere as outras notas e Enter insere o alvo certo (Pasta/Título quando o título se repete)", async () => {
+ const notas = new Map([
+  ["1", { id: "1", titulo: "Nota", pasta: null, tags: [] }],
+  ["2", { id: "2", titulo: "Receitas", pasta: "Cozinha", tags: [] }],
+  ["3", { id: "3", titulo: "Reunião", pasta: "Trabalho", tags: [] }],
+  ["4", { id: "4", titulo: "Reunião", pasta: "Pessoal", tags: [] }],
+ ]);
+ render(<AbaDeNota aba={aba} {...props} notas={notas} />);
+ const editor = screen.getByRole("textbox", { name: /Texto da nota/ }) as HTMLTextAreaElement;
+ editor.focus(); fireEvent.change(editor, { target: { value: "ver [[rece" } });
+ expect(screen.getByRole("listbox", { name: "Notas para ligar" })).toBeInTheDocument();
+ expect(screen.queryByRole("option", { name: /^Nota/ })).not.toBeInTheDocument();
+ fireEvent.keyDown(editor, { key: "Enter" });
+ expect(editor).toHaveValue("ver [[Receitas]]");
+ fireEvent.change(editor, { target: { value: "ver [[Receitas]] e [[reun" } });
+ const opcoes = screen.getAllByRole("option").map((o) => o.getAttribute("aria-label"));
+ expect(opcoes.sort()).toEqual(["Reunião, na pasta Pessoal", "Reunião, na pasta Trabalho"]);
+ fireEvent.keyDown(editor, { key: "Enter" });
+ expect(editor.value).toMatch(/^ver \[\[Receitas\]\] e \[\[(Pessoal|Trabalho)\/Reunião\]\]$/);
+});
 it("em Leitura pasta e tags são só texto", () => {
  render(<AbaDeNota aba={{ ...aba, modo: "leitura" }} {...props} />);
  expect(screen.queryByRole("combobox", { name: "Pasta" })).not.toBeInTheDocument();

@@ -72,7 +72,7 @@ rascunho do Bimo pode buscar em outras notas (só leitura, sem ferramentas de es
 | --- | --- | --- |
 | 9a | Renomear qualquer nota | Feita (20/10/2026) |
 | 9b | Pasta e tags pela interface | Feita (20/10/2026) |
-| 9c | Base do autocompletar + `[[` | A fazer |
+| 9c | Base do autocompletar + `[[` | Feita (20/10/2026) |
 | 9d | `#` e menu `/` | A fazer |
 | 9e | Rascunho do Bimo | A fazer |
 
@@ -132,6 +132,20 @@ Tab/Enter normais; ignora composição IME; não abre durante recuperação de r
 ARIA: textarea continua textbox; aberto ganha `aria-autocomplete="list"`,
 `aria-controls`, `aria-activedescendant`; região `status` ao abrir e ao inserir.
 `[[Título#` com seções da nota alvo é opcional no fim.
+
+*Como ficou (9c):* `detectarGatilho` (só `ligacao`; `tag` e `comando` entram na 9d) olha primeiro a
+linha do cursor e só então frontmatter e código; não dispara com o cursor no meio de uma
+ligação existente (`[[Mi|nha]]`, `[[Nota|apelido]]`). `sugerirLigacoes` reaproveita
+`buscarPorTitulo` (8 itens, sem a própria nota) e usa `Pasta/Título` quando só o título não
+resolve para a nota. O hook `useSugestoesDoEditor` concentra o estado: a lista **abre só por
+digitação** (mover o cursor apenas atualiza ou fecha), Esc é persistente no mesmo `[[`, Tab só
+insere depois de navegar com as setas, setas/Enter com modificador são do campo, IME e
+somente leitura fecham a lista, e `escolher` revalida o gatilho. A lista (`SugestoesDoEditor`)
+escolhe no `click` (o `mousedown` só mantém o foco), tem id por nota (`aria-activedescendant`
+muda quando o topo muda) e indicador de opção ativa por borda, não só por cor. Conhecido:
+`aria-activedescendant` em `<textarea>` é pouco anunciado no Safari/iOS; a abertura e a
+inserção são faladas numa região de status. Decisão: o campo continua `textbox` (um
+`<textarea>` não aceita `role="combobox"`).
 
 **9d — `#` e `/`.** `#` só no começo da linha ou após espaço, seguido de caractere
 de tag (`# ` e `##` nunca abrem); sugestões de `GET /api/notas/tags` (cache até
