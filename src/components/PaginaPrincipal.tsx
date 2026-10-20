@@ -73,7 +73,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const emNotas = modo === "notas";
   const graus = useMemo(() => calcularGraus(grafo.arestas), [grafo.arestas]);
   const [notasLocais, definirNotasLocais] = useState<NotasLocais>(new Map());
-  const [idsComTituloEditavel, definirIdsComTituloEditavel] = useState<ReadonlySet<string>>(new Set());
+  const [idsComConfirmacaoAoSair, definirIdsComConfirmacaoAoSair] = useState<ReadonlySet<string>>(new Set());
   const [focoPedido, definirFocoPedido] = useState<FocoPedido | null>(null);
   const notasPorId = useMemo(() => mesclarNotasLocais(indexarNotas(itens), notasLocais), [itens, notasLocais]);
   const arvore = useMemo(() => construirArvore([...notasPorId.values()]), [notasPorId]);
@@ -116,7 +116,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const criacao = useCriacaoDeNota({
     capacidades, notas: [...notasPorId.values()], registrar: registrarNota,
     abrir: (id, opcoes) => {
-      if (opcoes.criada && opcoes.alvo === "titulo") definirIdsComTituloEditavel((ids) => new Set(ids).add(id));
+      if (opcoes.criada && opcoes.alvo === "titulo") definirIdsComConfirmacaoAoSair((ids) => new Set(ids).add(id));
       despachar({ tipo: "abrir-nota", id, novaAba: opcoes.novaAba, modo: opcoes.criada ? "edicao" : "leitura" });
       definirFocoPedido({ id, alvo: opcoes.criada ? opcoes.alvo : "nota" });
       setModo("notas"); setMenuAberto(false); setPaletaAberta(false);
@@ -289,7 +289,11 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             criarDisponivel={capacidades.escrita}
             focoPedido={focoPedido}
             aoConsumirFoco={() => definirFocoPedido(null)}
-            idsComTituloEditavel={idsComTituloEditavel}
+            idsComConfirmacaoAoSair={idsComConfirmacaoAoSair}
+            aoSairDoTitulo={(id) => definirIdsComConfirmacaoAoSair((ids) => {
+              if (!ids.has(id)) return ids;
+              const restantes = new Set(ids); restantes.delete(id); return restantes;
+            })}
             aoRenomear={registrarNota}
             aoPerguntarAoBimo={perguntarAoBimo}
             aoIrParaNota={() => setPaletaAberta(true)}

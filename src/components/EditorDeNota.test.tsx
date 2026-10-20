@@ -15,5 +15,14 @@ it("foca o texto, mantém idioma e intercepta Ctrl/Cmd+S com checkpoint", () => 
 it("montagem comum não rouba foco e recuperação é descrita", () => {
   render(<EditorDeNota texto="texto" titulo="Nota" aguardandoRecuperacao descricaoRecuperacao="aviso" aoMudar={vi.fn()} forcar={vi.fn()} />);
   const editor = screen.getByRole("textbox"); expect(editor).not.toHaveFocus();
-  expect(editor).toHaveAttribute("aria-readonly", "true"); expect(editor).toHaveAttribute("aria-describedby", "aviso");
+  expect(editor).toHaveAttribute("readonly"); expect(editor).not.toHaveAttribute("aria-readonly"); expect(editor).toHaveAttribute("aria-describedby", "aviso");
+});
+it("ocupado: somente leitura, aria-busy e aviso falado ligado ao campo", () => {
+  const { rerender } = render(<EditorDeNota texto="texto" titulo="Nota" aoMudar={vi.fn()} forcar={vi.fn()} />);
+  const editor = screen.getByRole("textbox");
+  expect(editor).not.toHaveAttribute("readonly"); expect(editor).toHaveAttribute("aria-busy", "false");
+  rerender(<EditorDeNota texto="texto" titulo="Nota" ocupado aoMudar={vi.fn()} forcar={vi.fn()} />);
+  expect(editor).toHaveAttribute("readonly"); expect(editor).toHaveAttribute("aria-busy", "true");
+  expect(editor).toHaveAccessibleDescription("Renomeando a nota…");
+  expect(screen.getByRole("status")).toHaveTextContent("Renomeando a nota…");
 });

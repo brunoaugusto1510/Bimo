@@ -14,6 +14,14 @@ const LIMITE_KEEPALIVE = 64 * 1024;
 export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, editando: boolean, aoSalvar?: (nota: NotaCompleta, checkpoint: boolean) => void) {
   const [vista, definirVista] = useState<(RetratoDaEdicao & { id: string }) | null>(null);
   const [recuperacao, definirRecuperacao] = useState<{ id: string; rascunho: RascunhoLocal } | null>(null);
+  // A aba reaproveita o hook ao navegar: cada nota tem a sua própria contagem de operações em voo.
+  const [ocupadas, definirOcupadas] = useState<ReadonlyMap<string, number>>(new Map());
+  const ocupado = (ocupadas.get(id) ?? 0) > 0;
+  const marcarOcupada = useCallback((alvo: string, delta: 1 | -1) => definirOcupadas((atuais) => {
+    const proximas = new Map(atuais), total = (atuais.get(alvo) ?? 0) + delta;
+    if (total > 0) proximas.set(alvo, total); else proximas.delete(alvo);
+    return proximas;
+  }), []);
   const [avisoLocal, definirAvisoLocal] = useState("");
   const controle = useRef<{ id: string; maquina: SalvamentoAutomatico; copia: ReturnType<typeof criarRascunhoLocal> } | null>(null);
   const callback = useRef(aoSalvar);
@@ -162,31 +170,38 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
   const retrato = vista?.id === id ? vista : null;
   return {
     texto: retrato?.texto ?? dados?.nota.conteudo ?? "", nota: retrato?.nota ?? dados?.nota,
-    estado: retrato?.estado ?? "salvo", aoMudar, forcar, resolverConflito,
-    async renomear(titulo: string): Promise<NotaCompleta> {
+    estado: retrato?.estado ?? "salvo", ocupado, aoMudar, forcar, resolverConflito,
+    async renomear(titulo: string): Promise<{ nota: NotaCompleta; notasReescritas: number }> {
       const atual = controle.current;
       if (!escrita || !atual || atual.id !== id || recuperacao?.id === id) throw new Error("A nota não está disponível para renomear.");
-      return atual.maquina.executarExclusivo(async (revisao) => {
-        const textoEnviado = atual.maquina.obter().texto;
-        const resultado = await renomearNota(id, titulo, revisao);
-        if (resultado.tipo === "ok" || (resultado.tipo === "conflito" && resultado.atual.titulo === titulo && resultado.atual.conteudo === atual.maquina.obter().nota.conteudo)) {
-          const salva = resultado.tipo === "ok" ? resultado.nota : resultado.atual;
-          atual.maquina.rebasear(salva, textoEnviado);
-          const retrato = atual.maquina.obter();
-          if (retrato.estado === "conflito") throw new Error("O conteúdo mudou durante a renomeação. Resolva o conflito.");
-          if (controle.current !== atual) return salva;
-          atual.copia.confirmar(salva.conteudo);
-          if (retrato.texto !== salva.conteudo) atual.copia.guardar(retrato.texto, salva.revisao);
-          callback.current?.(salva, true);
-          window.dispatchEvent(new CustomEvent(EVENTO_NOTA_SALVA, { detail: { id, checkpoint: true } }));
-          if (resultado.tipo === "conflito" || (resultado.notasReescritas ?? 0) > 0) {
-            window.dispatchEvent(new CustomEvent(EVENTO_NOTAS_REESCRITAS, { detail: { id } }));
+      marcarOcupada(id, 1);
+      try {
+        return await atual.maquina.executarExclusivo(async (revisao) => {
+          const textoEnviado = atual.maquina.obter().texto;
+          const resultado = await renomearNota(id, titulo, revisao);
+          if (resultado.tipo === "ok" || (resultado.tipo === "conflito" && resultado.atual.titulo === titulo && resultado.atual.conteudo === atual.maquina.obter().nota.conteudo)) {
+            const salva = resultado.tipo === "ok" ? resultado.nota : resultado.atual;
+            atual.maquina.rebasear(salva, textoEnviado);
+            const retrato = atual.maquina.obter();
+            if (retrato.estado === "conflito") throw new Error("O conteúdo mudou durante a renomeação. Resolva o conflito.");
+            const resposta = { nota: salva, notasReescritas: resultado.tipo === "ok" ? resultado.notasReescritas ?? 0 : 0 };
+            // As outras abas precisam revalidar mesmo que esta máquina já tenha sido trocada (navegou e voltou).
+            const reescreveu = resultado.tipo === "conflito" || (resultado.notasReescritas ?? 0) > 0;
+            const avisarReescrita = () => window.dispatchEvent(new CustomEvent(EVENTO_NOTAS_REESCRITAS, { detail: { id } }));
+            if (controle.current !== atual) { if (reescreveu) avisarReescrita(); return resposta; }
+            atual.copia.confirmar(salva.conteudo);
+            if (retrato.texto !== salva.conteudo) atual.copia.guardar(retrato.texto, salva.revisao);
+            callback.current?.(salva, true);
+            window.dispatchEvent(new CustomEvent(EVENTO_NOTA_SALVA, { detail: { id, checkpoint: true } }));
+            if (reescreveu) avisarReescrita();
+            return resposta;
           }
-          return salva;
-        }
-        if (resultado.tipo === "conflito") atual.maquina.recuperarConflito(atual.maquina.obter().texto, resultado.atual);
-        throw new Error(resultado.tipo === "erro" ? resultado.mensagem : resultado.tipo === "titulo-em-uso" ? "Já existe uma nota com esse título nessa pasta." : resultado.tipo === "somente-leitura" ? "As notas estão em modo somente leitura." : "Não foi possível renomear a nota.");
-      });
+          if (resultado.tipo === "conflito") atual.maquina.recuperarConflito(atual.maquina.obter().texto, resultado.atual);
+          throw new Error(resultado.tipo === "erro" ? resultado.mensagem : resultado.tipo === "titulo-em-uso" ? "Já existe uma nota com esse título nessa pasta." : resultado.tipo === "somente-leitura" ? "As notas estão em modo somente leitura." : "Não foi possível renomear a nota.");
+        });
+      } finally {
+        marcarOcupada(id, -1);
+      }
     },
     mensagem: retrato?.mensagem, avisoLocal,
     rascunhoRecuperado: recuperacao?.id === id,

@@ -8,7 +8,7 @@ const buscar = vi.hoisted(() => vi.fn());
 vi.mock("../cliente-de-notas", () => ({ salvarNota: salvar, renomearNota: renomear, buscarNota: buscar }));
 const nota = { id: "1", titulo: "Nota", pasta: null, tags: [], criadoEm: null, atualizadoEm: null, conteudo: "inicial", revisao: 1 };
 const dados = { nota, capacidades: { escrita: true, datas: true } };
-beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); salvar.mockReset().mockImplementation(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } })); });
+beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); renomear.mockReset(); salvar.mockReset().mockImplementation(async (_id, mudancas) => ({ tipo: "ok", nota: { ...nota, ...mudancas, revisao: 2 } })); });
 afterEach(() => vi.useRealTimers());
 it("salva após 3 segundos; sair da edição preserva texto e fecha checkpoint", async () => {
   const { result, rerender } = renderHook(({ modo }) => useEdicaoDeNota("1", dados, modo), { initialProps: { modo: true } });
@@ -117,7 +117,7 @@ it("reconhece renomeação confirmada após resposta perdida sem conflito", asyn
   renomear.mockResolvedValue({ tipo: "conflito", atual });
   const registrar = vi.fn();
   const { result } = renderHook(() => useEdicaoDeNota("1", dados, true, registrar));
-  await act(async () => { expect(await result.current.renomear("Novo")).toEqual(atual); });
+  await act(async () => { expect(await result.current.renomear("Novo")).toEqual({ nota: atual, notasReescritas: 0 }); });
   expect(result.current.estado).toBe("salvo");
   expect(registrar).toHaveBeenCalledWith(atual, true);
 });
@@ -156,4 +156,47 @@ it("desmontar durante renomeação rejeitada ainda envia o texto pendente", asyn
  unmount();
  await act(async () => { rejeitar(new Error("rede")); await pedido; });
  expect(salvar).toHaveBeenCalledWith("1", { conteudo: "antes de fechar" }, { revisaoBase: 1, checkpoint: true }, { keepalive: false });
+});
+
+it.each([undefined, 0, 2])("renomear devolve nota e contagem %s e libera ocupado", async (notasReescritas) => {
+ let concluir!: (valor: unknown) => void;
+ renomear.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ expect(result.current.ocupado).toBe(false);
+ let pedido!: ReturnType<typeof result.current.renomear>;
+ await act(async () => { pedido = result.current.renomear("Novo"); });
+ expect(result.current.ocupado).toBe(true);
+ const salva = { ...nota, titulo: "Novo", revisao: 2 };
+ await act(async () => {
+  concluir({ tipo: "ok", nota: salva, notasReescritas });
+  expect(await pedido).toEqual({ nota: salva, notasReescritas: notasReescritas ?? 0 });
+ });
+ expect(result.current.ocupado).toBe(false);
+});
+it.each(["erro", "conflito", "rede"])("renomeação libera ocupado após %s", async (tipo) => {
+ let concluir!: (valor: unknown) => void, rejeitar!: (erro: Error) => void;
+ renomear.mockImplementationOnce(() => new Promise((r, j) => { concluir = r; rejeitar = j; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.renomear("Novo").catch((erro) => erro); });
+ expect(result.current.ocupado).toBe(true);
+ await act(async () => {
+  if (tipo === "rede") rejeitar(new Error("rede"));
+  else concluir(tipo === "erro" ? { tipo, mensagem: "falhou" } : { tipo, atual: { ...nota, titulo: "Outro", revisao: 2 } });
+  expect(await pedido).toBeInstanceOf(Error);
+ });
+ expect(result.current.ocupado).toBe(false);
+});
+it("recusar uma segunda renomeação mantém ocupado até a primeira terminar", async () => {
+ let concluir!: (valor: unknown) => void;
+ renomear.mockImplementationOnce(() => new Promise((r) => { concluir = r; }));
+ const { result } = renderHook(() => useEdicaoDeNota("1", dados, true));
+ let pedido!: Promise<unknown>;
+ await act(async () => { pedido = result.current.renomear("Novo"); });
+ await act(async () => {
+  await expect(result.current.renomear("Outro")).rejects.toThrow("Já há uma operação em andamento nesta nota.");
+ });
+ expect(result.current.ocupado).toBe(true); expect(renomear).toHaveBeenCalledTimes(1);
+ await act(async () => { concluir({ tipo: "ok", nota: { ...nota, titulo: "Novo", revisao: 2 } }); await pedido; });
+ expect(result.current.ocupado).toBe(false);
 });

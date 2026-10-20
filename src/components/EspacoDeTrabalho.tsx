@@ -27,7 +27,8 @@ type Props = {
   criarDisponivel?: boolean;
   focoPedido?: FocoPedido | null;
   aoConsumirFoco?: () => void;
-  idsComTituloEditavel?: ReadonlySet<string>;
+  idsComConfirmacaoAoSair?: ReadonlySet<string>;
+  aoSairDoTitulo?: (id: IdDeNota) => void;
   aoRenomear?: (nota: NotaParaArvore) => void;
   aoPerguntarAoBimo: (id: IdDeNota | null) => void;
   aoIrParaNota: () => void;
@@ -55,7 +56,7 @@ export default function EspacoDeTrabalho({
   aoCriarNota,
   aoPerguntarAoBimo,
   aoIrParaNota,
-  children, aoNovaNota, criarDisponivel = false, focoPedido, aoConsumirFoco, idsComTituloEditavel, aoRenomear,
+  children, aoNovaNota, criarDisponivel = false, focoPedido, aoConsumirFoco, idsComConfirmacaoAoSair, aoSairDoTitulo, aoRenomear,
 }: Props) {
   const aba = abaAtiva(estado);
   const [pendencias, definirPendencias] = useState<ReadonlyMap<string, boolean>>(new Map());
@@ -116,7 +117,8 @@ export default function EspacoDeTrabalho({
           <AbaDeNota
             focoPedido={focoPedido}
             aoConsumirFoco={aoConsumirFoco}
-            tituloEditavel={idsComTituloEditavel?.has(idAtual(candidata))}
+            confirmarTituloAoSair={idsComConfirmacaoAoSair?.has(idAtual(candidata))}
+            aoSairDoTitulo={() => aoSairDoTitulo?.(idAtual(candidata))}
             aoRenomear={aoRenomear}
             escritaDisponivel={criarDisponivel}
             aba={candidata}

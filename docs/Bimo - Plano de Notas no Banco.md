@@ -70,7 +70,7 @@ rascunho do Bimo pode buscar em outras notas (só leitura, sem ferramentas de es
 
 | Subfase | Escopo | Situação |
 | --- | --- | --- |
-| 9a | Renomear qualquer nota | A fazer |
+| 9a | Renomear qualquer nota | Feita (20/10/2026) |
 | 9b | Pasta e tags pela interface | A fazer |
 | 9c | Base do autocompletar + `[[` | A fazer |
 | 9d | `#` e menu `/` | A fazer |
@@ -84,6 +84,16 @@ Edição; `idsComTituloEditavel` sai (o foco da criação já vem de `focoPedido
 meio faria o autosave apagar essa reescrita). Mensagem da fila exclusiva genérica.
 Arquivos: `AbaDeNota`, `EspacoDeTrabalho`, `PaginaPrincipal`, `CampoDeTitulo`,
 `EditorDeNota` (prop `ocupado`), `usar-edicao-de-nota.ts`, `salvamento-automatico.ts`.
+
+*Como ficou (9a):* em nota existente só Enter confirma e sair do campo restaura o título
+(com anúncio falado); em nota recém-criada o blur confirma até a primeira saída
+(`idsComConfirmacaoAoSair` perde o id depois disso). Perder a janela (Alt-Tab) não conta
+como sair. `ocupado` é contado por id (a aba não remonta ao navegar); o editor fica
+`readOnly` com o aviso "Renomeando a nota…". Trocar para Leitura fica bloqueado
+durante a renomeação e com título pendente (o foco vai ao campo). O foco no texto após o
+Enter espera o editor liberar. `EVENTO_NOTAS_REESCRITAS` sai mesmo se a máquina de edição
+já foi trocada. Fora de escopo, por decisão de design: contraste da borda dos campos
+(`--borda`, 1,3:1) e `scroll-mt` dos campos sob a barra grudada.
 
 **9b — pasta e tags.** `atualizarNota` passa a devolver `notasReescritas` quando a
 pasta muda (`tipos.ts`, `banco.ts`, `memoria.ts`, `suite-de-contrato.ts`; `salvarNota`
