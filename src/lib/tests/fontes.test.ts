@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Mesmo padrão de `vault-real.test.ts`: mocka os módulos de que `fontes.ts`
- * depende (`./db/cliente`, `./supabase-storage`) e testa a lógica de domínio
+ * Mocka os módulos de que `fontes.ts` depende (`./db/cliente`, `./supabase-storage`) e testa a lógica de domínio
  * de verdade — não o schema em si, que é importado normal (é só declaração,
  * sem I/O).
  */

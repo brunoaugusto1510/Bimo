@@ -18,7 +18,7 @@ const NOME_BUCKET_FONTES = "fontes";
 
 /**
  * Lê as variáveis de ambiente uma única vez e falha com uma mensagem clara
- * se algo estiver faltando — mesmo padrão de `getGitHubConfig`.
+ * se algo estiver faltando — falha suave, como a configuração das notas.
  */
 export function getConfigStorage(): ConfigStorage {
   const url = process.env.SUPABASE_URL;

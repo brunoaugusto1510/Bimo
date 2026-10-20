@@ -20,16 +20,14 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
-    exclude: [...defaultExclude, "mobile/**", "etapas-futuras/**"],
+    exclude: [...defaultExclude, "mobile/**"],
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      // etapas-futuras/ não é código em execução (é referência de design) —
-      // não faz sentido cobrar cobertura dele.
-      exclude: ["etapas-futuras/**", "node_modules/**", ".next/**"],
+      exclude: ["node_modules/**", ".next/**"],
     },
   },
 });
