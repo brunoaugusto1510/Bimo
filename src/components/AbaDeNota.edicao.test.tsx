@@ -185,6 +185,20 @@ it("em Edição, [[ sugere as outras notas e Enter insere o alvo certo (Pasta/T�
  fireEvent.keyDown(editor, { key: "Enter" });
  expect(editor.value).toMatch(/^ver \[\[Receitas\]\] e \[\[(Pessoal|Trabalho)\/Reunião\]\]$/);
 });
+it("em Edição, # sugere as tags em uso nas notas e / aplica comandos de formatação", async () => {
+ render(<AbaDeNota aba={aba} {...props} />);
+ await act(async () => {});
+ const editor = screen.getByRole("textbox", { name: /Texto da nota/ }) as HTMLTextAreaElement;
+ editor.focus(); fireEvent.change(editor, { target: { value: "ideia #es" } });
+ expect(screen.getByRole("listbox", { name: "Tags" })).toBeInTheDocument();
+ fireEvent.keyDown(editor, { key: "ArrowDown" });
+ fireEvent.keyDown(editor, { key: "Enter" });
+ expect(editor).toHaveValue("ideia #estudo");
+ fireEvent.change(editor, { target: { value: "ideia #estudo\n/tar" } });
+ expect(screen.getByRole("listbox", { name: "Comandos de formatação" })).toBeInTheDocument();
+ fireEvent.keyDown(editor, { key: "Enter" });
+ expect(editor).toHaveValue("ideia #estudo\n- [ ] ");
+});
 it("em Leitura pasta e tags são só texto", () => {
  render(<AbaDeNota aba={{ ...aba, modo: "leitura" }} {...props} />);
  expect(screen.queryByRole("combobox", { name: "Pasta" })).not.toBeInTheDocument();

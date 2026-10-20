@@ -15,7 +15,7 @@ import EditorDeNota from "./EditorDeNota";
 import ControlesDaEdicao from "./ControlesDaEdicao";
 import { useEdicaoDeNota } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
 import { useTagsDasNotas } from "@/lib/espaco-de-trabalho/usar-tags-das-notas";
-import { sugerirLigacoes as montarSugestoes } from "@/lib/edicao/sugestoes-de-ligacao";
+import { sugerirParaGatilho } from "@/lib/edicao/sugestoes";
 
 import CampoDeTitulo from "./CampoDeTitulo";
 import type { FocoPedido, ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
@@ -347,7 +347,7 @@ export default function AbaDeNota({
               aoAbrirNota={aoAbrirNota}
               aoCriarNota={aoCriarNota}
             >
-              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerirLigacoes={(consulta) => montarSugestoes({ notas: listaDeNotas, consulta, idAtual: id, pastaAtual: pasta, resolver })} texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
+              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerir={(gatilho) => sugerirParaGatilho(gatilho, { notas: listaDeNotas, idAtual: id, pastaAtual: pasta, resolver, tagsDasNotas: sugestoesDeTags, tagsDaNota: edicao.nota?.tags ?? [] })} texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
             </VisaoDaNota>
           )}
         </div>

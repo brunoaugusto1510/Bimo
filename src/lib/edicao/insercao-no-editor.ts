@@ -1,4 +1,5 @@
-export type Edicao = { de: number; ate: number; texto: string; cursor: number };
+/** Troca `[de, ate)` por `texto`; depois a seleção vai de `cursor` até `selecaoAte` (ou fica só o cursor, sem ele). */
+export type Edicao = { de: number; ate: number; texto: string; cursor: number; selecaoAte?: number };
 
 /** Substitui a consulta e aproveita o fechamento que já estiver no campo. */
 export function planejarInsercaoDeLigacao(
@@ -26,5 +27,5 @@ export function aplicarEdicaoNoCampo(campo: HTMLTextAreaElement, edicao: Edicao)
     campo.setRangeText(edicao.texto, edicao.de, edicao.ate, "end");
     campo.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  campo.setSelectionRange(edicao.cursor, edicao.cursor);
+  campo.setSelectionRange(edicao.cursor, edicao.selecaoAte ?? edicao.cursor);
 }

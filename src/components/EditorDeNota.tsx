@@ -1,20 +1,21 @@
 "use client";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { combinaAtalho } from "@/lib/atalhos";
-import type { SugestaoDeLigacao } from "@/lib/edicao/sugestoes-de-ligacao";
+import type { Gatilho } from "@/lib/edicao/gatilho-do-editor";
+import { paraItemDaLista, rotuloDaLista, type Sugestao } from "@/lib/edicao/sugestoes";
 import { useSugestoesDoEditor } from "@/lib/espaco-de-trabalho/usar-sugestoes-do-editor";
 import SugestoesDoEditor from "./SugestoesDoEditor";
 
 type Props = {
   texto: string; titulo?: string; focarAoEntrar?: boolean; descricaoRecuperacao?: string; aguardandoRecuperacao?: boolean; ocupado?: boolean;
-  /** As notas que combinam com o que foi digitado depois de `[[`; sem ela, o autocompletar fica desligado. */
-  sugerirLigacoes?: (consulta: string) => SugestaoDeLigacao[];
+  /** As opções para o que foi digitado (`[[nota`, `#tag`, `/comando`); sem ela, o autocompletar fica desligado. */
+  sugerir?: (gatilho: Gatilho) => Sugestao[];
   aoMudar(texto: string): void; forcar(opcoes: { checkpoint: boolean }): unknown;
 };
-export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false, descricaoRecuperacao, aoMudar, forcar, sugerirLigacoes, aguardandoRecuperacao = false, ocupado = false }: Props) {
+export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false, descricaoRecuperacao, aoMudar, forcar, sugerir, aguardandoRecuperacao = false, ocupado = false }: Props) {
   const campo = useRef<HTMLTextAreaElement>(null);
   const idOcupado = useId();
-  const sugestoes = useSugestoesDoEditor({ campo, sugerir: sugerirLigacoes, bloqueado: aguardandoRecuperacao || ocupado });
+  const sugestoes = useSugestoesDoEditor({ campo, sugerir, bloqueado: aguardandoRecuperacao || ocupado });
   useEffect(() => { if (focarAoEntrar && !aguardandoRecuperacao) campo.current?.focus({ preventScroll: true }); }, [focarAoEntrar, aguardandoRecuperacao]);
   useLayoutEffect(() => {
     const elemento = campo.current;
@@ -37,7 +38,7 @@ export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false
     <p id={idOcupado} role="status" className={ocupado ? "mb-2 text-meta text-texto" : "sr-only"}>{ocupado ? "Atualizando a nota…" : ""}</p>
     <textarea ref={campo} value={texto} maxLength={1_000_000} readOnly={aguardandoRecuperacao || ocupado} aria-busy={ocupado}
       aria-describedby={ocupado ? idOcupado : aguardandoRecuperacao ? descricaoRecuperacao : undefined}
-      aria-autocomplete={sugerirLigacoes ? "list" : undefined} aria-controls={sugestoes.aberto ? sugestoes.idLista : undefined}
+      aria-autocomplete={sugerir ? "list" : undefined} aria-controls={sugestoes.aberto ? sugestoes.idLista : undefined}
       aria-activedescendant={sugestoes.idDaOpcaoAtiva}
       onChange={(evento) => { aoMudar(evento.target.value); sugestoes.atualizar(true); }}
       onSelect={() => sugestoes.atualizar(false)} onBlur={sugestoes.fechar}
@@ -47,7 +48,8 @@ export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false
         if (sugestoes.aoTeclar(evento)) return;
         if (combinaAtalho(evento.nativeEvent, "mod+s")) { evento.preventDefault(); evento.stopPropagation(); if (!aguardandoRecuperacao) void forcar({ checkpoint: true }); }
       }} className="block min-h-64 w-full resize-none overflow-hidden rounded-bloco border border-borda bg-painel p-2 text-base leading-relaxed text-texto outline-offset-2 [field-sizing:content] read-only:bg-painel-alt focus-visible:border-destaque md:text-corpo" />
-    {sugestoes.aberto && <SugestoesDoEditor id={sugestoes.idLista} sugestoes={sugestoes.aberto.sugestoes} indiceAtivo={sugestoes.aberto.indice} posicao={sugestoes.aberto.posicao} aoEscolher={sugestoes.escolher} />}
+    {sugestoes.aberto && <SugestoesDoEditor id={sugestoes.idLista} rotulo={rotuloDaLista(sugestoes.aberto.gatilho.tipo)} itens={sugestoes.aberto.sugestoes.map(paraItemDaLista)}
+      indiceAtivo={sugestoes.aberto.indice} posicao={sugestoes.aberto.posicao} aoEscolher={sugestoes.escolher} />}
     <p role="status" className="sr-only"><span key={sugestoes.aviso.id}>{sugestoes.aviso.texto}</span></p>
   </>;
 }

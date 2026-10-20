@@ -73,7 +73,7 @@ rascunho do Bimo pode buscar em outras notas (só leitura, sem ferramentas de es
 | 9a | Renomear qualquer nota | Feita (20/10/2026) |
 | 9b | Pasta e tags pela interface | Feita (20/10/2026) |
 | 9c | Base do autocompletar + `[[` | Feita (20/10/2026) |
-| 9d | `#` e menu `/` | A fazer |
+| 9d | `#` e menu `/` | Feita (20/10/2026) |
 | 9e | Rascunho do Bimo | A fazer |
 
 **9a — renomear qualquer nota.** `CampoDeTitulo` em toda nota com escrita e modo
@@ -153,6 +153,18 @@ de tag (`# ` e `##` nunca abrem); sugestões de `GET /api/notas/tags` (cache at�
 espaço, consulta só letras, fecha com espaço ou sem resultado. `aplicarComando`
 puro: título 1–3 (troca prefixo existente), lista, numerada, tarefa, citação, bloco
 de código (cursor no meio), divisor `---` (com linha em branco antes), tabela 2×2.
+
+*Como ficou (9d):* o hook `useSugestoesDoEditor` serve os três gatilhos; `src/lib/edicao/sugestoes.ts`
+é o modelo unificado (ligação, tag, comando: ranking, itens da lista, avisos, `planejarInsercao`).
+`#` não abre com número puro (`#123`), dentro de ligação aberta, em código/frontmatter nem no meio
+de palavra; a barra sozinha só abre o menu no começo da linha (no meio da frase só com letras).
+Enter em tag (e no `/` sozinho) só insere depois de escolher com as setas, porque a busca é
+aproximada e trocaria o que foi digitado; em ligação e em `/letras` Enter insere a primeira opção.
+Depois de inserir, o gatilho fica dispensado (a tag inserida ainda casa com `#tag`). Comandos de
+bloco empurram o resto da linha para baixo, ocupam o lugar de um prefixo de lista/citação vazio e
+`/divisor` na primeira linha vira `***` (um `---` ali abriria um frontmatter). A tabela deixa
+"Coluna 1" selecionado. Conhecido e não tratado: filtrar a lista ou fechá-la por falta de
+resultado não é anunciado; reabrir depois de Esc exige digitar o gatilho de novo.
 
 **9e — rascunho do Bimo.** Rota nova `POST /api/bimo/rascunho` (não reaproveitar
 `/api/chat`, que tem ferramentas de escrita e até 5 voltas): `exigirSessao` +
