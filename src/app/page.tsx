@@ -23,7 +23,10 @@ async function carregarDadosDaPagina(): Promise<ResultadoDaPagina> {
     if (erro instanceof ErroDeConfiguracao) {
       return { tipo: "erro", mensagem: erro.message, variaveis: erro.variaveis };
     }
-    return { tipo: "erro", mensagem: erro instanceof Error ? erro.message : "Erro desconhecido." };
+    // O detalhe (host, usuário do banco…) fica no log do servidor, nunca na tela.
+    // Só nome e mensagem: o objeto inteiro pode carregar a string de conexão (ex.: `input` de um `Invalid URL`).
+    console.error("Falha ao carregar as notas da página inicial.", erro instanceof Error ? `${erro.name}: ${erro.message}` : "erro desconhecido");
+    return { tipo: "erro", mensagem: "Não consegui carregar as notas agora. Tente de novo em instantes." };
   }
 }
 
@@ -35,7 +38,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Este arquivo não tem "use client": ele roda no servidor. É aqui que dá para
- * usar o GITHUB_TOKEN e a conexão com o banco com segurança — nada disso chega
+ * usar a conexão com o banco com segurança — nada disso chega
  * ao navegador, porque este componente já devolve HTML pronto (com a árvore
  * das notas dentro).
  *

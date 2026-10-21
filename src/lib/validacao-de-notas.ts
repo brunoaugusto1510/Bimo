@@ -65,7 +65,7 @@ export const esquemaDeRenomeacao = z.object({ revisaoBase, titulo });
 
 /**
  * Ids são opacos, mas só de letras, dígitos, `_` e `-`: cabem numa rota e não escapam dela.
- * O teto acomoda o id do GitHub (o caminho do arquivo em base64url, ~4/3 do tamanho) para caminhos longos.
+ * O teto folgado vem da época em que o id também podia ser um caminho codificado; hoje basta para qualquer id do banco.
  */
 export const esquemaDeIdDeNota = z.string().regex(/^[A-Za-z0-9_-]{1,1500}$/, "Identificador de nota inválido.");
 

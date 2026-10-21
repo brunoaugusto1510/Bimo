@@ -2,16 +2,10 @@ import { ErroDeFerramenta } from "./erro-de-ferramenta";
 import type { IdDeNota } from "./types";
 import { dividirCaminho, validarTitulo } from "./caminho-da-nota";
 import { caminhoDaNota, resolverNotaDoAgente } from "./resolver-nota-do-agente";
-import { codificarIdDoGithub } from "./repositorio-de-notas/github-somente-leitura";
 import type { RepositorioDeNotas, ResultadoDeEscrita } from "./repositorio-de-notas/tipos";
 
 type ModoDeEdicao = "acrescentar" | "substituir";
-type EscritaLegada = { caminho: string; commitUrl: string };
-export type LegadoDeEscrita = {
-  criarNota(caminho: string, conteudo: string): Promise<EscritaLegada>;
-  editarNota(caminho: string, conteudo: string, modo: ModoDeEdicao): Promise<EscritaLegada>;
-};
-type EscritaDoAgente = { caminho: string; notaId: IdDeNota; commitUrl?: string };
+type EscritaDoAgente = { caminho: string; notaId: IdDeNota };
 export type LeiturasDoAgente = Map<IdDeNota, number>;
 
 type PortaDeEscrita = {
@@ -67,29 +61,9 @@ function portaDoRepositorio(repositorio: RepositorioDeNotas): PortaDeEscrita {
   };
 }
 
-/** Temporário: some no corte para o banco (Fase 10). */
-function portaLegada(repositorio: RepositorioDeNotas, injetado?: LegadoDeEscrita): PortaDeEscrita {
-  const carregar = async () => injetado ?? await import("./vault-real");
-  function identificar(resultado: EscritaLegada): EscritaDoAgente {
-    return { ...resultado, notaId: codificarIdDoGithub(resultado.caminho) };
-  }
-  return {
-    async criar(caminho, conteudo) {
-      const validacao = validarTitulo(dividirCaminho(caminho).titulo);
-      if (!validacao.ok) throw new ErroDeFerramenta(validacao.motivo);
-      return identificar(await (await carregar()).criarNota(caminho, conteudo));
-    },
-    async editar(caminho, conteudo, modo, leituras) {
-      const nota = resolverNotaDoAgente(caminho, await repositorio.listarResumos(), "escrita");
-      if (!nota) return exigirGravacao(repositorio, { tipo: "nao-encontrada" });
-      exigirLeitura(nota.id, modo, leituras);
-      return identificar(await (await carregar()).editarNota(caminhoDaNota(nota), conteudo, modo));
-    },
-  };
-}
-
-export function escolherPortaDeEscrita(repositorio: RepositorioDeNotas, legado?: LegadoDeEscrita): PortaDeEscrita {
-  return repositorio.capacidades.escrita ? portaDoRepositorio(repositorio) : portaLegada(repositorio, legado);
+/** Um repositório sem escrita já responde `somente-leitura`, que `exigirGravacao` explica. */
+export function escolherPortaDeEscrita(repositorio: RepositorioDeNotas): PortaDeEscrita {
+  return portaDoRepositorio(repositorio);
 }
 
 function exigirLeitura(id: IdDeNota, modo: ModoDeEdicao, leituras?: LeiturasDoAgente): number | undefined {

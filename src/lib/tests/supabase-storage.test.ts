@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Mesmo padrão de `github.test.ts`: mocka o cliente externo (aqui,
- * `@supabase/supabase-js`) e testa de verdade os helpers deste módulo
+ * Mocka o cliente externo (aqui, `@supabase/supabase-js`) e testa de verdade os helpers deste módulo
  * (montagem de caminho, tratamento de erro, conversão pra Buffer).
  */
 const uploadMock = vi.fn();

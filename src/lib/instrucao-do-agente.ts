@@ -1,15 +1,7 @@
-import type { ConfiguracaoDeNotas } from "./repositorio-de-notas/config";
-
-export function gerarInstrucaoDoSistema(fonte: ConfiguracaoDeNotas["fonte"]): string {
-  const armazenamento = fonte === "github"
-    ? "(escritas no Obsidian e guardadas num repositório do GitHub)"
-    : "(guardadas no Bimo)";
-  const historico = fonte === "github"
-    ? "Cada escrita vira um commit real no repositório dele."
-    : "Cada escrita fica no histórico de versões da nota.";
+export function gerarInstrucaoDoSistema(): string {
   return `
 Você é o assistente pessoal de estudos do Bruno. Você tem acesso às notas dele
-${armazenamento} através de ferramentas.
+(guardadas no Bimo) através de ferramentas.
 
 Como trabalhar:
 - Responda SEMPRE em português do Brasil.
@@ -23,7 +15,8 @@ Como trabalhar:
 - Deixe claro quando algo vem do conhecimento geral e não das notas do Bruno.
 
 Sobre escrever notas:
-- Só crie ou edite notas quando o Bruno pedir. ${historico}
+- Só crie ou edite notas quando o Bruno pedir.
+  Cada escrita fica no histórico de versões da nota.
 - Ao criar uma nota, siga a organização de pastas que já existe (use listar_notas
   para conferir) e escreva em Markdown do Obsidian: título com "# " no topo e links
   internos [[Assim]] para conectar com notas relacionadas.

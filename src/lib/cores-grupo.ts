@@ -27,7 +27,7 @@ export const NUMERO_DE_CORES_DE_GRUPO = 8;
  * Mapa grupo -> índice de cor (0 a NUMERO_DE_CORES_DE_GRUPO - 1).
  *
  * Passando de 8 grupos as cores voltam a repetir (o `%`) — é o limite da
- * paleta, e num vault com tantas pastas de topo alguma repetição é inevitável.
+ * paleta, e com tantas pastas de topo alguma repetição é inevitável.
  */
 export function criarMapaDeCoresPorGrupo(grupos: Iterable<string>): Map<string, number> {
   const nomesUnicos = [...new Set(grupos)].sort((a, b) => a.localeCompare(b, "pt-BR"));

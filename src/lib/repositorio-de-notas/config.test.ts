@@ -18,13 +18,18 @@ function capturar(funcao: () => unknown): ErroDeConfiguracao {
 }
 
 describe("lerConfiguracaoDeNotas", () => {
-  it("sem NOTAS_FONTE, usa o GitHub (o comportamento de antes)", () => {
-    expect(lerConfiguracaoDeNotas(ambiente({}))).toEqual({ fonte: "github" });
-    expect(lerConfiguracaoDeNotas(ambiente({ NOTAS_FONTE: "" }))).toEqual({ fonte: "github" });
+  it("sem NOTAS_FONTE, o padrão é o banco e pede as variáveis dele", () => {
+    for (const env of [ambiente({}), ambiente({ NOTAS_FONTE: "" })]) {
+      expect(capturar(() => lerConfiguracaoDeNotas(env)).variaveis).toEqual(["DATABASE_URL", "USER_ID_PADRAO"]);
+    }
+    expect(lerConfiguracaoDeNotas(ambiente({ DATABASE_URL: "postgresql://x", USER_ID_PADRAO: UUID }))).toEqual({
+      fonte: "banco",
+      userId: UUID,
+    });
   });
 
   it("aceita a fonte em qualquer caixa e com espaços", () => {
-    expect(lerConfiguracaoDeNotas(ambiente({ NOTAS_FONTE: " GitHub " }))).toEqual({ fonte: "github" });
+    expect(lerConfiguracaoDeNotas(ambiente({ NOTAS_FONTE: " MEMORIA " }))).toEqual({ fonte: "memoria" });
   });
 
   it("recusa uma fonte desconhecida, apontando a variável", () => {
@@ -32,7 +37,17 @@ describe("lerConfiguracaoDeNotas", () => {
 
     expect(erro).toBeInstanceOf(ErroDeConfiguracao);
     expect(erro.variaveis).toEqual(["NOTAS_FONTE"]);
-    expect(erro.message).toMatch(/github.*banco.*memoria/);
+    expect(erro.message).toMatch(/banco.*memoria/);
+    expect(erro.message).not.toContain("nuvem");
+  });
+
+  it("a fonte github foi removida: erro claro em vez de cair em outra fonte", () => {
+    for (const valor of ["github", " GitHub "]) {
+      const erro = capturar(() => lerConfiguracaoDeNotas(ambiente({ NOTAS_FONTE: valor })));
+
+      expect(erro.variaveis).toEqual(["NOTAS_FONTE"]);
+      expect(erro.message).toMatch(/GitHub.*removida.*banco/i);
+    }
   });
 
   describe("memoria", () => {

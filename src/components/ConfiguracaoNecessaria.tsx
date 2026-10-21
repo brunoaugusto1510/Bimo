@@ -1,13 +1,12 @@
 type Props = {
   mensagem: string;
-  /** As variáveis de ambiente que a fonte escolhida pede. Sem elas, vale a lista do repositório do GitHub. */
+  /** As variáveis de ambiente que a fonte escolhida pede. Sem elas, vale a lista do banco. */
   variaveis?: string[];
 };
 
 /**
  * Tela mostrada no lugar da interface normal quando as notas não puderam ser
- * carregadas — `.env` faltando, token sem permissão, repositório errado, banco
- * sem configurar, etc. Em vez de esconder o problema atrás de dados de
+ * carregadas — `.env` faltando, banco sem configurar, etc. Em vez de esconder o problema atrás de dados de
  * exemplo, mostra a mensagem de erro (que já vem clara de quem falhou) e o que
  * fazer para corrigir.
  */
@@ -30,14 +29,10 @@ export default function ConfiguracaoNecessaria({ mensagem, variaveis }: Props) {
             ) : (
               <>
                 <li>
-                  <code>VAULT_REPO</code> — no formato <code>dono/repositorio</code>
+                  <code>DATABASE_URL</code> — a conexão com o banco das notas
                 </li>
                 <li>
-                  <code>GITHUB_TOKEN</code> — um Personal Access Token com permissão de
-                  leitura no repositório
-                </li>
-                <li>
-                  <code>VAULT_BRANCH</code> e <code>VAULT_SUBPATH</code> — opcionais
+                  <code>USER_ID_PADRAO</code> — o usuário dono das notas
                 </li>
               </>
             )}

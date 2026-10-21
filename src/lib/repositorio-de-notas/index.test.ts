@@ -16,10 +16,25 @@ afterEach(() => {
 });
 
 describe("obterRepositorio", () => {
-  it("sem NOTAS_FONTE, entrega o repositório do GitHub, somente leitura", async () => {
-    const repo = await obterRepositorio();
+  it("sem NOTAS_FONTE nem variáveis do banco, falha suave com ErroDeConfiguracao (sem tocar no banco)", async () => {
+    vi.stubEnv("NOTAS_FONTE", "");
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("USER_ID_PADRAO", "");
+    vi.mocked(criarRepositorioDoBanco).mockClear();
 
-    expect(repo.capacidades).toEqual({ escrita: false, datas: false });
+    await expect(obterRepositorio()).rejects.toBeInstanceOf(ErroDeConfiguracao);
+    expect(criarRepositorioDoBanco).not.toHaveBeenCalled();
+  });
+
+  it("sem NOTAS_FONTE, mas com as variáveis do banco, entrega o banco", async () => {
+    vi.stubEnv("NOTAS_FONTE", "");
+    vi.stubEnv("DATABASE_URL", "postgresql://x");
+    vi.stubEnv("USER_ID_PADRAO", "0b9f6d0e-3c1a-4f55-9a52-2f6c1f0e7a11");
+    vi.mocked(criarRepositorioDoBanco).mockClear();
+
+    await obterRepositorio();
+
+    expect(criarRepositorioDoBanco).toHaveBeenCalledWith("0b9f6d0e-3c1a-4f55-9a52-2f6c1f0e7a11");
   });
 
   it("com NOTAS_FONTE=memoria, entrega a memória com as notas de exemplo", async () => {
@@ -38,10 +53,13 @@ describe("obterRepositorio", () => {
   });
 
   it("troca de repositório quando a configuração muda", async () => {
-    const github = await obterRepositorio();
+    vi.stubEnv("NOTAS_FONTE", "banco");
+    vi.stubEnv("DATABASE_URL", "postgresql://x");
+    vi.stubEnv("USER_ID_PADRAO", "0b9f6d0e-3c1a-4f55-9a52-2f6c1f0e7a11");
+    const banco = await obterRepositorio();
     vi.stubEnv("NOTAS_FONTE", "memoria");
 
-    expect(await obterRepositorio()).not.toBe(github);
+    expect(await obterRepositorio()).not.toBe(banco);
   });
 
   it("propaga a configuração errada como ErroDeConfiguracao, sem tocar no banco", async () => {

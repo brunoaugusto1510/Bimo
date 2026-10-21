@@ -10,12 +10,12 @@ import type { Mensagem } from "@/lib/types";
  * (que decide se e quais ferramentas usar) e devolve a resposta final.
  *
  * Roda no servidor (toda rota dentro de app/api roda lá), então é o único
- * lugar — além da rota de notas — que usa GEMINI_API_KEY/GITHUB_TOKEN.
+ * lugar — além da rota de rascunho — que usa GEMINI_API_KEY.
  */
 export async function POST(request: Request) {
   // O `proxy.ts` já barra isso na borda; conferir aqui também é de propósito.
   // A doc do Next 16 avisa que uma mudança de `matcher` pode descobrir uma rota
-  // sem ninguém notar — e esta gasta cota do Gemini, além de ler o vault.
+  // sem ninguém notar — e esta gasta cota do Gemini, além de ler as notas.
   const semSessao = exigirSessao(request);
   if (semSessao) return semSessao;
   const outraOrigem = exigirMesmaOrigem(request);

@@ -58,36 +58,6 @@ describe("Chat", () => {
     expect(screen.getByText('Buscou "TCP" — 1 nota(s)')).toBeInTheDocument();
   });
 
-  it("mostra um link para o commit quando o agente escreve uma nota", async () => {
-    const usuario = userEvent.setup();
-    vi.stubGlobal(
-      "fetch",
-      mockFetch({
-        ok: true,
-        corpo: {
-          resposta: 'Criei a nota "Estudos/DNS.md".',
-          ferramentas: [
-            {
-              nome: "criar_nota",
-              argumentos: { caminho: "Estudos/DNS.md", conteudo: "# DNS" },
-              resumo: 'Criou a nota "Estudos/DNS.md"',
-              commitUrl: "https://github.com/usuario/vault/commit/abc",
-            },
-          ],
-        },
-      }),
-    );
-
-    render(<ChatControlado />);
-
-    await usuario.type(screen.getByPlaceholderText("Digite sua mensagem..."), "crie uma nota sobre DNS");
-    await usuario.click(screen.getByRole("button", { name: "Enviar" }));
-
-    const link = await screen.findByRole("link", { name: /Criou a nota "Estudos\/DNS\.md"/ });
-    expect(link).toHaveAttribute("href", "https://github.com/usuario/vault/commit/abc");
-    expect(link).toHaveAttribute("target", "_blank");
-  });
-
   it("mostra uma mensagem de erro visível quando a rota falha, sem travar no '...'", async () => {
     const usuario = userEvent.setup();
     vi.stubGlobal(

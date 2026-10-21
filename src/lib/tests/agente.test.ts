@@ -59,7 +59,7 @@ describe("responder", () => {
     });
     const resultado = await responder([{ papel: "usuario", conteudo: "crie uma nota" }]);
     expect(resultado.ferramentas[0]).toMatchObject({ notaId: "nota-7" });
-    expect(resultado.ferramentas[0].commitUrl).toBeUndefined();
+    expect(resultado.ferramentas[0]).not.toHaveProperty("commitUrl");
     expect(generateContentMock.mock.calls[0][0].config.systemInstruction).toMatch(/guardadas no Bimo/);
     expect(generateContentMock.mock.calls[0][0].config.systemInstruction).not.toMatch(/commit|GitHub|vault/i);
   });
@@ -112,36 +112,6 @@ describe("responder", () => {
     expect(resultado.ferramentas).toEqual([
       { nome: "buscar_notas", argumentos: { consulta: "TCP" }, resumo: 'Buscou "TCP" — 1 nota(s)', erro: undefined },
     ]);
-  });
-
-  it("propaga o link do commit quando a ferramenta escreveu no vault", async () => {
-    generateContentMock
-      .mockResolvedValueOnce(turnoComChamada("criar_nota", { caminho: "Estudos/DNS.md", conteudo: "# DNS" }))
-      .mockResolvedValueOnce(turnoDeTexto("Criei a nota Estudos/DNS.md."));
-
-    vi.mocked(executarFerramenta).mockResolvedValue({
-      resposta: { sucesso: true, caminho: "Estudos/DNS.md", commit: "https://github.com/usuario/vault/commit/abc" },
-      resumo: 'Criou a nota "Estudos/DNS.md"',
-    });
-
-    const resultado = await responder([{ papel: "usuario", conteudo: "crie uma nota sobre DNS" }]);
-
-    expect(resultado.ferramentas[0]?.commitUrl).toBe("https://github.com/usuario/vault/commit/abc");
-  });
-
-  it("não inventa um commitUrl para ferramentas que não escreveram nada", async () => {
-    generateContentMock
-      .mockResolvedValueOnce(turnoComChamada("buscar_notas", { consulta: "TCP" }))
-      .mockResolvedValueOnce(turnoDeTexto("ok"));
-
-    vi.mocked(executarFerramenta).mockResolvedValue({
-      resposta: { encontradas: 0 },
-      resumo: 'Buscou "TCP" — nenhuma nota encontrada',
-    });
-
-    const resultado = await responder([{ papel: "usuario", conteudo: "o que é TCP?" }]);
-
-    expect(resultado.ferramentas[0]?.commitUrl).toBeUndefined();
   });
 
   it("registra o uso da ferramenta mesmo quando ela devolve erro, sem interromper o laço", async () => {

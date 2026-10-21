@@ -3,7 +3,6 @@ import {
   CONFIGURACAO_PADRAO,
   calcularGraus,
   converterParaForcas,
-  lerConfiguracaoDoGrafo,
   raioDoNo,
 } from "../fisica-do-grafo";
 
@@ -17,8 +16,8 @@ describe("converterParaForcas", () => {
     expect(forcas.distanciaDoLink).toBe(250);
   });
 
-  it("reconhece a posição de slider gravada no graph.json de um vault com valores padrão", () => {
-    // Valor real do `.obsidian/graph.json` de um vault que nunca mexeu no slider.
+  it("reconhece a posição de slider do Obsidian com valores padrão", () => {
+    // Valor real do `.obsidian/graph.json` de quem nunca mexeu no slider.
     const forcas = converterParaForcas({ ...CONFIGURACAO_PADRAO, centerStrength: 0.518713248970312 });
     expect(forcas.centralizacao).toBeCloseTo(0.1, 6);
   });
@@ -33,60 +32,6 @@ describe("converterParaForcas", () => {
     const noZero = converterParaForcas({ ...CONFIGURACAO_PADRAO, centerStrength: 0, linkStrength: 0 });
     expect(noZero.centralizacao).toBeCloseTo(0, 6);
     expect(noZero.link).toBeCloseTo(0, 6);
-  });
-});
-
-describe("lerConfiguracaoDoGrafo", () => {
-  it("aproveita os campos válidos de um graph.json", () => {
-    const configuracao = lerConfiguracaoDoGrafo({
-      centerStrength: 0.5,
-      repelStrength: 18.8,
-      linkStrength: 0.84,
-      linkDistance: 249,
-      nodeSizeMultiplier: 1.2,
-      showTags: true,
-      hideUnresolved: true,
-      showOrphans: false,
-      // Campos que o Bimo não usa são ignorados.
-      colorGroups: [],
-      scale: 0.08,
-    });
-
-    expect(configuracao).toEqual({
-      centerStrength: 0.5,
-      repelStrength: 18.8,
-      linkStrength: 0.84,
-      linkDistance: 249,
-      nodeSizeMultiplier: 1.2,
-      showTags: true,
-      hideUnresolved: true,
-      showOrphans: false,
-    });
-  });
-
-  it("usa o padrão campo a campo quando um valor falta ou tem o tipo errado", () => {
-    const configuracao = lerConfiguracaoDoGrafo({ linkDistance: "longe", showTags: 1, repelStrength: 5 });
-
-    expect(configuracao).toEqual({ ...CONFIGURACAO_PADRAO, repelStrength: 5 });
-  });
-
-  it("prende os sliders aos limites da interface do Obsidian", () => {
-    const configuracao = lerConfiguracaoDoGrafo({ centerStrength: 7, linkStrength: -1, repelStrength: 99 });
-
-    expect(configuracao.centerStrength).toBe(1);
-    expect(configuracao.linkStrength).toBe(0);
-    expect(configuracao.repelStrength).toBe(20);
-  });
-
-  it("recusa distância e tamanho que não sejam positivos", () => {
-    const configuracao = lerConfiguracaoDoGrafo({ linkDistance: 0, nodeSizeMultiplier: Number.NaN });
-
-    expect(configuracao.linkDistance).toBe(CONFIGURACAO_PADRAO.linkDistance);
-    expect(configuracao.nodeSizeMultiplier).toBe(CONFIGURACAO_PADRAO.nodeSizeMultiplier);
-  });
-
-  it.each([null, undefined, "texto", 42, [1, 2]])("devolve o padrão inteiro para %p", (entrada) => {
-    expect(lerConfiguracaoDoGrafo(entrada)).toEqual(CONFIGURACAO_PADRAO);
   });
 });
 

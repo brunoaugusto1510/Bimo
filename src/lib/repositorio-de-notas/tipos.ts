@@ -3,9 +3,8 @@
  *
  * Tudo acima daqui (serviço, rotas, interface, agente) fala só com
  * `RepositorioDeNotas`. Quem implementa decide o armazenamento: o banco do
- * Bimo (`banco.ts`), uma memória descartável para testes e desenvolvimento
- * (`memoria.ts`) e, só durante a transição, o repositório do GitHub em modo
- * leitura (`github-somente-leitura.ts`).
+ * Bimo (`banco.ts`) ou uma memória descartável para testes e desenvolvimento
+ * (`memoria.ts`).
  */
 
 import type { ConfiguracaoDoGrafo } from "../fisica-do-grafo";
@@ -19,7 +18,7 @@ export type ResumoDeNota = {
   /** Caminho da pasta (`A/B`); `null` é a raiz. Organização pura, não identidade. */
   pasta: string | null;
   tags: string[];
-  /** ISO 8601, ou `null` quando a fonte não sabe (GitHub só leitura). */
+  /** ISO 8601, ou `null` quando a fonte não sabe. */
   criadoEm: string | null;
   atualizadoEm: string | null;
   /**

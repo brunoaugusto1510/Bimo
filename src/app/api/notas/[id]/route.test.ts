@@ -35,7 +35,7 @@ describe("GET /api/notas/[id]", () => {
     const corpo = await res.json();
     expect(corpo.nota).toMatchObject({ id: idA, titulo: "A", conteudo: expect.stringContaining("[[B]]") });
     expect(corpo.capacidades).toEqual({ escrita: true, datas: true });
-    // Ler uma nota é ler uma nota: não baixa todas as outras (no GitHub seriam centenas de downloads).
+    // Ler uma nota é ler uma nota: não baixa todas as outras (seriam centenas de leituras).
     expect(listar).not.toHaveBeenCalled();
   });
 
