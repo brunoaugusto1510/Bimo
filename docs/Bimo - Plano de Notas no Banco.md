@@ -25,7 +25,7 @@ Levar ao app as 4 telas de desktop do design (Abrir nota com abas, Nova nota, Ne
 | 2 | Contrato `RepositorioDeNotas`, repositório em memória, adaptador do GitHub (removido na 10c), serviço com cache, suíte de contrato | Feita |
 | 3 | Rotas `/api/notas`, `/api/grafo` e interface por id | Feita |
 | 4 | Repositório no banco (`banco.ts`) e migração `0006` | Feita |
-| 5 | Importador `npm run importar-notas` | Feita (importação real executada: 383 notas); o importador foi removido na 10c e segue no histórico do git |
+| 5 | Importador `npm run importar-notas` | Feita. A importação real só foi executada em 21/10/2026 (383 criadas, 1 ignorada por título `.pdf.md`, 0 falhas), depois do corte; antes disso o banco estava vazio. O importador foi removido na 10c e segue no histórico do git |
 | 6 | Agente (Gemini) lendo e escrevendo pelo repositório configurado | Feita |
 | 7 | Espaço de trabalho de leitura: abas, navegação, Ctrl+O, painel lateral, prévia de ligação | Feita |
 | 8a | Edição com salvamento automático | Feita |
@@ -228,7 +228,8 @@ Subfases (cada uma commitada e verificada sozinha, branch `feat/corte-para-o-ban
 *Como ficou:* o app só lê e escreve no banco. O repositório do GitHub é arquivo e a
 edição no Obsidian/GitHub deixou de chegar ao app. O grafo usa a configuração padrão
 (`CONFIGURACAO_PADRAO`), como já fazia no modo banco; o `.obsidian/graph.json` não é
-mais lido. O importador saiu: as 383 notas já estavam no banco e o código segue no
+mais lido. O importador saiu: as 383 notas só foram importadas depois do corte (21/10/2026; o
+plano e a 10c afirmavam, por engano, que já estavam no banco) e o código segue no
 histórico do git (para repetir a importação, recupere `scripts/importar-notas.ts`,
 `src/lib/importacao-de-notas.ts` e `src/lib/vault-real.ts` de um commit anterior a
 `a2cd2a6`). `tsx` deixou de ser dependência direta (continua como dependência do
