@@ -8,8 +8,8 @@ progress, phase status and implementation history go to
 
 ## Project
 
-**Bimo** ("Personal Brain") — a chat UI over the user's notes, with a Gemini agent that
-reads and writes them through function calling. Everything is in Portuguese (pt-BR):
+**Bimo** ("Personal Brain") — a chat UI over the user's notes, with a GPT-6 Luna agent that
+reads and writes them through the OpenAI Responses API. Gemini still handles editor drafts and ingestion. Everything is in Portuguese (pt-BR):
 variable/function/type names, comments and UI copy. Keep new code in pt-BR to match.
 
 ## Commands

@@ -30,7 +30,8 @@ function requisicao(corpo: unknown, autenticado = true): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.SEGREDO_SESSAO = SEGREDO;
-  vi.stubEnv("GEMINI_API_KEY", "teste");
+  vi.stubEnv("OPENAI_API_KEY", "teste");
+  vi.stubEnv("GEMINI_API_KEY", "");
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -49,7 +50,7 @@ describe("POST /api/chat", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(responder).toHaveBeenCalledWith([{ papel: "usuario", conteudo: "Olá" }]);
+    expect(responder).toHaveBeenCalledWith([{ papel: "usuario", conteudo: "Olá" }], { signal: expect.any(AbortSignal) });
     await expect(res.json()).resolves.toEqual({ resposta: "Oi!", ferramentas: [] });
   });
 
@@ -93,7 +94,7 @@ describe("POST /api/chat", () => {
 
   it("devolve 500 genérico quando responder() lança exceção", async () => {
     vi.mocked(responder).mockRejectedValue(
-      new Error("GEMINI_API_KEY não está definida."),
+      new Error("OPENAI_API_KEY não está definida."),
     );
 
     const res = await POST(
@@ -114,10 +115,10 @@ describe("POST /api/chat", () => {
   });
 
   it("recusa configuração ausente com 503 genérico", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     const resposta = await POST(requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] }));
     expect(resposta.status).toBe(503);
-    expect(JSON.stringify(await resposta.json())).not.toContain("GEMINI_API_KEY");
+    expect(JSON.stringify(await resposta.json())).not.toContain("OPENAI_API_KEY");
     expect(responder).not.toHaveBeenCalled();
   });
 
@@ -209,7 +210,7 @@ describe("POST /api/chat em NDJSON", () => {
       { tipo: "passo", nome: "criar_nota", resumo: 'Criou a nota "N.md"', erro: false, ids: ["n1"], argumentos: { caminho: "N.md", conteudo: "x" }, notaId: "n1" },
       { tipo: "resposta", resposta: "Pronto.", ferramentas: final.ferramentas },
     ]);
-    expect(responder).toHaveBeenCalledWith(corpoValido.mensagens, { aoPasso: expect.any(Function) });
+    expect(responder).toHaveBeenCalledWith(corpoValido.mensagens, { aoPasso: expect.any(Function), signal: expect.any(AbortSignal) });
   });
 
   it("entrega o passo antes de o agente terminar", async () => {
@@ -315,13 +316,13 @@ describe("POST /api/chat em NDJSON", () => {
     await res.text();
   });
 
-  it("sem o cabeçalho de NDJSON continua respondendo JSON e não passa opções ao agente", async () => {
+  it("sem NDJSON continua respondendo JSON e passa o sinal ao agente", async () => {
     vi.mocked(responder).mockResolvedValue({ resposta: "Oi!", ferramentas: [] });
 
     const res = await POST(requisicao(corpoValido));
 
     expect(res.headers.get("content-type")).toContain("application/json");
-    expect(responder).toHaveBeenCalledWith(corpoValido.mensagens);
+    expect(responder).toHaveBeenCalledWith(corpoValido.mensagens, { signal: expect.any(AbortSignal) });
   });
 
   it("erros antes do fluxo continuam sendo JSON com status", async () => {
@@ -344,10 +345,50 @@ describe("POST /api/chat em NDJSON", () => {
     expect(semMensagens.status).toBe(400);
     expect(semMensagens.headers.get("content-type")).toContain("application/json");
 
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     const semChave = await POST(requisicaoNdjson(corpoValido));
     expect(semChave.status).toBe(503);
     expect(semChave.headers.get("content-type")).toContain("application/json");
     expect(responder).not.toHaveBeenCalled();
   });
+});
+
+
+it("cancela o agente quando o leitor abandona o NDJSON", async () => {
+  let sinal: AbortSignal | undefined;
+  let terminar!: () => void;
+  const espera = new Promise<void>((resolve) => { terminar = resolve; });
+  vi.mocked(responder).mockImplementation(async (_m, opcoes) => {
+    sinal = opcoes?.signal;
+    await espera;
+    return { resposta: "fim", ferramentas: [] };
+  });
+  const pedido = requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] });
+  pedido.headers.set("accept", "application/x-ndjson");
+  const resposta = await POST(pedido);
+  await resposta.body!.cancel();
+  expect(sinal?.aborted).toBe(true);
+  terminar();
+});
+
+it("recusa histórico acima de 40 mensagens antes de chamar o agente", async () => {
+  const resposta = await POST(requisicao({ mensagens: Array.from({ length: 41 }, () => ({ papel: "usuario", conteudo: "oi" })) }));
+  expect(resposta.status).toBe(400);
+  expect(responder).not.toHaveBeenCalled();
+});
+
+
+it.each([20001, 80001])("recusa texto que ultrapassa os limites (%s caracteres)", async (total) => {
+  const mensagens = total === 20001
+    ? [{ papel: "usuario", conteudo: "x".repeat(total) }]
+    : Array.from({ length: 5 }, () => ({ papel: "usuario", conteudo: "x".repeat(16001) }));
+  expect((await POST(requisicao({ mensagens }))).status).toBe(400);
+  expect(responder).not.toHaveBeenCalled();
+});
+
+it("recusa corpo acima de 1 MB", async () => {
+  const pedido = requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] });
+  pedido.headers.set("content-length", "1048577");
+  expect((await POST(pedido)).status).toBe(413);
+  expect(responder).not.toHaveBeenCalled();
 });

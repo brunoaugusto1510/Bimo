@@ -2,7 +2,7 @@
 
 Um espaço de notas com um assistente: as suas notas moram no banco do Bimo, você
 as lê e escreve num editor com abas e salvamento automático, e um agente do
-Gemini consulta e escreve nelas por function calling.
+GPT-6 Luna consulta e escreve nelas por function calling na Responses API da OpenAI.
 
 ## Onde o projeto está agora
 
@@ -34,7 +34,9 @@ Copie `.env.example` para `.env` e preencha. O essencial:
 - `SENHA_HASH` — hash da senha de acesso; gere com `npm run gerar-senha`
 - `SEGREDO_SESSAO` — chave (32+ caracteres) que assina o cookie; gere com
   `npm run gerar-segredo`
-- `GEMINI_API_KEY` — chave da API do Gemini (https://aistudio.google.com/apikey)
+- `OPENAI_API_KEY` — chave da API OpenAI para o agente principal do chat
+- `OPENAI_MODEL` — opcional; padrão `gpt-6-luna`
+- `GEMINI_API_KEY` — chave Gemini para rascunhos no editor e ingestão (https://aistudio.google.com/apikey)
 
 Sem `DATABASE_URL`/`USER_ID_PADRAO`, a página mostra uma tela explicando o que
 falta em vez de quebrar. Sem `SENHA_HASH`/`SEGREDO_SESSAO`, o login recusa todo
@@ -42,6 +44,20 @@ acesso (503) em vez de deixar as notas expostas por descuido.
 
 Para desenvolver sem banco, `NOTAS_FONTE=memoria` usa notas de exemplo na memória
 (recusado em produção). As migrações do banco rodam com `npm run db:migrate`.
+
+O chat usa raciocínio `low`, até cinco chamadas de 4.096 tokens de saída cada
+(incluindo raciocínio), com prazo de 45 segundos. O histórico aceita até 40
+mensagens, 20 mil caracteres por mensagem e 80 mil no total; o contexto montado
+com ferramentas é limitado a 200 mil caracteres serializados. Notas grandes não
+são cortadas silenciosamente: o pedido é interrompido antes de reenviá-las ao modelo.
+O consumo de cada chamada é registrado no servidor sem texto das notas ou chave.
+Esses limites não são um teto financeiro mensal. As respostas usam `store: false`;
+isso não equivale a uma garantia de retenção zero pelo provedor.
+
+Na hospedagem, configure `OPENAI_API_KEY` e, opcionalmente, `OPENAI_MODEL`, e faça
+um novo deploy. Sem a chave OpenAI, o chat responde 503; não há troca automática
+para Gemini. Se uma escrita terminar antes de uma falha/cancelamento, a escrita
+permanece salva: cancelar a resposta não desfaz operações já concluídas.
 
 ## Rodar
 
@@ -78,7 +94,7 @@ efêmero no Supabase configurado: nunca aponte para um banco de produção.
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Drizzle +
-Supabase (Postgres) · Gemini · Vitest
+Supabase (Postgres) · OpenAI (chat) · Gemini (rascunho e ingestão) · Vitest
 
 ## Ideias futuras
 

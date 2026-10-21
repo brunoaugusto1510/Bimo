@@ -237,7 +237,7 @@ histórico do git (para repetir a importação, recupere `scripts/importar-notas
 estava: o teto folgado era para o id do GitHub, mas apertá-lo não traz ganho agora.
 
 **Checklist de produção (ação sua, na Vercel):** conferir que `DATABASE_URL` (porta
-6543), `USER_ID_PADRAO`, `SENHA_HASH`, `SEGREDO_SESSAO` e `GEMINI_API_KEY` existem e que
+6543), `USER_ID_PADRAO`, `SENHA_HASH`, `SEGREDO_SESSAO`, `OPENAI_API_KEY` (chat) e `GEMINI_API_KEY` (rascunho e ingestão) existem e que
 não há `NOTAS_FONTE=github`; sem isso a página mostra a tela "falta configurar" e o chat
 responde 503. Depois do deploy, apagar `VAULT_REPO`, `VAULT_BRANCH`, `VAULT_SUBPATH` e
 `GITHUB_TOKEN` e **revogar o token do GitHub** (ele tinha permissão de escrita).
@@ -252,10 +252,49 @@ exportação periódica das notas para ele seria um recurso novo, a decidir depo
 - `src/lib/agente.ts`, `ferramentas.ts`, `porta-de-escrita-do-agente.ts`, `resolver-nota-do-agente.ts` — o agente continua endereçando por caminho (`Pasta/Título.md`); `substituir` exige ter lido a nota na conversa; escrita nunca resolve por trecho do título.
 - `src/lib/espaco-de-trabalho/` e `src/components/` — estado das abas (reducer puro), persistência, hooks `useEspacoDeTrabalho`/`useNota`/`useLigacoes`, e os componentes do espaço de trabalho.
 
+## Agente principal com GPT-6 Luna — 21/10/2026
+
+O chat passa a usar `gpt-6-luna` pela Responses API da OpenAI. `openai.ts`
+usa HTTP nativo, protegido por `server-only`, sem dependência adicional, com
+`OPENAI_API_KEY` e modelo opcional `OPENAI_MODEL`. A chave fica no servidor;
+sem ela a rota responde 503, sem troca automática de provedor. O Gemini continua
+no rascunho do editor e na ingestão, com suas próprias variáveis.
+
+`ferramentas-openai.ts` adapta as cinco declarações existentes para schemas
+estritos (campos opcionais anuláveis); a execução continua em `ferramentas.ts`.
+O agente preserva raciocínio e resultados pelo `call_id`, o mapa de revisões lidas,
+a recusa de substituição sem leitura e os eventos `aoPasso`/NDJSON do grafo.
+Não há repetição automática de requisições; escritas com nome e argumentos iguais
+são reaproveitadas dentro da mesma execução, evitando um segundo acréscimo.
+Isso não é idempotência entre pedidos separados ou instâncias.
+
+Limites: raciocínio `low`, saída até 4.096 tokens por chamada, até cinco chamadas,
+prazo de 45 segundos e cancelamento do transporte ao abandonar o fluxo. Uma
+escrita já concluída não é desfeita pelo cancelamento. A rota limita o corpo a
+1 MB, histórico a 40 mensagens, cada texto a 20 mil caracteres e o total a 80 mil;
+o agente recusa contexto serializado acima de 200 mil caracteres antes da próxima
+chamada, sem cortar notas silenciosamente. Chamadas incompletas e recusas não
+executam ferramentas. Consumo é registrado por chamada só com metadados; não há
+teto financeiro mensal persistente nem limitador de frequência do chat nesta etapa.
+O cancelamento não interrompe uma transação de notas já iniciada.
+
+Validação inicial RED: 30 testes falharam, 18 passaram e duas suítes não carregaram
+porque os módulos novos ainda não existiam. GREEN final: 164 testes em 13 arquivos, TypeScript e ESLint passaram. A validação usa API simulada e
+notas em memória; não chama OpenAI/Gemini nem Supabase reais. Configurar a chave no
+ambiente de execução e verificar o comportamento real do modelo continuam pendentes.
+
+## RAG e Wiki Viva — plano para revisão — 21/10/2026
+
+Proposta detalhada em [Bimo - Plano de RAG e Wiki Viva.md](./Bimo%20-%20Plano%20de%20RAG%20e%20Wiki%20Viva.md), com referências à documentação oficial da OpenAI consultada nesta data. O objetivo é adaptar a organização ao que o usuário anota livremente, criando e enriquecendo notas derivadas com sínteses, relações e evidências verificáveis.
+
+O caminho recomendado combina busca textual/semântica no Postgres, embeddings da OpenAI e compilação incremental pela Responses API. O plano compara File Search, descreve snapshots separados do autosave, publicação atômica, isolamento por usuário, fila durável, limites de consumo, avaliação e oito etapas após os contratos iniciais. Inclui um briefing pronto para o Claude revisar. É planejamento; RAG e Wiki Viva ainda não foram implementados.
+
+Validação desta entrega: 132 testes passaram em nove arquivos focados no transporte OpenAI, laço do agente, ferramentas, resolução de notas, helpers HTTP e rota de chat, com APIs simuladas e repositório em memória. TypeScript (`--noEmit --incremental false`) e ESLint dos nove arquivos TypeScript da migração passaram. Essa execução é distinta da validação histórica de 164 testes registrada acima. Não houve inferência real, integração com Supabase ou migração do banco.
+
 ## Continuar em outro computador
 
 1. `git fetch && git checkout main && git pull`, depois `npm install` (a Fase 10 está na `feat/corte-para-o-banco` até ser mergeada).
-2. Crie o `.env` a partir de `.env.example`. Valores que faltam num computador novo: `DATABASE_URL` (transaction pooler, porta 6543), `DATABASE_URL_MIGRATIONS` (session pooler, 5432), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (a chave secreta, não a publicável), `USER_ID_PADRAO`, `SENHA_HASH` e `SEGREDO_SESSAO` (`npm run gerar-senha`, `npm run gerar-segredo`), `GEMINI_API_KEY`. Nada disso vai para o Git.
+2. Crie o `.env` a partir de `.env.example`. Valores que faltam num computador novo: `DATABASE_URL` (transaction pooler, porta 6543), `DATABASE_URL_MIGRATIONS` (session pooler, 5432), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (a chave secreta, não a publicável), `USER_ID_PADRAO`, `SENHA_HASH` e `SEGREDO_SESSAO` (`npm run gerar-senha`, `npm run gerar-segredo`), `OPENAI_API_KEY` para o chat e `GEMINI_API_KEY` para rascunho/ingestão. `OPENAI_MODEL` é opcional (padrão `gpt-6-luna`). Nada disso vai para o Git.
 3. Os dados já estão no Supabase: as migrações `0000` a `0006` estão aplicadas e as 383 notas foram importadas.
 4. Para ver as notas do banco: `npm run dev` (o banco é o padrão; `NOTAS_FONTE=memoria` usa notas de exemplo).
 5. Conferir que está tudo certo: `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`. Os testes de `banco.test.ts` rodam contra o Postgres real: criam e apagam um usuário efêmero pela Admin API do Supabase.

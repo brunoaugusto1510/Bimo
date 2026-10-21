@@ -1,37 +1,24 @@
-/**
- * O laço do agente: conversa com o Gemini até ele parar de pedir ferramentas.
- *
- * O fluxo é sempre o mesmo:
- *
- *   1. mandamos o histórico da conversa para o Gemini
- *   2. ele responde com texto (acabou) OU com chamadas de ferramenta
- *   3. executamos as ferramentas e devolvemos os resultados
- *   4. volta pro passo 1
- *
- * Ou seja: o modelo decide *o quê* fazer, o nosso código decide *como* e
- * mantém o controle sobre tudo que toca as notas de verdade.
- */
-
-import {
-  type Content,
-  type Part,
-} from "@google/genai";
-import { declaracoesDeFerramentas, executarFerramenta } from "./ferramentas";
-import { criarClienteGemini, MODELO } from "./gemini";
+/** O Luna decide quais ferramentas pedir; o Bimo controla o acesso e a escrita das notas. */
+import { z } from "zod";
+import { executarFerramenta, type SaidaFerramenta } from "./ferramentas";
+import { ferramentasOpenAI } from "./ferramentas-openai";
+import { criarRespostaOpenAI, type ItemDaResposta } from "./openai";
 import { gerarInstrucaoDoSistema } from "./instrucao-do-agente";
 import type { IdDeNota, Mensagem, UsoDeFerramenta } from "./types";
 
-/** Trava de segurança: sem isso um modelo confuso pediria ferramentas para sempre. */
 const MAX_VOLTAS = 5;
-
-/** Converte o histórico do nosso formato para o formato do Gemini. */
-function paraContents(mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>): Content[] {
-  return mensagens.map((m) => ({
-    // No Gemini o assistente se chama "model", não "assistant"/"agente".
-    role: m.papel === "agente" ? "model" : "user",
-    parts: [{ text: m.conteudo }],
-  }));
-}
+const TEMPO_MAXIMO_MS = 45_000;
+const MAX_CARACTERES_DE_CONTEXTO = 200_000;
+const esquemaDaChamada = z.object({
+  type: z.literal("function_call"), call_id: z.string().min(1),
+  name: z.string().min(1), arguments: z.string(),
+});
+const esquemaDaMensagem = z.object({
+  content: z.array(z.discriminatedUnion("type", [
+    z.object({ type: z.literal("output_text"), text: z.string() }),
+    z.object({ type: z.literal("refusal"), refusal: z.string() }),
+  ])),
+});
 
 export type ResultadoAgente = {
   resposta: string;
@@ -45,6 +32,7 @@ export type PassoDoServidor = {
 };
 
 export type OpcoesDoAgente = {
+  signal?: AbortSignal;
   /** Chamado logo após cada ferramenta rodar. Se lançar, o erro é ignorado: o laço não depende de quem ouve. */
   aoPasso?: (passo: PassoDoServidor) => void;
 };
@@ -58,79 +46,92 @@ function avisarPasso(aoPasso: OpcoesDoAgente["aoPasso"], passo: PassoDoServidor)
   }
 }
 
+/** Validação também no agente, para chamadas internas não contornarem os limites da rota. */
+export function historicoPermitido(mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>): boolean {
+  return mensagens.length > 0 && mensagens.length <= 40
+    && mensagens.every((m) => m.conteudo.length <= 20_000)
+    && mensagens.reduce((total, m) => total + m.conteudo.length, 0) <= 80_000;
+}
+
+function textoDaResposta(output: ItemDaResposta[]): string {
+  const textos: string[] = [];
+  for (const item of output) {
+    if (item.type !== "message") continue;
+    const mensagem = esquemaDaMensagem.parse(item);
+    for (const parte of mensagem.content) {
+      if (parte.type === "refusal") throw new Error("O modelo recusou o pedido.");
+      textos.push(parte.text);
+    }
+  }
+  return textos.join("\n").trim();
+}
+
 export async function responder(
   mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>,
   opcoes: OpcoesDoAgente = {},
 ): Promise<ResultadoAgente> {
-  const ai = criarClienteGemini();
-  const instrucao = gerarInstrucaoDoSistema();
-  const contents = paraContents(mensagens);
+  if (!process.env.OPENAI_API_KEY?.trim()) throw new Error("OPENAI_API_KEY não está definida.");
+  if (!historicoPermitido(mensagens)) throw new Error("O histórico ultrapassa os limites do chat.");
+  const controle = new AbortController();
+  const cancelar = () => controle.abort();
+  opcoes.signal?.addEventListener("abort", cancelar, { once: true });
+  if (opcoes.signal?.aborted) cancelar();
+  const temporizador = setTimeout(cancelar, TEMPO_MAXIMO_MS);
+  const input: Record<string, unknown>[] = mensagens.map((m) => ({
+    role: m.papel === "agente" ? "assistant" : "user", content: m.conteudo,
+  }));
   const ferramentasUsadas: UsoDeFerramenta[] = [];
   const leituras = new Map<IdDeNota, number>();
-
-  for (let volta = 0; volta < MAX_VOLTAS; volta++) {
-    const resposta = await ai.models.generateContent({
-      model: MODELO,
-      contents,
-      config: {
-        systemInstruction: instrucao,
-        tools: [{ functionDeclarations: declaracoesDeFerramentas }],
-        // Nós mesmos executamos as ferramentas, no laço abaixo.
-        automaticFunctionCalling: { disable: true },
-        temperature: 0.4,
-      },
-    });
-
-    // Guardamos o turno do modelo exatamente como veio, sem remontar: partes
-    // internas do raciocínio precisam voltar intactas na próxima chamada.
-    const turnoDoModelo = resposta.candidates?.[0]?.content;
-    if (turnoDoModelo) contents.push(turnoDoModelo);
-
-    const chamadas = resposta.functionCalls ?? [];
-
-    if (chamadas.length === 0) {
-      return {
-        resposta: resposta.text?.trim() || "(o modelo não devolveu texto)",
-        ferramentas: ferramentasUsadas,
-      };
+  const chamadasVistas = new Set<string>();
+  const escritas = new Map<string, SaidaFerramenta>();
+  try {
+    for (let volta = 0; volta < MAX_VOLTAS; volta++) {
+      controle.signal.throwIfAborted();
+      if (JSON.stringify(input).length > MAX_CARACTERES_DE_CONTEXTO) {
+        throw new Error("O contexto ultrapassou o limite. Faça uma consulta mais específica.");
+      }
+      const resposta = await criarRespostaOpenAI({
+        instructions: gerarInstrucaoDoSistema(), input: [...input], tools: ferramentasOpenAI,
+      }, controle.signal);
+      controle.signal.throwIfAborted();
+      // Não executar chamadas parciais, mesmo se a resposta incluir texto ou argumentos válidos.
+      if (resposta.status !== "completed") throw new Error("O modelo não concluiu a resposta.");
+      const texto = textoDaResposta(resposta.output);
+      const chamadas = resposta.output.filter((item) => item.type === "function_call").map((item) => esquemaDaChamada.parse(item));
+      if (!chamadas.length) {
+        if (!texto) throw new Error("O modelo não devolveu texto.");
+        return { resposta: texto, ferramentas: ferramentasUsadas };
+      }
+      // Reenviar todos os itens, inclusive raciocínio criptografado, durante esta execução.
+      input.push(...resposta.output);
+      for (const chamada of chamadas) {
+        controle.signal.throwIfAborted();
+        if (chamadasVistas.has(chamada.call_id)) throw new Error("O modelo repetiu uma chamada já processada.");
+        chamadasVistas.add(chamada.call_id);
+        const bruto = z.record(z.string(), z.unknown()).parse(JSON.parse(chamada.arguments));
+        const argumentos = Object.fromEntries(Object.entries(bruto).filter(([, valor]) => valor !== null));
+        const ehEscrita = chamada.name === "criar_nota" || chamada.name === "editar_nota";
+        const assinatura = JSON.stringify([chamada.name, Object.entries(argumentos).sort(([a], [b]) => a.localeCompare(b))]);
+        let saida = ehEscrita ? escritas.get(assinatura) : undefined;
+        if (!saida) {
+          saida = await executarFerramenta(chamada.name, argumentos, { leituras });
+          if (ehEscrita) escritas.set(assinatura, saida);
+          const uso: UsoDeFerramenta = {
+            nome: chamada.name, argumentos, resumo: saida.resumo, erro: saida.erro,
+            ...(saida.notaId ? { notaId: saida.notaId } : {}),
+          };
+          ferramentasUsadas.push(uso);
+          avisarPasso(opcoes.aoPasso, { ferramenta: uso, ids: saida.ids ?? [] });
+        }
+        input.push({ type: "function_call_output", call_id: chamada.call_id, output: JSON.stringify(saida.resposta) });
+      }
     }
-
-    // Uma resposta por chamada, na mesma ordem em que foram pedidas.
-    const partesDeResposta: Part[] = [];
-
-    for (const chamada of chamadas) {
-      if (!chamada.name) continue;
-
-      const argumentos = chamada.args ?? {};
-      const saida = await executarFerramenta(chamada.name, argumentos, { leituras });
-
-      const uso: UsoDeFerramenta = {
-        nome: chamada.name,
-        argumentos,
-        resumo: saida.resumo,
-        erro: saida.erro,
-        ...(saida.notaId ? { notaId: saida.notaId } : {}),
-      };
-      ferramentasUsadas.push(uso);
-      avisarPasso(opcoes.aoPasso, { ferramenta: uso, ids: saida.ids ?? [] });
-
-      partesDeResposta.push({
-        functionResponse: {
-          // O id só existe em algumas respostas; quando existe, tem que voltar.
-          ...(chamada.id ? { id: chamada.id } : {}),
-          name: chamada.name,
-          response: saida.resposta,
-        },
-      });
-    }
-
-    contents.push({ role: "user", parts: partesDeResposta });
+    return {
+      resposta: "Consultei as notas várias vezes seguidas e não cheguei a uma resposta final. Tente reformular a pergunta de forma mais específica.",
+      ferramentas: ferramentasUsadas,
+    };
+  } finally {
+    clearTimeout(temporizador);
+    opcoes.signal?.removeEventListener("abort", cancelar);
   }
-
-  return {
-    resposta:
-      "Consultei as notas várias vezes seguidas e não cheguei a uma resposta final. " +
-      "Tente reformular a pergunta de forma mais específica.",
-    ferramentas: ferramentasUsadas,
-  };
 }
