@@ -26,12 +26,15 @@ import { getConfigStorage } from "../supabase-storage";
  * `afterAll` usa `db.delete` direto nas tabelas envolvidas.
  *
  * Desvio do plano original: `user_id` tem foreign key de verdade para
- * `auth.users` (ver `db/schema/auth.ts`), então um UUID "qualquer fixo" para
- * o Usuário B violaria a constraint. Em vez disso, criamos um usuário efêmero
- * de verdade via Supabase Admin API (mesmo mecanismo usado para criar o
- * `USER_ID_PADRAO`, documentado em `.env`) e o removemos no `afterAll`.
+ * `auth.users` (ver `db/schema/auth.ts`), então um UUID "qualquer fixo"
+ * violaria a constraint. Em vez disso, criamos DOIS usuários efêmeros de
+ * verdade via Supabase Admin API e os removemos no `afterAll`.
  *
- * `getConfigStorage()`/`createClient(...)` e a validação de `USER_ID_PADRAO`
+ * NUNCA use o `USER_ID_PADRAO` aqui: o `afterAll` apaga tudo o que pertence
+ * aos usuários do teste, e usar o usuário real apagava as notas dele a cada
+ * `npm test` (aconteceu). O `afterAll` ainda ignora qualquer id igual ao dele.
+ *
+ * `getConfigStorage()`/`createClient(...)`
  * ficam dentro do `beforeAll`, não no corpo do `describe`: `describe.skipIf`
  * só pula a *execução* de `it`/hooks, mas o corpo do `describe` roda mesmo
  * assim durante a coleta de testes — se essas chamadas estivessem aqui fora,
@@ -50,26 +53,30 @@ describe.skipIf(!process.env.DATABASE_URL)("busca-textual (integração real)", 
   let notaB: Awaited<ReturnType<typeof criarNota>>;
   let entidadeB: Awaited<ReturnType<typeof criarEntidade>>;
 
-  beforeAll(async () => {
-    if (!process.env.USER_ID_PADRAO) {
-      throw new Error(
-        "USER_ID_PADRAO não está definida — necessária para este teste de integração (ver .env.example).",
-      );
-    }
-    USUARIO_A = process.env.USER_ID_PADRAO;
+  /** O usuário real do app. O `afterAll` apaga tudo o que pertence aos usuários do teste, então este nunca pode ser um deles. */
+  const usuarioReal = () => process.env.USER_ID_PADRAO?.trim().toLowerCase();
 
-    const { url, chaveServico } = getConfigStorage();
-    supabaseAdmin = createClient(url, chaveServico);
-
-    // Usuário B efêmero — só existe para o teste de isolamento, removido no afterAll.
+  async function criarUsuarioEfemero(rotulo: string): Promise<string> {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: `busca-textual-teste-${Date.now()}@teste.bimo.local`,
+      email: `busca-textual-teste-${rotulo}-${Date.now()}@teste.bimo.local`,
       email_confirm: true,
     });
     if (error || !data.user) {
       throw new Error(`Falha ao criar usuário de teste efêmero: ${error?.message}`);
     }
-    USUARIO_B = data.user.id;
+    if (data.user.id.toLowerCase() === usuarioReal()) {
+      throw new Error("O usuário efêmero não pode ser o USER_ID_PADRAO.");
+    }
+    return data.user.id;
+  }
+
+  beforeAll(async () => {
+    const { url, chaveServico } = getConfigStorage();
+    supabaseAdmin = createClient(url, chaveServico);
+
+    // Os DOIS usuários são efêmeros (removidos no afterAll). Este teste nunca toca no USER_ID_PADRAO.
+    USUARIO_A = await criarUsuarioEfemero("a");
+    USUARIO_B = await criarUsuarioEfemero("b");
 
     // Match no título (peso A) — deve ranquear acima do match só no corpo (peso C).
     notaComTituloA = await criarNota({
@@ -122,22 +129,27 @@ describe.skipIf(!process.env.DATABASE_URL)("busca-textual (integração real)", 
     // delete específico der erro, ainda queremos tentar limpar o resto —
     // deixar lixo pra trás é pior num projeto pessoal com um Supabase real
     // compartilhado do que logar um aviso e seguir.
+    // Só os usuários efêmeros deste teste, e nunca o usuário real: se por algum motivo um id
+    // coincidir com o USER_ID_PADRAO, ele é ignorado em vez de ter as notas apagadas.
+    const usuarios = [USUARIO_A, USUARIO_B].filter(
+      (id): id is string => Boolean(id) && id.toLowerCase() !== usuarioReal(),
+    );
     const passos: Array<[string, () => Promise<unknown>]> = [
-      ["notas do Usuário A", () => db.delete(notas).where(eq(notas.userId, USUARIO_A))],
-      ["notas do Usuário B", () => db.delete(notas).where(eq(notas.userId, USUARIO_B))],
-      ["entidades do Usuário A", () => db.delete(entidades).where(eq(entidades.userId, USUARIO_A))],
-      ["entidades do Usuário B", () => db.delete(entidades).where(eq(entidades.userId, USUARIO_B))],
+      ...usuarios.flatMap((id, i): Array<[string, () => Promise<unknown>]> => [
+        [`notas do usuário efêmero ${i + 1}`, () => db.delete(notas).where(eq(notas.userId, id))],
+        [`entidades do usuário efêmero ${i + 1}`, () => db.delete(entidades).where(eq(entidades.userId, id))],
+      ]),
       ...idsParaLimpar.map(
         (id): [string, () => Promise<unknown>] => [`nó ${id}`, () => db.delete(nos).where(eq(nos.id, id))],
       ),
-      ["usuário efêmero (Supabase Auth)", () => supabaseAdmin.auth.admin.deleteUser(USUARIO_B)],
+      ...usuarios.map((id, i): [string, () => Promise<unknown>] => [
+        `usuário efêmero ${i + 1} (Supabase Auth)`,
+        () => supabaseAdmin.auth.admin.deleteUser(id),
+      ]),
     ];
 
     for (const [descricao, passo] of passos) {
       try {
-        if ((descricao.includes("Usuário B") || descricao.includes("efêmero")) && !USUARIO_B) {
-          continue; // nunca chegou a ser criado — nada a limpar
-        }
         await passo();
       } catch (erro) {
         console.warn(`Falha ao limpar ${descricao} no afterAll:`, erro);

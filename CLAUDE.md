@@ -30,7 +30,10 @@ npm run gerar-segredo                  # prints a SEGREDO_SESSAO
   "aceita um hash gerado com os mesmos parâmetros do script" test catches drift. Change
   both together.
 - `banco.test.ts` and the other integration suites run against the real Supabase
-  database (they create and delete an ephemeral user); never point them at production.
+  database (they create and delete ephemeral users); never point them at production.
+- **Integration tests must never use `USER_ID_PADRAO`** (the real user): their `afterAll`
+  deletes everything owned by the test users, and a test that used it wiped the real notes
+  on every `npm test`. Create ephemeral users through the Admin API and delete only theirs.
 
 ## Environment
 
