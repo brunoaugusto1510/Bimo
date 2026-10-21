@@ -8,10 +8,13 @@
  * (classes `bimo-pensando*`) mora em globals.css e para sozinha com
  * `prefers-reduced-motion`.
  */
-export default function BimoPensando({ texto = "Pensando…" }: { texto?: string }) {
+export default function BimoPensando({ texto = "Pensando…", compacto = false }: { texto?: string; compacto?: boolean }) {
+  // Compacto: dentro da pílula de passo do chat, no azul da pílula.
+  const tamanhos = compacto ? "gap-2 text-meta text-destaque-texto" : "gap-2 text-controle text-texto";
   return (
-    <div role="status" className="inline-flex items-center gap-2 text-controle whitespace-nowrap text-texto">
-      <svg className="bimo-pensando h-6 w-16 shrink-0" viewBox="0 0 64 24" aria-hidden>
+    // Compacto, quem anuncia é a lista de passos em volta (aria-live): um `status` aqui repetiria o aviso.
+    <div role={compacto ? undefined : "status"} className={`inline-flex items-center whitespace-nowrap ${tamanhos}`}>
+      <svg className={`bimo-pensando shrink-0 ${compacto ? "h-3.5 w-9" : "h-6 w-16"}`} viewBox="0 0 64 24" aria-hidden>
         <line className="a1" x1="6" y1="14" x2="20" y2="6" />
         <line className="a2" x1="20" y1="6" x2="31" y2="16" />
         <line className="a3" x1="31" y1="16" x2="44" y2="8" />

@@ -140,6 +140,11 @@ export type SaidaFerramenta = {
   resumo: string;
   erro?: boolean;
   notaId?: IdDeNota;
+  /**
+   * Notas tocadas pela ferramenta, na ordem em que importam (busca: ranking).
+   * Só para a interface acender o grafo — NUNCA entra em `resposta`.
+   */
+  ids?: IdDeNota[];
 };
 
 type Args = Record<string, unknown>;
@@ -209,6 +214,7 @@ async function execBuscar(args: Args, repositorio: RepositorioDeNotas): Promise<
       resultados.length === 0
         ? `Buscou "${consulta}" — nenhuma nota encontrada`
         : `Buscou "${consulta}" — ${resultados.length} nota(s)`,
+    ids: resultados.map((r) => r.id),
   };
 }
 
@@ -257,6 +263,7 @@ async function execLer(args: Args, repositorio: RepositorioDeNotas, leituras?: L
       conteudo: resultado.conteudo,
     },
     resumo: `Leu "${caminhoDaNota(resultado)}"`,
+    ids: [resultado.id],
   };
 }
 
@@ -273,6 +280,7 @@ async function execCriar(args: Args, repositorio: RepositorioDeNotas): Promise<S
     },
     resumo: `Criou a nota "${resultado.caminho}"`,
     notaId: resultado.notaId,
+    ids: [resultado.notaId],
   };
 }
 
@@ -291,6 +299,7 @@ async function execEditar(args: Args, repositorio: RepositorioDeNotas, leituras?
     },
     resumo: `${modo === "substituir" ? "Reescreveu" : "Complementou"} a nota "${resultado.caminho}"`,
     notaId: resultado.notaId,
+    ids: [resultado.notaId],
   };
 }
 

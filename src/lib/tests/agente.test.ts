@@ -20,7 +20,7 @@ vi.mock("../ferramentas", () => ({
 }));
 
 import { executarFerramenta } from "../ferramentas";
-import { responder } from "../agente";
+import { responder, type PassoDoServidor } from "../agente";
 
 function turnoDeTexto(texto: string) {
   return {
@@ -157,4 +157,84 @@ it("compartilha leituras no laço e isola chamadas de responder", async () => {
   expect(chamadas[0][2]?.leituras).toBeInstanceOf(Map);
   expect(chamadas[0][2]?.leituras).toBe(chamadas[1][2]?.leituras);
   expect(chamadas[0][2]?.leituras).not.toBe(chamadas[2][2]?.leituras);
+});
+
+describe("responder com aoPasso", () => {
+  const pergunta = [{ papel: "usuario" as const, conteudo: "o que é TCP?" }];
+
+  it("emite cada passo logo após a ferramenta rodar, com os ids e o mesmo objeto de `ferramentas`", async () => {
+    generateContentMock
+      .mockResolvedValueOnce(turnoComChamada("buscar_notas", { consulta: "TCP" }))
+      .mockResolvedValueOnce(turnoComChamada("ler_nota", { caminho: "TCP" }, "call-2"))
+      .mockResolvedValueOnce(turnoDeTexto("Pronto."));
+    vi.mocked(executarFerramenta)
+      .mockResolvedValueOnce({ resposta: {}, resumo: "Buscou", ids: ["a", "b"] })
+      .mockResolvedValueOnce({ resposta: {}, resumo: "Leu", ids: ["a"] });
+
+    const passos: PassoDoServidor[] = [];
+    const resultado = await responder(pergunta, { aoPasso: (passo) => passos.push(passo) });
+
+    expect(passos.map((p) => p.ferramenta.nome)).toEqual(["buscar_notas", "ler_nota"]);
+    expect(passos.map((p) => p.ids)).toEqual([["a", "b"], ["a"]]);
+    expect(passos[0].ferramenta).toBe(resultado.ferramentas[0]);
+    expect(passos[1].ferramenta).toBe(resultado.ferramentas[1]);
+  });
+
+  it("emite o passo antes de executar a ferramenta seguinte", async () => {
+    generateContentMock
+      .mockResolvedValueOnce({
+        candidates: [{ content: { role: "model", parts: [] } }],
+        functionCalls: [
+          { name: "buscar_notas", args: { consulta: "a" } },
+          { name: "listar_notas", args: {} },
+        ],
+        text: undefined,
+      })
+      .mockResolvedValueOnce(turnoDeTexto("ok"));
+    const ordem: string[] = [];
+    vi.mocked(executarFerramenta).mockImplementation(async (nome) => {
+      ordem.push(`exec:${nome}`);
+      return { resposta: {}, resumo: nome };
+    });
+
+    await responder(pergunta, { aoPasso: (passo) => ordem.push(`passo:${passo.ferramenta.nome}`) });
+
+    expect(ordem).toEqual(["exec:buscar_notas", "passo:buscar_notas", "exec:listar_notas", "passo:listar_notas"]);
+  });
+
+  it("passo sem ids na saída da ferramenta leva lista vazia", async () => {
+    generateContentMock
+      .mockResolvedValueOnce(turnoComChamada("listar_notas", {}))
+      .mockResolvedValueOnce(turnoDeTexto("ok"));
+    vi.mocked(executarFerramenta).mockResolvedValue({ resposta: {}, resumo: "Listou" });
+    const aoPasso = vi.fn();
+
+    await responder(pergunta, { aoPasso });
+
+    expect(aoPasso).toHaveBeenCalledWith({ ferramenta: expect.objectContaining({ nome: "listar_notas" }), ids: [] });
+  });
+
+  it("o laço segue normalmente quando aoPasso lança", async () => {
+    generateContentMock
+      .mockResolvedValueOnce(turnoComChamada("buscar_notas", { consulta: "TCP" }))
+      .mockResolvedValueOnce(turnoDeTexto("Resposta final."));
+    vi.mocked(executarFerramenta).mockResolvedValue({ resposta: { ok: true }, resumo: "Buscou" });
+
+    const resultado = await responder(pergunta, { aoPasso: () => { throw new Error("cliente caiu"); } });
+
+    expect(resultado.resposta).toBe("Resposta final.");
+    expect(resultado.ferramentas).toHaveLength(1);
+  });
+
+  it("não manda os ids ao Gemini nem muda o retorno de ferramentas", async () => {
+    generateContentMock
+      .mockResolvedValueOnce(turnoComChamada("buscar_notas", { consulta: "TCP" }))
+      .mockResolvedValueOnce(turnoDeTexto("ok"));
+    vi.mocked(executarFerramenta).mockResolvedValue({ resposta: { encontradas: 1 }, resumo: "Buscou", ids: ["segredo-id"] });
+
+    const resultado = await responder(pergunta);
+
+    expect(JSON.stringify(generateContentMock.mock.calls[1][0].contents)).not.toContain("segredo-id");
+    expect(resultado.ferramentas[0]).not.toHaveProperty("ids");
+  });
 });

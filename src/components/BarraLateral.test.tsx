@@ -149,3 +149,27 @@ describe("BarraLateral", () => {
     });
   });
 });
+
+describe("BarraLateral — rastro do Bimo", () => {
+  it("diz quais notas o Bimo encontrou, usou ou criou, e destaca a que ele está lendo", () => {
+    renderizar({
+      marcas: new Map([
+        ["inbox", { tipo: "candidata", ativa: false }],
+        ["algebra", { tipo: "usada", ativa: true }],
+        ["tcp", { tipo: "nova", ativa: false }],
+      ]),
+    });
+
+    expect(screen.getByRole("button", { name: /^Inbox.*encontrada pelo Bimo$/ })).toBeInTheDocument();
+    const lendo = screen.getByRole("button", { name: /^Álgebra Linear.*usada pelo Bimo$/ });
+    expect(lendo).toHaveClass("bg-destaque-suave");
+    expect(screen.queryByRole("button", { name: /TCP/ })).toBeNull(); // Redes começa fechada
+  });
+
+  it("a nota criada leva a etiqueta nova", async () => {
+    const { usuario } = renderizar({ marcas: new Map([["tcp", { tipo: "nova", ativa: false }]]) });
+    await usuario.click(screen.getByRole("button", { name: /Redes/ }));
+
+    expect(screen.getByRole("button", { name: /^TCP.*criada pelo Bimo$/ })).toHaveTextContent("nova");
+  });
+});

@@ -5,8 +5,6 @@ import type { Simulation } from "d3-force";
 import {
   ZOOM_MAXIMO,
   arrastar,
-  calcularCaixa,
-  encontrarNoEm,
   enquadrar,
   interpolar,
   limitesDeZoom,
@@ -17,7 +15,23 @@ import {
   type Camera,
   type Ponto,
 } from "@/lib/camera-do-grafo";
+import { criarQuadroDoRastroMemoizado } from "@/lib/caminho-memoizado";
+import {
+  aplicarForma,
+  atualizarCerebro,
+  type EstadoDoCerebro,
+} from "@/lib/cerebro-do-layout";
 import { criarMapaDeCoresPorGrupo, NUMERO_DE_CORES_DE_GRUPO } from "@/lib/cores-grupo";
+import { idsCriadosNoRastro } from "@/lib/criacoes-do-rastro";
+import { caixaDosNos, encontrarNoDesenhadoEm } from "@/lib/geometria-dos-nos";
+import {
+  avancarProgresso,
+  fatorDeRaioNoCerebro,
+  fatorDeSuavizacao,
+  moverNoDesenhado,
+} from "@/lib/morfose-do-grafo";
+import type { Rastro } from "@/lib/rastro-do-agente";
+import { aplicarRealce, type RealceNoGrafo } from "@/lib/realce-no-grafo";
 import { ATRIBUTO_DO_TEMA } from "@/lib/tema";
 import {
   RAIO_MAXIMO_DO_NO,
@@ -32,7 +46,15 @@ import {
   type LinkSimulado,
   type NoSimulado,
 } from "@/lib/simulacao-do-grafo";
-import { desenharQuadro, lerCores, type Foco, type NoVisual } from "./desenhar-grafo";
+import {
+  desenharQuadro,
+  lerCores,
+  resolverArestas,
+  type ArestaResolvida,
+  type Foco,
+  type NoVisual,
+} from "./desenhar-grafo";
+import { indexarLigacoes } from "./desenhar-rastro";
 
 /** Comandos de câmera que a barra do grafo (fora deste componente) dispara. */
 export type ControleDoGrafo = {
@@ -53,6 +75,18 @@ type Props = {
   notaAberta: string | null;
   /** Incrementa a cada resposta do agente — dispara um pulso de movimento. */
   pulso: number;
+  /**
+   * O que o agente fez na conversa atual (timestamps de `performance.now()`, o mesmo relógio
+   * do `requestAnimationFrame`). O grafo mostra o caminho dele por cima das notas.
+   */
+  rastro?: Rastro | null;
+  /** Uma nota que o chat pediu para achar ("Fontes"): fica acesa no cérebro por um instante. */
+  realce?: RealceNoGrafo | null;
+  /**
+   * Fração da altura que o modo fundo deixa livre embaixo para a conversa: o cérebro é
+   * enquadrado no que sobra em cima. A aba Notas usa a área inteira.
+   */
+  reservaInferior?: number;
   /** Modo fundo: clicar numa nota a abre. */
   onAbrirNota: (caminho: string) => void;
   /**
@@ -107,6 +141,9 @@ const ENERGIA_DURANTE_O_ARRASTO = 0.3;
 const ZOOM_MAXIMO_AO_MOSTRAR_NOTA = 2;
 const OCUPACAO_AO_MOSTRAR_NOTA = 0.7;
 
+/** Limite do intervalo entre quadros que alimenta a passagem globo ↔ cérebro. */
+const DT_MAXIMO_DO_QUADRO_MS = 100;
+
 const SEM_VIZINHOS: ReadonlySet<string> = new Set();
 
 type Acoes = ControleDoGrafo & { mostrarNota: (id: string) => void };
@@ -127,6 +164,25 @@ type Gesto =
   | { tipo: "pinca"; distanciaInicial: number; centroInicial: Ponto; cameraInicial: Camera };
 
 const SEM_GESTO: Gesto = { tipo: "nenhum" };
+
+/**
+ * Grava no layout atual o cérebro dele. Com `recalcular`, refaz a forma se os nós ou as
+ * posições mudaram (é cara); sem, só reaproveita a que já existe — na aba Notas o cérebro
+ * não aparece, então o cálculo espera a volta para a aba Bimo.
+ */
+function sincronizarCerebro(
+  nos: NoVisual[],
+  atual: EstadoDoCerebro | null,
+  nosPorId: ReadonlyMap<string, NoVisual>,
+  recalcular: boolean,
+): { estado: EstadoDoCerebro | null; arestas: ArestaResolvida[] } {
+  if (recalcular) {
+    const estado = atualizarCerebro(nos, atual);
+    return { estado, arestas: estado ? resolverArestas(estado.forma.arestas, nosPorId) : [] };
+  }
+  aplicarForma(nos, atual?.forma ?? null);
+  return { estado: atual, arestas: atual ? resolverArestas(atual.forma.arestas, nosPorId) : [] };
+}
 
 function distanciaEntre(a: Ponto, b: Ponto): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -149,6 +205,9 @@ export default function GrafoDeFundo({
   configuracao,
   notaAberta,
   pulso,
+  rastro = null,
+  realce = null,
+  reservaInferior = 0,
   onAbrirNota,
   interativo = false,
   pausado = false,
@@ -163,6 +222,24 @@ export default function GrafoDeFundo({
   const linksRef = useRef<LinkSimulado[]>([]);
   const simulacaoRef = useRef<Simulation<NoSimulado, undefined> | null>(null);
   const intensidadeRef = useRef(1);
+
+  // Globo ↔ cérebro: 0 = globo (aba Notas), 1 = cérebro (aba Bimo). Nasce já no valor certo,
+  // para a página não abrir com o grafo se transformando.
+  const progressoRef = useRef(interativo ? 0 : 1);
+  const cerebroRef = useRef<EstadoDoCerebro | null>(null);
+  const arestasDoCerebroRef = useRef<ArestaResolvida[]>([]);
+  // Montados uma vez por layout, para o quadro não indexar nada.
+  const nosPorIdRef = useRef<ReadonlyMap<string, NoVisual>>(new Map());
+  const ligacoesPorNoRef = useRef<ReturnType<typeof indexarLigacoes>>(new Map());
+  // Verdadeiro quando globo ↔ cérebro parou: nada se mexe, então o quadro não refaz a conta.
+  const morfoseAssentadaRef = useRef(false);
+  // Quando cada nó entrou no layout: o nascimento de uma nota nova toca nesse instante.
+  const nascimentosRef = useRef<ReadonlyMap<string, number>>(new Map());
+  const rastroRef = useRef(rastro);
+  const realceRef = useRef(realce);
+  const reservaInferiorRef = useRef(reservaInferior);
+  const criadasRef = useRef<ReadonlySet<string>>(new Set());
+  const quadroDoRastroRef = useRef(criarQuadroDoRastroMemoizado());
 
   // Câmera atual e para onde ela está indo. `zoomIniciado` falso = primeiro
   // quadro de um layout novo, que assume o enquadramento sem animar.
@@ -188,6 +265,7 @@ export default function GrafoDeFundo({
   const grauPorId = useMemo(() => calcularGraus(arestas), [arestas]);
   const vizinhosPorId = useMemo(() => montarVizinhos(arestas), [arestas]);
   const multiplicadorDeTamanho = configuracao.nodeSizeMultiplier;
+  const criadas = useMemo(() => idsCriadosNoRastro(rastro), [rastro]);
 
   useEffect(() => {
     onAbrirNotaRef.current = onAbrirNota;
@@ -196,6 +274,10 @@ export default function GrafoDeFundo({
     pausadoRef.current = pausado;
     selecionadoRef.current = selecionado;
     notaAbertaRef.current = notaAberta;
+    rastroRef.current = rastro;
+    realceRef.current = realce;
+    reservaInferiorRef.current = reservaInferior;
+    criadasRef.current = criadas;
   });
 
   useImperativeHandle(
@@ -214,6 +296,11 @@ export default function GrafoDeFundo({
       nosRef.current = [];
       linksRef.current = [];
       simulacaoRef.current = null;
+      cerebroRef.current = null;
+      arestasDoCerebroRef.current = [];
+      nosPorIdRef.current = new Map();
+      ligacoesPorNoRef.current = new Map();
+      nascimentosRef.current = new Map();
       return;
     }
 
@@ -227,10 +314,62 @@ export default function GrafoDeFundo({
       passos: anteriores.size ? (nos.some((no) => !anteriores.has(no.id)) ? 30 : 0) : undefined,
     });
 
-    // A simulação mexe nestes mesmos objetos; a fase da "respiração" só entra por cima.
-    nosRef.current = nosSimulados.map((no) =>
-      Object.assign(no, { fase: anteriores.get(no.id)?.fase ?? Math.random() * Math.PI * 2, frequencia: anteriores.get(no.id)?.frequencia ?? 0.4 + Math.random() * 0.5 }),
+    const agora = performance.now();
+    const nascimentosAnteriores = nascimentosRef.current;
+    nascimentosRef.current = new Map(
+      nosSimulados.flatMap((no): Array<[string, number]> => {
+        const antes = nascimentosAnteriores.get(no.id);
+        if (antes !== undefined) return [[no.id, antes]];
+        // Quem aparece depois do primeiro layout nasce agora. No primeiro, todos "já estavam lá" —
+        // menos a nota que o agente acabou de criar (o primeiro nó de um grafo vazio, por exemplo).
+        const apareceu = anteriores.size > 0 ? !anteriores.has(no.id) : criadasRef.current.has(no.id);
+        return apareceu ? [[no.id, agora]] : [];
+      }),
     );
+
+    // A simulação mexe nestes mesmos objetos; a fase da "respiração" e a posição desenhada só entram por cima.
+    const nosVisuais: NoVisual[] = nosSimulados.map((no) => {
+      const anterior = anteriores.get(no.id);
+      return Object.assign(no, {
+        fase: anterior?.fase ?? Math.random() * Math.PI * 2,
+        frequencia: anterior?.frequencia ?? 0.4 + Math.random() * 0.5,
+        dx: anterior?.dx ?? no.x,
+        dy: anterior?.dy ?? no.y,
+        progresso: anterior?.progresso ?? 0,
+        px: anterior?.px ?? no.x,
+        py: anterior?.py ?? no.y,
+        tx: 0,
+        ty: 0,
+      });
+    });
+    nosRef.current = nosVisuais;
+    nosPorIdRef.current = new Map(nosVisuais.map((no) => [no.id, no]));
+    ligacoesPorNoRef.current = indexarLigacoes(links);
+
+    // O cérebro é calculado a partir das posições do globo — só quando elas mudaram, e só na
+    // aba Bimo (na aba Notas ele não aparece; a volta para a Bimo recalcula).
+    const cerebro = sincronizarCerebro(
+      nosVisuais,
+      cerebroRef.current,
+      nosPorIdRef.current,
+      !interativoRef.current,
+    );
+    cerebroRef.current = cerebro.estado;
+    arestasDoCerebroRef.current = cerebro.arestas;
+
+    // Quem já estava na tela desliza até a vaga nova; quem chega aparece no lugar certo.
+    for (const no of nosVisuais) {
+      if (anteriores.has(no.id)) continue;
+      moverNoDesenhado(no, {
+        progressoGeral: progressoRef.current,
+        interativo: interativoRef.current,
+        fator: 1,
+        reduzido: true,
+      });
+      no.px = no.dx;
+      no.py = no.dy;
+    }
+    morfoseAssentadaRef.current = false;
     linksRef.current = links;
     simulacaoRef.current = simulacao;
     if (!anteriores.size) {
@@ -271,8 +410,21 @@ export default function GrafoDeFundo({
       if (no.tipo === "nota") return cores.paleta[mapaDeCores.get(no.grupo) ?? 0];
       return no.tipo === "tag" ? cores.tag : cores.naoResolvida;
     };
-    const raioDe = (no: NoVisual): number =>
-      raioNaTela(raioDoNo(grauPorId.get(no.id) ?? 0, multiplicadorDeTamanho), cameraRef.current.k);
+    const raioDe = (no: NoVisual): number => {
+      const grau = grauPorId.get(no.id) ?? 0;
+      return raioNaTela(
+        raioDoNo(grau, multiplicadorDeTamanho) * fatorDeRaioNoCerebro(grau, no.progresso),
+        cameraRef.current.k,
+      );
+    };
+
+    // `prefers-reduced-motion`: a forma muda de uma vez, sem deslizar, respirar, pulsar nem faísca.
+    const consultaDeMovimento = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    let movimentoReduzido = consultaDeMovimento?.matches ?? false;
+    const aoMudarMovimento = (evento: MediaQueryListEvent) => {
+      movimentoReduzido = evento.matches;
+    };
+    consultaDeMovimento?.addEventListener?.("change", aoMudarMovimento);
 
     const tamanho = () => ({ largura: container.clientWidth, altura: container.clientHeight });
 
@@ -297,10 +449,12 @@ export default function GrafoDeFundo({
      * ajusta. O teto em 1 faz o zoom só afastar, nunca ampliar um grafo pequeno.
      */
     const enquadramentoDoGrafo = (): Camera | null => {
-      const caixa = calcularCaixa(nosRef.current);
+      const caixa = caixaDosNos(nosRef.current, "desenhada");
       if (!caixa) return null;
       const { largura, altura } = tamanho();
-      return enquadrar(caixa, largura, altura, {
+      // No modo fundo o cérebro fica em cima e a conversa embaixo: só a parte de cima enquadra.
+      const reserva = interativoRef.current ? 0 : Math.min(Math.max(reservaInferiorRef.current, 0), 0.9);
+      return enquadrar(caixa, largura, altura * (1 - reserva), {
         margem: RAIO_MAXIMO_DO_NO * multiplicadorDeTamanho * 2,
         ocupacao: MARGEM_DE_ZOOM,
         zoomMaximo: 1,
@@ -309,27 +463,42 @@ export default function GrafoDeFundo({
 
     const limitesAtuais = () => limitesDeZoom(enquadramentoDoGrafo()?.k ?? 1);
 
-    const atualizarCamera = () => {
-      const enquadramento = enquadramentoDoGrafo();
-      if (!enquadramento) return;
+    // Segue o enquadramento do grafo (como no modo fundo) até a câmera passar a ser do usuário:
+    // inclui a volta ao globo na aba Notas, em que o grafo ainda está se transformando.
+    let seguindoEnquadramento = !interativoRef.current || progressoRef.current > 0;
 
+    const atualizarCamera = () => {
       if (!zoomIniciadoRef.current) {
-        cameraRef.current = enquadramento;
+        const primeiro = enquadramentoDoGrafo();
+        if (!primeiro) return;
+        cameraRef.current = primeiro;
         zoomIniciadoRef.current = true;
         return;
       }
 
-      // Modo fundo: a câmera acompanha o enquadramento — se o painel muda de tamanho, ela desliza.
-      if (!interativoRef.current) {
+      const interativoAgora = interativoRef.current;
+      if (!interativoAgora) seguindoEnquadramento = true;
+
+      if (seguindoEnquadramento) {
+        const enquadramento = enquadramentoDoGrafo();
+        if (!enquadramento) return;
         alvoDaCameraRef.current = null;
-        cameraRef.current = interpolar(cameraRef.current, enquadramento, SUAVIZACAO_DO_ZOOM);
+        cameraRef.current = movimentoReduzido
+          ? enquadramento
+          : interpolar(cameraRef.current, enquadramento, SUAVIZACAO_DO_ZOOM);
+        // Já é globo e a câmera chegou: daqui em diante ela é do usuário.
+        if (interativoAgora && progressoRef.current === 0 && quaseIgual(cameraRef.current, enquadramento)) {
+          seguindoEnquadramento = false;
+        }
         return;
       }
 
       // Modo interativo: a câmera é do usuário; só anima rumo a um destino que um botão ou uma seleção pediu.
       const alvo = alvoDaCameraRef.current;
       if (!alvo) return;
-      cameraRef.current = interpolar(cameraRef.current, alvo, SUAVIZACAO_DA_CAMERA);
+      cameraRef.current = movimentoReduzido
+        ? alvo
+        : interpolar(cameraRef.current, alvo, SUAVIZACAO_DA_CAMERA);
       if (quaseIgual(cameraRef.current, alvo)) {
         cameraRef.current = alvo;
         alvoDaCameraRef.current = null;
@@ -337,6 +506,7 @@ export default function GrafoDeFundo({
     };
 
     const zoomDosBotoes = (fator: number) => {
+      seguindoEnquadramento = false;
       const { largura, altura } = tamanho();
       alvoDaCameraRef.current = zoomEmTorno(
         cameraRef.current,
@@ -353,8 +523,10 @@ export default function GrafoDeFundo({
      */
     const mostrarNota = (id: string) => {
       const grupo = new Set([id, ...(vizinhosPorId.get(id) ?? SEM_VIZINHOS)]);
-      const caixa = calcularCaixa(nosRef.current.filter((no) => grupo.has(no.id)));
+      // O destino é o globo (a aba Notas), mesmo que o grafo ainda esteja virando globo.
+      const caixa = caixaDosNos(nosRef.current, "simulacao", (no) => grupo.has(no.id));
       if (!caixa) return;
+      seguindoEnquadramento = false;
       const { largura, altura } = tamanho();
       alvoDaCameraRef.current = enquadrar(caixa, largura, altura, {
         margem: RAIO_MAXIMO_DO_NO * multiplicadorDeTamanho * 4,
@@ -368,7 +540,9 @@ export default function GrafoDeFundo({
       afastar: () => zoomDosBotoes(1 / FATOR_DOS_BOTOES),
       enquadrar: () => {
         const enquadramento = enquadramentoDoGrafo();
-        if (enquadramento) alvoDaCameraRef.current = enquadramento;
+        if (!enquadramento) return;
+        seguindoEnquadramento = false;
+        alvoDaCameraRef.current = enquadramento;
       },
       enquadrarVizinhos: () => {
         const id = selecionadoRef.current;
@@ -384,6 +558,39 @@ export default function GrafoDeFundo({
       const simulacao = simulacaoRef.current;
       if (!interativoRef.current || !simulacao) return;
       if (simulacao.alpha() >= simulacao.alphaMin() || simulacao.alphaTarget() > 0) simulacao.tick();
+    };
+
+    let interativoNoQuadroAnterior = interativoRef.current;
+
+    /** Anda o progresso globo ↔ cérebro e leva a posição desenhada de cada nó até o alvo. */
+    const atualizarMorfose = (dtMs: number) => {
+      const interativoAgora = interativoRef.current;
+      // Voltou para a aba Bimo: o cérebro é refeito se o globo mudou enquanto o usuário mexia nele.
+      if (interativoNoQuadroAnterior && !interativoAgora) {
+        const cerebro = sincronizarCerebro(nosRef.current, cerebroRef.current, nosPorIdRef.current, true);
+        cerebroRef.current = cerebro.estado;
+        arestasDoCerebroRef.current = cerebro.arestas;
+        morfoseAssentadaRef.current = false;
+      }
+      interativoNoQuadroAnterior = interativoAgora;
+      if (morfoseAssentadaRef.current && !interativoAgora) return;
+
+      const alvoGeral = interativoAgora ? 0 : 1;
+      const progresso = avancarProgresso(progressoRef.current, alvoGeral, dtMs, movimentoReduzido);
+      progressoRef.current = progresso;
+
+      const movimento = {
+        progressoGeral: progresso,
+        interativo: interativoAgora,
+        fator: fatorDeSuavizacao(dtMs),
+        reduzido: movimentoReduzido,
+      };
+      let algumMoveu = false;
+      for (const no of nosRef.current) {
+        if (moverNoDesenhado(no, movimento)) algumMoveu = true;
+      }
+      morfoseAssentadaRef.current =
+        !interativoAgora && progresso === alvoGeral && movimento.fator > 0 && !algumMoveu;
     };
 
     let focoEmCache: { id: string | null; foco: Foco | null } = { id: null, foco: null };
@@ -403,9 +610,16 @@ export default function GrafoDeFundo({
 
     let animando = true;
     let idDoQuadro = 0;
+    let tempoDoQuadroAnterior: number | null = null;
 
     const quadro = (tempoMs: number) => {
       if (!animando) return;
+      // Um quadro muito longo (aba em segundo plano) não pode pular a transição inteira.
+      const dtMs =
+        tempoDoQuadroAnterior === null
+          ? 0
+          : Math.min(tempoMs - tempoDoQuadroAnterior, DT_MAXIMO_DO_QUADRO_MS);
+      tempoDoQuadroAnterior = tempoMs;
 
       // Coberto por uma nota aberta: não há o que simular nem desenhar, só esperar.
       if (pausadoRef.current) {
@@ -416,8 +630,9 @@ export default function GrafoDeFundo({
 
       // Painel escondido (aba trocada, menu aberto no celular) tem tamanho 0: não há o que desenhar.
       if (largura > 0 && altura > 0) {
-        atualizarCamera();
         avancarFisica();
+        atualizarMorfose(dtMs);
+        atualizarCamera();
         desenharQuadro(contexto, {
           largura,
           altura,
@@ -430,6 +645,17 @@ export default function GrafoDeFundo({
           hover: hoverRef.current,
           nos: nosRef.current,
           links: linksRef.current,
+          arestasDoCerebro: arestasDoCerebroRef.current,
+          nosPorId: nosPorIdRef.current,
+          ligacoesPorNo: ligacoesPorNoRef.current,
+          criadas: criadasRef.current,
+          rastro: aplicarRealce(
+            quadroDoRastroRef.current(rastroRef.current, tempoMs, vizinhosPorId),
+            realceRef.current,
+            tempoMs,
+          ),
+          nascimentos: nascimentosRef.current,
+          movimentoReduzido,
           cores,
           corDoNo,
           raioNaTela: raioDe,
@@ -451,13 +677,17 @@ export default function GrafoDeFundo({
       return { x: evento.clientX - retangulo.left, y: evento.clientY - retangulo.top };
     };
 
+    const SO_NOTAS = (no: NoVisual) => no.tipo === "nota";
+
+    // Acerta onde o nó foi desenhado no último quadro (a vaga no cérebro, a respiração), não onde a simulação o deixou.
     const noEm = (ponto: Ponto, margem: number, apenasNotas = false): NoVisual | null =>
-      encontrarNoEm(
-        apenasNotas ? nosRef.current.filter((no) => no.tipo === "nota") : nosRef.current,
+      encontrarNoDesenhadoEm(
+        nosRef.current,
         cameraRef.current,
         ponto,
         raioDe,
         margem,
+        apenasNotas ? SO_NOTAS : undefined,
       );
 
     const selecionar = (id: string | null) => onSelecionarRef.current?.(id);
@@ -498,6 +728,7 @@ export default function GrafoDeFundo({
       }
       const ponto = pontoDoEvento(evento);
       ponteiros.set(evento.pointerId, ponto);
+      seguindoEnquadramento = false;
       alvoDaCameraRef.current = null;
 
       if (ponteiros.size >= 2) {
@@ -513,7 +744,7 @@ export default function GrafoDeFundo({
           tipo: "no",
           no,
           inicio: ponto,
-          deslocamento: { x: no.x - mundo.x, y: no.y - mundo.y },
+          deslocamento: { x: no.px - mundo.x, y: no.py - mundo.y },
           moveu: false,
         };
       } else {
@@ -606,6 +837,7 @@ export default function GrafoDeFundo({
       if (!interativoRef.current) return;
       // Sem isto a página inteira rolaria junto com o zoom.
       evento.preventDefault();
+      seguindoEnquadramento = false;
       // deltaMode 1 = linhas, 2 = páginas (Firefox, algumas rodas): converte para pixels.
       const unidade = evento.deltaMode === 1 ? 16 : evento.deltaMode === 2 ? 400 : 1;
       const fator = Math.exp(-evento.deltaY * unidade * SENSIBILIDADE_DA_RODA);
@@ -634,6 +866,7 @@ export default function GrafoDeFundo({
       cancelAnimationFrame(idDoQuadro);
       observador.disconnect();
       observadorDoTema.disconnect();
+      consultaDeMovimento?.removeEventListener?.("change", aoMudarMovimento);
       canvas.removeEventListener("pointerdown", aoPressionar);
       canvas.removeEventListener("pointermove", aoMover);
       canvas.removeEventListener("pointerup", aoSoltar);

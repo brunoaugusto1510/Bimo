@@ -45,7 +45,7 @@ describe("Chat", () => {
 
     render(<ChatControlado />);
 
-    await usuario.type(screen.getByPlaceholderText("Digite sua mensagem..."), "O que é TCP?");
+    await usuario.type(screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…"), "O que é TCP?");
     await usuario.click(screen.getByRole("button", { name: "Enviar" }));
 
     expect(screen.getByText("O que é TCP?")).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe("Chat", () => {
 
     render(<ChatControlado />);
 
-    await usuario.type(screen.getByPlaceholderText("Digite sua mensagem..."), "oi");
+    await usuario.type(screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…"), "oi");
     await usuario.click(screen.getByRole("button", { name: "Enviar" }));
 
     await waitFor(() => {
@@ -77,7 +77,7 @@ describe("Chat", () => {
     // Não fica travado "pensando" para sempre: o campo (que a própria `enviar`
     // já limpou) aceita texto de novo e o botão reabilita — se `pensando`
     // tivesse ficado `true` por um `finally` que não rodou, isto travaria.
-    await usuario.type(screen.getByPlaceholderText("Digite sua mensagem..."), "de novo");
+    await usuario.type(screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…"), "de novo");
     expect(screen.getByRole("button", { name: "Enviar" })).not.toBeDisabled();
   });
 
@@ -88,11 +88,11 @@ describe("Chat", () => {
     render(<ChatControlado />);
 
     await usuario.click(
-      screen.getByRole("button", { name: "Resuma minhas anotações de redes" }),
+      screen.getByRole("button", { name: "Cria uma nota resumindo minhas anotações de redes" }),
     );
 
-    expect(screen.getByPlaceholderText("Digite sua mensagem...")).toHaveValue(
-      "Resuma minhas anotações de redes",
+    expect(screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…")).toHaveValue(
+      "Cria uma nota resumindo minhas anotações de redes",
     );
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -104,7 +104,7 @@ describe("Chat", () => {
       vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(conteudo + borda);
       vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(conteudo);
     }
-    const campo = () => screen.getByPlaceholderText("Digite sua mensagem...");
+    const campo = () => screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…");
 
     it("soma a borda ao conteúdo, para o campo não nascer menor que o texto (e com barra de rolagem)", () => {
       medidas({ conteudo: 40, borda: 2 });
@@ -149,7 +149,7 @@ describe("Chat", () => {
     it("não mede o campo enquanto está escondido: o scrollHeight de um elemento sem layout é 0", () => {
       const props = { onRascunhoChange: () => {} };
       const { rerender } = render(<Chat {...props} rascunho="" ativo={false} />);
-      const campo = screen.getByPlaceholderText("Digite sua mensagem...");
+      const campo = screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…");
 
       rerender(<Chat {...props} rascunho="texto escrito com o chat escondido" ativo={false} />);
 

@@ -24,6 +24,9 @@ import { ABA_DO_GRAFICO, abaAtiva, idAtual } from "@/lib/espaco-de-trabalho/esta
 import { useEspacoDeTrabalho } from "@/lib/espaco-de-trabalho/usar-espaco-de-trabalho";
 import { calcularGraus } from "@/lib/fisica-do-grafo";
 import type { Grafo } from "@/lib/grafo-de-notas";
+import { encerrarRastro, iniciarRastro, registrarPasso, type PassoDoAgente, type Rastro } from "@/lib/rastro-do-agente";
+import { marcasDoRastro, resumoDoRastro } from "@/lib/rastro-na-interface";
+import type { RealceNoGrafo } from "@/lib/realce-no-grafo";
 import type { IdDeNota, ItemDeNotas } from "@/lib/types";
 
 type Props = {
@@ -48,6 +51,9 @@ const OPCOES_DE_MODO = [
 
 const SOMENTE_LEITURA = { escrita: false, datas: false };
 
+/** Na aba Bimo a conversa fica embaixo: o cérebro é enquadrado no resto da altura, em cima. */
+const RESERVA_DA_CONVERSA = 0.45;
+
 export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais = SOMENTE_LEITURA }: Props) {
   const [atualizacao, definirAtualizacao] = useState<{ origem: Props["itens"]; dados: import("@/lib/servico-de-notas").DadosDaPagina } | null>(null);
   const { itens, grafo, aviso, capacidades } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais };
@@ -67,6 +73,25 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   // Incrementar isto é o sinal para o grafo dar um pulso de movimento — acontece a cada
   // resposta do agente.
   const [pulsoDoGrafo, setPulsoDoGrafo] = useState(0);
+  // Por onde o agente passou na pergunta atual — o grafo acende essas notas. Uma pergunta
+  // nova começa um rastro novo; o anterior fica marcado até lá. O relógio é o do
+  // `requestAnimationFrame` (`performance.now`), o mesmo que o grafo usa para desenhar.
+  const [rastro, definirRastro] = useState<Rastro | null>(null);
+  const iniciarRastroDoAgente = useCallback(() => definirRastro(iniciarRastro(performance.now())), []);
+  // A hora é lida no evento, fora do updater: o React pode rodar o updater mais tarde (ou duas
+  // vezes no StrictMode), e o rastro tem que guardar quando o passo chegou, não quando renderizou.
+  const registrarPassoDoAgente = useCallback((passo: PassoDoAgente) => {
+    const agora = performance.now();
+    definirRastro((atual) => (atual ? registrarPasso(atual, passo, agora) : atual));
+  }, []);
+  const encerrarRastroDoAgente = useCallback(() => {
+    const agora = performance.now();
+    definirRastro((atual) => (atual ? encerrarRastro(atual, agora) : atual));
+  }, []);
+  // Uma fonte clicada no chat: a nota acende no cérebro por um instante (mesmo relógio do rastro).
+  const [realce, definirRealce] = useState<RealceNoGrafo | null>(null);
+  const mostrarNoCerebro = useCallback((id: IdDeNota) => definirRealce({ id, em: performance.now() }), []);
+  const marcasNaLista = useMemo(() => marcasDoRastro(rastro), [rastro]);
 
   const controleDoGrafo = useRef<ControleDoGrafo>(null);
 
@@ -85,6 +110,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const noGrafico = estado.ativa === ABA_DO_GRAFICO;
   const idDaNotaAberta = aba?.tipo === "nota" ? idAtual(aba) : null;
   const dadosDaNotaFocada = notaFocada ? notasPorId.get(notaFocada) : undefined;
+  const tituloDaNota = useCallback((id: IdDeNota) => notasPorId.get(id)?.titulo, [notasPorId]);
+  const resumoDoUltimoRastro = useMemo(() => resumoDoRastro(rastro, tituloDaNota), [rastro, tituloDaNota]);
 
   function mudarModo(novo: Modo) {
     setModo(novo);
@@ -216,9 +243,12 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             type="button"
             onClick={() => setMenuAberto((estava) => !estava)}
             aria-label="Mostrar ou esconder as notas"
+            aria-expanded={menuAberto}
             className="flex h-10 w-10 items-center justify-center rounded-full text-suave transition-[color,background-color,transform] hover:bg-painel-alt hover:text-texto motion-safe:active:scale-[0.96] md:hidden"
           >
-            ☰
+            <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-4.5">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
           </button>
 
           {/* A marca, não o título da página: o `h1` é o da nota aberta (ou o da tela inicial). */}
@@ -243,9 +273,11 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             aria-label="Sair"
             className="flex h-10 min-w-10 items-center justify-center rounded-full border border-borda bg-painel px-2.5 text-sm font-semibold transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96] md:px-4"
           >
-            <span aria-hidden className="md:hidden">
-              ⏻
-            </span>
+            <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 md:hidden">
+              <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+              <path d="M10 16l-4-4 4-4" />
+              <path d="M6 12h10" />
+            </svg>
             <span className="hidden md:inline">Sair</span>
           </button>
         </div>
@@ -271,6 +303,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             itens={arvore}
             notaSelecionada={emNotas && noGrafico ? notaFocada : idDaNotaAberta}
             onSelecionarNota={(nota) => escolherNoMenu(nota.id)}
+            marcas={marcasNaLista}
           />
         </div>
 
@@ -304,6 +337,9 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
               configuracao={grafo.configuracao}
               notaAberta={idDaNotaAberta}
               pulso={pulsoDoGrafo}
+              rastro={rastro}
+              realce={realce}
+              reservaInferior={RESERVA_DA_CONVERSA}
               onAbrirNota={abrirNota}
               interativo={emNotas}
               pausado={emNotas && !noGrafico}
@@ -322,6 +358,11 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                 rascunho={rascunho}
                 onRascunhoChange={setRascunho}
                 onRespostaAgente={() => setPulsoDoGrafo((n) => n + 1)}
+                aoIniciarResposta={iniciarRastroDoAgente}
+                aoPassoDoAgente={registrarPassoDoAgente}
+                aoEncerrarResposta={encerrarRastroDoAgente}
+                aoMostrarNoCerebro={mostrarNoCerebro}
+                tituloDaNota={tituloDaNota}
               />
             </div>
 
@@ -348,6 +389,16 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                       onPerguntar={() => perguntarAoBimo(notaFocada)}
                       onFechar={() => setNotaFocada(null)}
                     />
+                  </div>
+                )}
+
+                {/* O que o Bimo fez na última pergunta, para achar no globo. Cede o lugar ao cartão de foco. */}
+                {!(notaFocada && dadosDaNotaFocada) && resumoDoUltimoRastro && (
+                  <div className="flex p-3 md:p-4">
+                    <p className="flex min-h-9 max-w-full items-center gap-2 rounded-full border border-destaque-suave-borda bg-destaque-suave px-3.5 text-meta text-texto motion-safe:animate-entrada">
+                      <MarcaBimo tamanho={16} />
+                      <span className="truncate">{resumoDoUltimoRastro}</span>
+                    </p>
                   </div>
                 )}
               </div>

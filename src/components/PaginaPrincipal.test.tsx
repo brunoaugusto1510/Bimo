@@ -100,7 +100,7 @@ it("falha na atualização por API conserva conversa e grafo montados", async ()
 
 const abaNotas = () => screen.getByRole("button", { name: "Notas" });
 const abaBimo = () => screen.getByRole("button", { name: "Bimo" });
-const campoDoChat = () => screen.getByPlaceholderText("Digite sua mensagem...");
+const campoDoChat = () => screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…");
 const menuDeNotas = () => screen.getByRole("navigation", { name: "Pastas e notas" });
 
 beforeEach(() => {

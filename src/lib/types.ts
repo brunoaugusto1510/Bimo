@@ -14,7 +14,11 @@ export type Mensagem = {
   conteudo: string;
   /** Só existe em mensagens do agente que usaram alguma ferramenta. */
   ferramentas?: UsoDeFerramenta[];
+  /** Notas que o agente leu para responder — as "Fontes" que o chat acende no cérebro. */
+  fontes?: FonteDaResposta[];
 };
+
+export type FonteDaResposta = { id: IdDeNota; titulo: string };
 
 /**
  * Identidade de uma nota para a interface, as rotas e o grafo. É opaca: quem

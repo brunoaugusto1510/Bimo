@@ -27,7 +27,7 @@ it("Alt+N abre em edição e seleciona título; resposta antiga não fecha; chat
  expect(titulo).toHaveFocus(); expect([titulo.selectionStart, titulo.selectionEnd]).toEqual([0, 10]);
  await act(async () => listaAntiga(Response.json({ itens, grafo, capacidades })));
  expect(screen.getByRole("tab", { name: "Sem título" })).toBeInTheDocument();
- expect(screen.getByPlaceholderText("Digite sua mensagem...")).toBe(chat); expect(contagem.montagens).toBe(montagens);
+ expect(screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…")).toBe(chat); expect(contagem.montagens).toBe(montagens);
  expect(screen.getByText("Nota «Sem título» criada. Edite o título.")).toBeInTheDocument();
  fireEvent.keyDown(titulo, { key: "Enter" }); await waitFor(() => expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toHaveFocus());
 });
@@ -63,7 +63,7 @@ it("renomear atualiza aba e árvore; bloqueia texto durante o POST e encadeia re
   return Response.json({ ligacoes: { entrada: [], saida: [] }, mencoesSemLigacao: [] });
  }); vi.stubGlobal("fetch", fetch);
  render(<PaginaPrincipal itens={itens} grafo={grafo} capacidades={capacidades} />);
- const chat = screen.getByPlaceholderText("Digite sua mensagem..."), montagens = contagem.montagens;
+ const chat = screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…"), montagens = contagem.montagens;
  fireEvent.keyDown(window, { key: "n", altKey: true });
  const titulo = await screen.findByRole("textbox", { name: "Título da nota" });
  const editor = screen.getByRole("textbox", { name: /Texto da nota/ });
@@ -80,7 +80,7 @@ it("renomear atualiza aba e árvore; bloqueia texto durante o POST e encadeia re
  fireEvent.change(editor, { target: { value: "depois" } });
  expect(screen.getByRole("tab", { name: /Meu título/ })).toBeInTheDocument();
  expect(screen.getByRole("navigation", { name: "Pastas e notas" })).toHaveTextContent("Meu título");
- expect(screen.getByPlaceholderText("Digite sua mensagem...")).toBe(chat); expect(contagem.montagens).toBe(montagens);
+ expect(screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…")).toBe(chat); expect(contagem.montagens).toBe(montagens);
  fireEvent.keyDown(editor, { key: "s", ctrlKey: true });
  await waitFor(() => expect(fetch.mock.calls.filter(([, op]) => op?.method === "PATCH")).toHaveLength(2));
  const ultimo = fetch.mock.calls.filter(([, op]) => op?.method === "PATCH")[1];

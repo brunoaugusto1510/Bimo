@@ -149,3 +149,48 @@ describe("ferramentas com repositório de notas", () => {
     expect(JSON.stringify(declaracoesDeFerramentas)).not.toMatch(/github/i);
   });
 });
+
+describe("ids das notas tocadas (só para a interface)", () => {
+  it("busca devolve os ids dos resultados na ordem do ranking, fora da resposta ao modelo", async () => {
+    const repo = semear();
+    const buscarPorConteudo = vi.fn(async () => [
+      { id: "nota-b", titulo: "TCP", pasta: null, trecho: "t" },
+      { id: "nota-a", titulo: "Álgebra", pasta: null, trecho: "a" },
+    ]);
+    const saida = await executar({ ...repo, buscarPorConteudo }, "buscar_notas", { consulta: "x" });
+    expect(saida.ids).toEqual(["nota-b", "nota-a"]);
+    expect(JSON.stringify(saida.resposta)).not.toContain("nota-b");
+    expect(saida.resposta).not.toHaveProperty("ids");
+  });
+  it("busca sem resultados devolve lista vazia de ids", async () => {
+    const saida = await executar(semear(), "buscar_notas", { consulta: "inexistente-xyz" });
+    expect(saida.ids ?? []).toEqual([]);
+  });
+  it("leitura devolve o id da nota lida, fora da resposta ao modelo", async () => {
+    const repo = semear();
+    const saida = await executar(repo, "ler_nota", { caminho: "TCP" });
+    const nota = (await repo.listarResumos()).find((n) => n.titulo === "TCP")!;
+    expect(saida.ids).toEqual([nota.id]);
+    expect(JSON.stringify(saida.resposta)).not.toContain(nota.id);
+    expect(saida.resposta).not.toHaveProperty("ids");
+  });
+  it("criação e edição devolvem o id da nota gravada, fora da resposta ao modelo", async () => {
+    const repo = semear();
+    const criada = await executar(repo, "criar_nota", { caminho: "Estudos/DNS.md", conteudo: "# DNS" });
+    expect(criada.ids).toEqual([criada.notaId]);
+    expect(criada.resposta).not.toHaveProperty("ids");
+    expect(JSON.stringify(criada.resposta)).not.toContain(criada.notaId!);
+
+    const editada = await executar(repo, "editar_nota", { caminho: "Estudos/DNS.md", conteudo: "mais", modo: "acrescentar" });
+    expect(editada.ids).toEqual([editada.notaId]);
+    expect(editada.resposta).not.toHaveProperty("ids");
+  });
+  it("listagem e erros não devolvem ids", async () => {
+    const repo = semear();
+    expect((await executar(repo, "listar_notas", {})).ids).toBeUndefined();
+    expect((await executar(repo, "ler_nota", { caminho: "Ausente" })).ids).toBeUndefined();
+    expect((await executar(repo, "criar_nota", { caminho: "Estudos/Redes/tcp.md", conteudo: "x" })).ids).toBeUndefined();
+    expect((await executar(repo, "buscar_notas", {})).ids).toBeUndefined();
+    expect((await executar(repo, "ferramenta_que_nao_existe", {})).ids).toBeUndefined();
+  });
+});

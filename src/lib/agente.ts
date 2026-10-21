@@ -38,8 +38,29 @@ export type ResultadoAgente = {
   ferramentas: UsoDeFerramenta[];
 };
 
+/** Um passo do agente, emitido assim que a ferramenta termina. `ids` é só para a interface. */
+export type PassoDoServidor = {
+  ferramenta: UsoDeFerramenta;
+  ids: IdDeNota[];
+};
+
+export type OpcoesDoAgente = {
+  /** Chamado logo após cada ferramenta rodar. Se lançar, o erro é ignorado: o laço não depende de quem ouve. */
+  aoPasso?: (passo: PassoDoServidor) => void;
+};
+
+/** Quem ouve os passos (um cliente que caiu, por exemplo) não pode derrubar o agente. */
+function avisarPasso(aoPasso: OpcoesDoAgente["aoPasso"], passo: PassoDoServidor): void {
+  try {
+    aoPasso?.(passo);
+  } catch {
+    // Ignorado de propósito.
+  }
+}
+
 export async function responder(
   mensagens: Array<Pick<Mensagem, "papel" | "conteudo">>,
+  opcoes: OpcoesDoAgente = {},
 ): Promise<ResultadoAgente> {
   const ai = criarClienteGemini();
   const instrucao = gerarInstrucaoDoSistema();
@@ -83,13 +104,15 @@ export async function responder(
       const argumentos = chamada.args ?? {};
       const saida = await executarFerramenta(chamada.name, argumentos, { leituras });
 
-      ferramentasUsadas.push({
+      const uso: UsoDeFerramenta = {
         nome: chamada.name,
         argumentos,
         resumo: saida.resumo,
         erro: saida.erro,
         ...(saida.notaId ? { notaId: saida.notaId } : {}),
-      });
+      };
+      ferramentasUsadas.push(uso);
+      avisarPasso(opcoes.aoPasso, { ferramenta: uso, ids: saida.ids ?? [] });
 
       partesDeResposta.push({
         functionResponse: {

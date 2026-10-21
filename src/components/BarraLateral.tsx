@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { contarNotas, filtrarArvore } from "@/lib/arvore-de-notas";
+import type { MarcaDoRastro } from "@/lib/rastro-na-interface";
 import type { IdDeNota, ItemDeNotas } from "@/lib/types";
 
 type Props = {
@@ -9,20 +10,33 @@ type Props = {
   /** Id da nota atualmente destacada, ou null se nenhuma */
   notaSelecionada: IdDeNota | null;
   onSelecionarNota: (nota: { id: IdDeNota; nome: string }) => void;
+  /** Por onde o Bimo passou na pergunta atual: a lista marca essas notas junto com o grafo. */
+  marcas?: ReadonlyMap<IdDeNota, MarcaDoRastro>;
 };
 
 /** Recuo por nível de pasta, em pixels. */
 const RECUO_POR_NIVEL = 16;
-/** Recuos-base do design system (tela "Nota"): a nota entra mais que a pasta, para alinhar com o nome dela e não com o caret. */
+/**
+ * Recuos-base: a pasta deixa espaço para o caret (10px + 8px de vão), e a nota começa onde
+ * o nome da pasta começa — dentro de uma pasta, ela fica um nível (16px) depois do nome dela.
+ */
 const RECUO_DA_PASTA = 4;
-const RECUO_DA_NOTA = 10;
+const RECUO_DA_NOTA = 22;
+
+/** O que cada marca do rastro diz a quem usa leitor de tela (a bolinha é só visual). */
+const DESCRICAO_DA_MARCA: Record<MarcaDoRastro["tipo"], string> = {
+  candidata: ", encontrada pelo Bimo",
+  usada: ", usada pelo Bimo",
+  nova: ", criada pelo Bimo",
+};
+const SEM_MARCAS: ReadonlyMap<IdDeNota, MarcaDoRastro> = new Map();
 
 /**
  * Estrutura das notas, como na tela "Nota" do design system: busca no topo,
  * rótulo de seção com o total, pastas com caret e contagem, e a nota
  * selecionada em azul.
  */
-export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota }: Props) {
+export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota, marcas = SEM_MARCAS }: Props) {
   const [consulta, setConsulta] = useState("");
 
   const totalDeNotas = useMemo(() => contarNotas(itens), [itens]);
@@ -36,18 +50,24 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota 
       <div className="px-3 pt-3">
         <label className="relative block">
           <span className="sr-only">Buscar nas notas</span>
-          <span
+          <svg
             aria-hidden
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="pointer-events-none absolute top-1/2 left-3.5 size-3.5 -translate-y-1/2 text-suave"
           >
-            🔍
-          </span>
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
           <input
             type="search"
             value={consulta}
             onChange={(evento) => setConsulta(evento.target.value)}
-            placeholder="Buscar nas notas..."
-            className="w-full rounded-card border border-borda bg-painel py-2.5 pr-3 pl-9 text-controle outline-none placeholder:text-suave focus:border-destaque"
+            placeholder="Buscar notas"
+            className="h-10 w-full rounded-full border border-borda bg-painel pr-3.5 pl-9 text-controle outline-none placeholder:text-suave focus:border-destaque"
           />
         </label>
       </div>
@@ -80,6 +100,7 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota 
               forcarAberta={buscando}
               notaSelecionada={notaSelecionada}
               onSelecionarNota={onSelecionarNota}
+              marcas={marcas}
             />
           ))
         )}
@@ -99,6 +120,7 @@ function ItemDaArvore({
   forcarAberta,
   notaSelecionada,
   onSelecionarNota,
+  marcas,
 }: {
   item: ItemDeNotas;
   nivel: number;
@@ -106,6 +128,7 @@ function ItemDaArvore({
   forcarAberta: boolean;
   notaSelecionada: IdDeNota | null;
   onSelecionarNota: Props["onSelecionarNota"];
+  marcas: ReadonlyMap<IdDeNota, MarcaDoRastro>;
 }) {
   // Pastas de primeiro nível começam abertas; as de dentro, fechadas.
   const [aberta, setAberta] = useState(nivel === 0);
@@ -116,6 +139,13 @@ function ItemDaArvore({
 
   if (item.tipo === "nota") {
     const selecionada = notaSelecionada === item.id;
+    const marca = marcas.get(item.id);
+    // A nota em que o Bimo está agora ganha o fundo azul suave, como a selecionada ganha o texto azul.
+    const destaque = marca?.ativa
+      ? "bg-destaque-suave font-semibold text-destaque-texto"
+      : selecionada
+        ? "font-semibold text-destaque-texto hover:bg-painel"
+        : "text-texto hover:bg-painel";
 
     return (
       <button
@@ -124,14 +154,18 @@ function ItemDaArvore({
         onClick={() => onSelecionarNota({ id: item.id, nome: item.nome })}
         aria-current={selecionada ? "true" : undefined}
         // Linhas mais altas no celular (dedo) e compactas no desktop (cursor).
-        className={`flex w-full items-center gap-2 rounded-tag py-2.5 pr-2 text-left text-controle transition-colors hover:bg-painel md:py-1.5 ${
-          selecionada ? "font-semibold text-destaque-texto" : "text-texto"
-        }`}
+        className={`flex w-full items-center gap-2 rounded-bloco py-2.5 pr-2.5 text-left text-controle transition-colors md:py-1.5 ${destaque}`}
       >
-        <span aria-hidden className="shrink-0">
-          📄
-        </span>
         <span className="truncate">{item.nome}</span>
+        {marca && <span className="sr-only">{DESCRICAO_DA_MARCA[marca.tipo]}</span>}
+        {marca?.tipo === "nova" && (
+          <span aria-hidden className="ml-auto shrink-0 rounded-full border border-destaque-suave-borda bg-destaque-suave px-1.5 text-secao font-semibold text-destaque-texto">
+            nova
+          </span>
+        )}
+        {marca && marca.tipo !== "nova" && (
+          <span aria-hidden className={`ml-auto size-2 shrink-0 rounded-full ${marca.tipo === "usada" ? "bg-destaque" : "bg-destaque-texto/50"}`} />
+        )}
       </button>
     );
   }
@@ -168,6 +202,7 @@ function ItemDaArvore({
               forcarAberta={forcarAberta}
               notaSelecionada={notaSelecionada}
               onSelecionarNota={onSelecionarNota}
+              marcas={marcas}
             />
           ))}
         </div>

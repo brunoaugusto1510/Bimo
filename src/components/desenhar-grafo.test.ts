@@ -1,58 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Camera } from "@/lib/camera-do-grafo";
-import { desenharQuadro, lerCores, type Cores, type NoVisual, type Quadro } from "./desenhar-grafo";
-
-/**
- * O jsdom não tem canvas. Este contexto falso só anota o que foi desenhado — e
- * com qual estilo no momento da chamada, que é o que importa (a cor e a
- * opacidade são estado do contexto, definidos antes de cada `fill`/`stroke`).
- */
-type Chamada =
-  | { tipo: "preencher"; cor: unknown; alfa: number; x: number; y: number; raio: number }
-  | { tipo: "tracar"; cor: unknown; alfa: number; largura: number; segmentos: number }
-  | { tipo: "texto"; texto: string; cor: unknown; x: number; y: number };
-
-function criarContextoFalso() {
-  const chamadas: Chamada[] = [];
-  let arco = { x: 0, y: 0, raio: 0 };
-  let segmentos = 0;
-
-  const contexto = {
-    fillStyle: "" as unknown,
-    strokeStyle: "" as unknown,
-    globalAlpha: 1,
-    lineWidth: 1,
-    clearRect: () => {},
-    beginPath: () => {
-      segmentos = 0;
-    },
-    moveTo: () => {
-      segmentos += 1;
-    },
-    lineTo: () => {},
-    arc: (x: number, y: number, raio: number) => {
-      arco = { x, y, raio };
-    },
-    fill: () => {
-      chamadas.push({ tipo: "preencher", cor: contexto.fillStyle, alfa: contexto.globalAlpha, ...arco });
-    },
-    stroke: () => {
-      chamadas.push({
-        tipo: "tracar",
-        cor: contexto.strokeStyle,
-        alfa: contexto.globalAlpha,
-        largura: contexto.lineWidth,
-        segmentos,
-      });
-    },
-    strokeText: () => {},
-    fillText: (texto: string, x: number, y: number) => {
-      chamadas.push({ tipo: "texto", texto, cor: contexto.fillStyle, x, y });
-    },
-  };
-
-  return { contexto: contexto as unknown as CanvasRenderingContext2D, chamadas };
-}
+import { criarContextoFalso, preenchimentos, textos, tracos } from "./contexto-falso";
+import { desenharQuadro, lerCores, resolverArestas, type Cores, type NoVisual, type Quadro } from "./desenhar-grafo";
 
 const CORES: Cores = {
   linha: "linha",
@@ -62,6 +11,12 @@ const CORES: Cores = {
   texto: "texto",
   fundo: "fundo",
   fonte: "sans-serif",
+  noNeutro: "#808080",
+  arestaNeutra: "#c0c0c0",
+  destaqueTexto: "#6ea8f2",
+  sobreDestaque: "#ffffff",
+  painel: "#ffffff",
+  bordaSuave: "#cfe0f8",
   paleta: ["grupo-0", "grupo-1"],
 };
 
@@ -79,6 +34,13 @@ function no(id: string, x: number, y: number, extra: Partial<NoVisual> = {}): No
     vy: 0,
     fase: 0,
     frequencia: 1,
+    dx: x,
+    dy: y,
+    progresso: 0,
+    px: x,
+    py: y,
+    tx: x,
+    ty: y,
     ...extra,
   } as NoVisual;
 }
@@ -118,13 +80,6 @@ function desenhar(extra: Partial<Quadro> = {}) {
   desenharQuadro(contexto, quadro(extra));
   return chamadas;
 }
-
-const preenchimentos = (chamadas: Chamada[]) =>
-  chamadas.filter((c): c is Extract<Chamada, { tipo: "preencher" }> => c.tipo === "preencher");
-const tracos = (chamadas: Chamada[]) =>
-  chamadas.filter((c): c is Extract<Chamada, { tipo: "tracar" }> => c.tipo === "tracar");
-const textos = (chamadas: Chamada[]) =>
-  chamadas.filter((c): c is Extract<Chamada, { tipo: "texto" }> => c.tipo === "texto");
 
 describe("desenharQuadro", () => {
   it("desenha uma bolinha por nó, na posição que a câmera manda", () => {
@@ -265,6 +220,178 @@ describe("desenharQuadro", () => {
   });
 });
 
+type DadosDeAresta = { de: string; para: string; tipo: "contorno" | "sulco" | "malha" };
+const resolvidas = (nos: NoVisual[], arestas: DadosDeAresta[]) =>
+  resolverArestas(arestas, new Map(nos.map((n) => [n.id, n])));
+
+describe("o cérebro", () => {
+  const ARESTAS = [
+    { de: "A.md", para: "B.md", tipo: "contorno" as const },
+    { de: "B.md", para: "C.md", tipo: "malha" as const },
+  ];
+  const comProgresso = (progresso: number) =>
+    [A, B, C, TAG].map((n) => ({ ...n, progresso })) as NoVisual[];
+  const nosDoCerebro = comProgresso(1);
+  const linksDe = (nos: NoVisual[]) => [
+    { source: nos[0], target: nos[1] },
+    { source: nos[1], target: nos[2] },
+  ];
+
+  it("no globo (progresso 0) não desenha nenhuma aresta do cérebro", () => {
+    const linhas = tracos(desenhar({ arestasDoCerebro: resolvidas([A, B, C, TAG], ARESTAS) })).filter((t) => t.segmentos > 0);
+
+    expect(linhas.map((t) => t.cor)).toEqual(["linha"]);
+  });
+
+  it("desenha contorno e sulco com o neutro dos nós e a malha com o neutro das arestas", () => {
+    const nos = nosDoCerebro;
+    const linhas = tracos(
+      desenhar({ interativo: false, nos, links: linksDe(nos), arestasDoCerebro: resolvidas(nos, ARESTAS) }),
+    );
+
+    const contorno = linhas.find((t) => t.cor === "#808080");
+    const malha = linhas.find((t) => t.cor === "#c0c0c0");
+    expect(contorno).toMatchObject({ largura: 1.4, alfa: 0.95 });
+    expect(malha).toMatchObject({ largura: 1, alfa: 0.75 });
+  });
+
+  it("as arestas aparecem com e² (e = o menor progresso das duas pontas)", () => {
+    const nos = [
+      { ...A, progresso: 0.5 },
+      { ...B, progresso: 1 },
+      C,
+      TAG,
+    ] as NoVisual[];
+
+    const linhas = tracos(
+      desenhar({
+        interativo: false,
+        nos,
+        links: [],
+        arestasDoCerebro: resolvidas(nos, [{ de: "A.md", para: "B.md", tipo: "contorno" }]),
+      }),
+    );
+
+    // 0,5 cai exatamente no degrau 3/6: alfa = 0,95 · 0,5².
+    expect(linhas[0].alfa).toBeCloseTo(0.95 * 0.25);
+  });
+
+  it("não desenha a aresta se uma das pontas ainda é globo", () => {
+    const nos = [{ ...A, progresso: 1 }, B, C, TAG] as NoVisual[];
+
+    const linhas = tracos(
+      desenhar({
+        interativo: false,
+        nos,
+        links: [],
+        arestasDoCerebro: resolvidas(nos, [{ de: "A.md", para: "B.md", tipo: "contorno" }]),
+      }),
+    );
+
+    expect(linhas).toHaveLength(0);
+  });
+
+  it("as ligações reais recuam a 20% da opacidade quando tudo é cérebro", () => {
+    const nos = nosDoCerebro;
+    const [linha] = tracos(desenhar({ interativo: false, nos, links: linksDe(nos) })).filter(
+      (t) => t.cor === "linha",
+    );
+
+    expect(linha.alfa).toBeCloseTo(0.4 * 0.2);
+  });
+
+  it("a bolinha troca a cor da pasta pelo neutro do cérebro", () => {
+    const cor = (progresso: number) =>
+      preenchimentos(desenhar({ nos: comProgresso(progresso), links: [] }))[0].cor;
+
+    expect(cor(0)).toBe("grupo-0");
+    expect(cor(1)).toBe("#808080");
+    expect(String(cor(0.5))).toContain("color-mix");
+  });
+});
+
+describe("enquanto o agente trabalha", () => {
+  const VAZIO = { notas: new Map(), segmentos: [], faisca: null, foco: 1, ativo: false };
+
+  it("escurece nós e ligações que não estão no rastro", () => {
+    const rastro = { ...VAZIO, foco: 0.45 };
+
+    const chamadas = desenhar({ rastro });
+
+    expect(preenchimentos(chamadas)[0].alfa).toBeCloseTo(0.75 * 0.45);
+    expect(tracos(chamadas)[0].alfa).toBeCloseTo(0.4 * 0.45);
+  });
+
+  it("não escurece quem está no rastro", () => {
+    const rastro = {
+      ...VAZIO,
+      foco: 0.45,
+      notas: new Map([["A.md", { estado: "lida" as const, intensidade: 1, desde: 0 }]]),
+    };
+
+    const [a, b] = preenchimentos(desenhar({ rastro }));
+
+    expect(a.alfa).toBe(1);
+    expect(b.alfa).toBeCloseTo(0.75 * 0.45);
+  });
+
+  it("escurece também o desenho do cérebro", () => {
+    const nos = [A, B, C, TAG].map((n) => ({ ...n, progresso: 1 })) as NoVisual[];
+
+    const linhas = tracos(
+      desenhar({
+        interativo: false,
+        nos,
+        links: [],
+        rastro: { ...VAZIO, foco: 0.5 },
+        arestasDoCerebro: resolvidas(nos, [{ de: "A.md", para: "B.md", tipo: "contorno" }]),
+      }),
+    );
+
+    expect(linhas[0].alfa).toBeCloseTo(0.95 * 0.5);
+  });
+});
+
+describe("modo fundo com movimento reduzido", () => {
+  it("não respira: a posição não muda com o tempo", () => {
+    const em = (tempo: number) =>
+      preenchimentos(
+        desenhar({ interativo: false, tempo, intensidade: 6, movimentoReduzido: true }),
+      )[0];
+
+    expect(em(0)).toMatchObject({ x: em(1.3).x, y: em(1.3).y });
+  });
+});
+
+describe("onde cada nó foi desenhado", () => {
+  it("grava a posição de tela no nó, para o clique acertar", () => {
+    const alvo = no("A.md", 100, 100);
+
+    desenhar({ nos: [alvo], links: [], camera: { x: 10, y: 20, k: 2 } });
+
+    expect(alvo).toMatchObject({ tx: 210, ty: 220, px: 100, py: 100 });
+  });
+
+  it("no modo fundo, grava também a respiração", () => {
+    const alvo = no("A.md", 100, 100);
+
+    desenhar({ nos: [alvo], links: [], interativo: false, tempo: 0, intensidade: 6 });
+
+    expect(alvo.py).not.toBe(100);
+    expect(alvo.ty).toBe(alvo.py);
+  });
+});
+
+describe("posição desenhada", () => {
+  it("usa dx/dy e não a posição da simulação", () => {
+    const deslocado = no("A.md", 100, 100, { dx: 40, dy: 60 });
+
+    const [bolinha] = preenchimentos(desenhar({ nos: [deslocado], links: [] }));
+
+    expect(bolinha).toMatchObject({ x: 40, y: 60 });
+  });
+});
+
 describe("lerCores", () => {
   beforeEach(() => {
     document.documentElement.removeAttribute("style");
@@ -274,16 +401,21 @@ describe("lerCores", () => {
     const cores = lerCores(3);
 
     expect(cores.destaque).toBe("#2574e0");
+    expect(cores.noNeutro).toBe("#c9c6bd");
+    expect(cores.arestaNeutra).toBe("#d8d4c9");
+    expect(cores.destaqueTexto).toBe("#1e66c4");
     expect(cores.paleta).toHaveLength(3);
   });
 
   it("lê as variáveis CSS do documento, para o canvas seguir o tema", () => {
     document.documentElement.style.setProperty("--destaque", "#123456");
     document.documentElement.style.setProperty("--grafo-cor-2", "#abcdef");
+    document.documentElement.style.setProperty("--destaque-texto", "#6ea8f2");
 
     const cores = lerCores(2);
 
     expect(cores.destaque).toBe("#123456");
     expect(cores.paleta[1]).toBe("#abcdef");
+    expect(cores.destaqueTexto).toBe("#6ea8f2");
   });
 });
