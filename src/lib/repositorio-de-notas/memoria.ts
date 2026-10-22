@@ -98,10 +98,10 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
     if (entrada.alvo) {
       const nota = notas.get(entrada.alvo.id); const meta = paginas.get(entrada.alvo.id);
       if (!nota || !meta) throw new ErroWiki("Essa nota não é uma página gerenciada da wiki.");
-      if (nota.revisao !== entrada.alvo.revisao || (!entrada.conceito && nota.revisao !== meta.revisaoPublicada)) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
+      if (nota.revisao !== entrada.alvo.revisao) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
       const nova = { ...nota, conteudo: entrada.conteudo, revisao: nota.revisao + 1, atualizadoEm: agora() };
       notas.set(nova.id, nova); versao++; resultado = { tipo: "ok", nota: copiar(nova) };
-    } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta === undefined ? "Wiki" : entrada.pasta, conteudo: entrada.conteudo });
+    } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta, conteudo: entrada.conteudo });
     if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes }));
     return resultado;
   }
@@ -127,9 +127,6 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       automacao: automacao.fila,
       async listar() { return [...paginas.values()].map((pagina) => comGerencia(copiarWiki(pagina))); },
       async obter(id) { const pagina = paginas.get(id); return pagina ? comGerencia(copiarWiki(pagina)) : null; },
-      async publicar(entrada) {
-        return publicar(entrada);
-      },
     },
 
     async marcaDeVersao() {

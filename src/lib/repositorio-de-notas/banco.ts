@@ -179,18 +179,16 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       const atual = await ler(entrada.alvo.id, tx);
       const [meta] = await tx.select({ revisao: paginasWiki.revisaoPublicada }).from(paginasWiki).where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${entrada.alvo.id}::bigint`)).orderBy(desc(paginasWiki.revisaoPublicada)).limit(1);
       if (!meta || !atual) throw new ErroWiki("Essa nota não é uma página gerenciada da wiki.");
-      if ((!entrada.conceito && atual.revisao !== meta.revisao) || atual.revisao !== entrada.alvo.revisao) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
-      if (entrada.conceito) {
-        const [conceito] = await tx.select({ protegida: conceitosWiki.protegida, revisao: conceitosWiki.revisaoGerenciada }).from(conceitosWiki)
-          .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${atual.id}::bigint`));
-        if (conceito?.protegida || atual.revisao !== (conceito?.revisao ?? meta.revisao)) throw new ErroWiki("A edição manual está protegida.", 422);
-      }
+      if (atual.revisao !== entrada.alvo.revisao) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
+      const [conceito] = await tx.select({ protegida: conceitosWiki.protegida, revisao: conceitosWiki.revisaoGerenciada }).from(conceitosWiki)
+        .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${atual.id}::bigint`));
+      if (conceito?.protegida || atual.revisao !== (conceito?.revisao ?? meta.revisao)) throw new ErroWiki("A edição manual está protegida.", 422);
       const resultado = await gravarNota(tx, { ...atual, conteudo: entrada.conteudo }, autor, false, false, "nenhum");
       if (resultado.tipo !== "ok") return resultado;
       nota = resultado.nota;
     } else {
       const pastas = await tx.selectDistinct({ pasta: notas.pasta }).from(notas).where(doUsuario);
-      const pasta = adotarGrafiaDaPasta(entrada.pasta === undefined ? "Wiki" : entrada.pasta, pastas.map((p) => p.pasta));
+      const pasta = adotarGrafiaDaPasta(entrada.pasta, pastas.map((p) => p.pasta));
       Object.assign(colisao, { pasta, titulo: entrada.titulo });
       const existente = await tituloEmUso(tx, pasta, entrada.titulo);
       if (existente) return { tipo: "titulo-em-uso", idExistente: existente.id };
@@ -225,10 +223,6 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
         if (!pagina) return null;
         const gerencia = (await gerenciasDasSinteses(id)).get(id);
         return gerencia ? { ...pagina, gerencia } : pagina;
-      },
-      async publicar(entrada) {
-        if (!(await sondarTabelasDaWiki(db)).viva) throw new ErroWiki("A Wiki Viva ainda não foi migrada neste banco.", 503);
-        return escrever<ResultadoDeEscrita>((tx, colisao) => publicarWiki(tx, entrada, colisao));
       },
     } : undefined,
     async obterAviso() { return undefined; },

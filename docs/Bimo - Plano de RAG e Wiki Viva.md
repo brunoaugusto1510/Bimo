@@ -306,7 +306,7 @@ O fluxo manual foi uma decisão do assistente e não corresponde ao caminho prin
 
 Backend potencialmente reaproveitável: saída estruturada, validação de citações, snapshots e proteção/publicação transacional. Faltam descoberta, eventos, processamento durável, consumo persistente e evolução integrada.
 
-Esta tarefa não remove, adapta nem habilita aquele código. Telas existentes serão tratadas com o usuário e o Claude. Reavaliar também a migração à luz dos contratos antes de executá-la.
+**Atualização de 22/10/2026:** o protótipo manual (página `/wiki`, `WikiViva.tsx`, `POST /api/wiki`, `compilarWiki`, `gerarSinteseWiki`, escrita direta pelo repositório e o link no cabeçalho) foi removido. Ficam a leitura (`GET /api/wiki`), a fila, a validação de citações e a publicação transacional pela fila. Telas serão definidas com o usuário e o Claude.
 
 ## 17. Briefing para o Claude
 

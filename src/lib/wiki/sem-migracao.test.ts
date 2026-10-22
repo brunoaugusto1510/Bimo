@@ -82,10 +82,6 @@ it("uma sondagem que falha não cancela a gravação da nota e a wiki fica desli
   } finally { quebrar.mockRestore(); registro.mockRestore(); }
 });
 
-it("publicar pela rota manual responde com um erro claro de migração", async () => {
-  const repo = criarRepositorioDoBanco(dono);
-  await expect(repo.wiki!.publicar({ titulo: "S", conteudo: "c", fontes: [], afirmacoes: [], alvo: null })).rejects.toMatchObject({ status: 503 });
-});
 
 it("migração parcial (sem a coluna da 0009) mantém a fila desligada em vez de quebrar depois da chamada paga", async () => {
   for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql"]) await pg.exec(await readFile(caminho, "utf8"));

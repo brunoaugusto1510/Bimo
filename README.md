@@ -67,7 +67,7 @@ Para ativar, revise as migrações `0007_wiki_viva` e `0008_wiki_automatica`, co
 
 Salvar não espera pelo modelo. A fila persistente agrupa autosaves, recupera a base anterior em lotes e publica nota, histórico, evidências e progresso atomicamente. Edições manuais ficam protegidas. Orçamento é reservado antes de cada chamada; consumo incerto continua comprometido. O teto é em tokens por usuário/dia UTC, sem equivalência fixa em dinheiro.
 
-O protótipo manual `/wiki` permanece no checkout para o trabalho de interface com o Claude; seu POST de compilação é bloqueado quando a automação está ligada. Em memória, os dados são descartáveis e não servem para produção. Citação literal verificada não comprova uma inferência: a qualidade semântica exige avaliação com notas aprovadas. Veja [operação, ativação, limites e testes](./docs/Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
+Não há página nem rota para compilar à mão: a manutenção é só pela fila. `GET /api/wiki` expõe o índice e as evidências das sínteses para a interface futura. Em memória, os dados são descartáveis e não servem para produção. Citação literal verificada não comprova uma inferência: a qualidade semântica exige avaliação com notas aprovadas. Veja [operação, ativação, limites e testes](./docs/Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
 
 ## Rodar
 

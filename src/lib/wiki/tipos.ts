@@ -1,4 +1,4 @@
-import type { NotaCompleta, ResultadoDeEscrita } from "../repositorio-de-notas/tipos";
+import type { NotaCompleta } from "../repositorio-de-notas/tipos";
 
 export type FonteWiki = Pick<NotaCompleta, "id" | "titulo" | "pasta" | "revisao" | "conteudo">;
 export type AfirmacaoWiki = {
@@ -14,16 +14,18 @@ export type MetadadosWiki = {
 export type PublicacaoWiki = {
   titulo: string; conteudo: string; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[];
   alvo: { id: string; revisao: number } | null;
-  /** A automação usa a organização da origem; o protótipo manual mantém seu padrão. */
-  pasta?: string | null;
-  conceito?: { chave: string; aliases: string[] };
+  /** Uma síntese nova nasce na organização da origem. */
+  pasta: string | null;
+  conceito: { chave: string; aliases: string[] };
 };
+/**
+ * Leitura das sínteses. A escrita só acontece pela fila (`automacao.concluir`), que revalida posse,
+ * geração e revisões e grava nota, histórico, evidências e progresso na mesma transação.
+ */
 export interface RepositorioDaWiki {
   readonly automacao?: import("./automacao-tipos").AutomacaoWiki;
   listar(): Promise<MetadadosWiki[]>;
   obter(id: string): Promise<MetadadosWiki | null>;
-  /** Revalida entradas e grava nota, histórico e evidências na mesma transação. */
-  publicar(entrada: PublicacaoWiki): Promise<ResultadoDeEscrita>;
 }
 // `name` explícito: a minificação do servidor renomeia classes, e os logs usam o nome como categoria.
 export class ErroWiki extends Error {
