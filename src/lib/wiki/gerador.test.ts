@@ -6,7 +6,7 @@ import { ErroDaGeracaoWiki } from "./tipos";
 vi.mock("../openai", () => ({ criarRespostaOpenAI: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
 const contexto = { origem: { id: "1", titulo: "A", pasta: null, revisao: 1, conteudo: "segredo fora do trecho" },
-  trecho: { inicio: 0, fim: 4, texto: "dado" }, candidatas: [] };
+  trecho: { inicio: 0, fim: 4, texto: "dado" }, candidatas: [], dependentes: [], indice: { total: 1, entradas: [{ id: "7", titulo: "Síntese existente", aliases: ["apelido"], protegida: false }] } };
 const usage = { input_tokens: 100, output_tokens: 50 };
 const resposta = (status: string, content: unknown[]) => ({ status, output: [{ type: "message", content }], usage });
 
@@ -19,6 +19,9 @@ it("descoberta usa schema estrito, envia somente o trecho atual e devolve consum
   expect(JSON.stringify(enviado)).not.toContain("segredo fora do trecho");
   expect(enviado.instructions).toContain("não confiáveis");
   expect(enviado.input[0]).toMatchObject({ role: "user" });
+  // O índice vai no payload e as instruções mandam consultá-lo antes de criar um conceito novo.
+  expect(JSON.parse((enviado.input[0] as { content: string }).content).indice.entradas[0]).toMatchObject({ id: "7", titulo: "Síntese existente" });
+  expect(enviado.instructions).toContain("indice");
 });
 
 it.each(["incomplete", "failed"])("resposta %s vira erro que carrega o uso já cobrado", async (status) => {

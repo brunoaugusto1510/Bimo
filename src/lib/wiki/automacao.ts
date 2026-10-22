@@ -3,8 +3,9 @@ import { normalizarTexto, validarTitulo, juntarCaminho } from "../caminho-da-not
 import { descreverErro } from "../registro-de-erros";
 import type { RepositorioDeNotas } from "../repositorio-de-notas/tipos";
 import { ErroDaGeracaoWiki, ErroWiki, type AfirmacaoWiki, type FonteWiki, type MetadadosWiki, type PublicacaoWiki } from "./tipos";
-import type { CandidataWiki, ConceitoWiki, ConsumoWiki, ContextoWiki, GeradorAutomaticoWiki, MotivoDaFalhaWiki } from "./automacao-tipos";
-import { citacaoInsuficiente, localizarCitacao, mesmoConteudo } from "./citacoes";
+import type { ConceitoWiki, ConsumoWiki, ContextoWiki, GeradorAutomaticoWiki, MotivoDaFalhaWiki } from "./automacao-tipos";
+import { citacaoInsuficiente, localizarCitacao } from "./citacoes";
+import { dependeDeRevisaoAnterior, palavrasEmComum, recuperarContexto } from "./recuperacao";
 
 const esquemaDaProposta = z.object({
   titulo: z.string().trim().min(1).max(200), alvoId: z.string().nullable(),
@@ -19,13 +20,13 @@ export const esquemaDaDescoberta = z.object({ propostas: z.array(esquemaDaPropos
 const esquemaDoEnvelope = z.object({ propostas: z.array(z.unknown()).max(3) }).strict();
 type PropostaWiki = z.infer<typeof esquemaDaProposta>;
 
-/** Cabe no máximo de propostas: o modelo pode atualizar todas as dependentes que vê. */
-const DEPENDENTES_POR_ONDA = 3;
 const SEM_COBRANCA: ConsumoWiki = { entrada: 0, saida: 0 };
 
 /** Payload limitado: os snapshots completos ficam no servidor, fora do contexto do modelo. */
 export function entradaDaDescoberta(c: ContextoWiki) {
   return { origem: { id: c.origem.id, titulo: c.origem.titulo, revisao: c.origem.revisao, ...c.trecho },
+    // Todas as sínteses por título e apelidos (as mais próximas da nota primeiro): reconhecer um conceito que a busca não trouxe.
+    indice: c.indice,
     candidatas: c.candidatas.map((p) => ({ id: p.nota.id, titulo: p.nota.titulo, revisao: p.nota.revisao,
       gerenciada: Boolean(p.metadados), protegida: p.conceito?.protegida ?? false,
       // Síntese construída sobre uma revisão anterior desta origem: o modelo deve atualizá-la ou deixá-la como está.
@@ -44,41 +45,6 @@ function trechoDaOrigem(conteudo: string, inicio: number) {
     if (/[\uD800-\uDBFF]/.test(conteudo[fim - 1])) fim--;
   }
   return { inicio, fim, texto: conteudo.slice(inicio, fim) };
-}
-
-const dependeDeRevisaoAnterior = (conceito: ConceitoWiki, origem: FonteWiki) =>
-  !conceito.protegida && conceito.origens[origem.id] !== undefined && conceito.origens[origem.id] !== origem.revisao;
-
-async function recuperarCandidatas(repo: RepositorioDeNotas, origem: FonteWiki, trecho: string): Promise<CandidataWiki[]> {
-  const conceitos = await repo.wiki!.automacao!.conceitos();
-  const termos = [...new Set(normalizarTexto(`${origem.titulo} ${trecho.slice(0, 3000)}`)
-    .match(/[\p{L}\p{N}]{4,}/gu) ?? [])].filter((t) => !["para", "como", "mais", "pela", "pelo", "essa", "esse", "sobre", "tambem"].includes(t)).slice(0, 8);
-  const ids = new Set<string>();
-  // Primeiro as sínteses que dependem de uma revisão anterior desta origem, em ondas limitadas.
-  for (const conceito of conceitos.filter((c) => dependeDeRevisaoAnterior(c, origem)).slice(0, DEPENDENTES_POR_ONDA)) ids.add(conceito.notaId);
-  for (const conceito of conceitos) {
-    if (termos.some((t) => normalizarTexto(`${conceito.chave} ${conceito.aliases.join(" ")}`).includes(t))) ids.add(conceito.notaId);
-    if (ids.size >= 4) break;
-  }
-  for (const termo of termos.slice(0, 4)) {
-    for (const achado of await repo.buscarPorConteudo(termo, 4)) if (achado.id !== origem.id && ids.size < 6) ids.add(achado.id);
-  }
-  const candidatas: CandidataWiki[] = [];
-  for (const id of ids) {
-    const nota = await repo.obterNota(id); if (!nota || id === origem.id) continue;
-    const metadados = await repo.wiki!.obter(id) ?? undefined;
-    if (metadados) {
-      // Renomear ou mover uma raiz muda a revisão sem mudar o que ela diz: vale o conteúdo.
-      const validas = new Set<string>();
-      for (const fonte of metadados.fontes) {
-        const atual = await repo.obterNota(fonte.id);
-        if (atual && mesmoConteudo(atual.conteudo, fonte.conteudo)) validas.add(fonte.id);
-      }
-      metadados.afirmacoes = metadados.afirmacoes.filter((a) => a.evidencias.every((e) => validas.has(e.fonteId)));
-    }
-    candidatas.push({ nota, metadados, conceito: conceitos.find((c) => c.notaId === id) });
-  }
-  return candidatas;
 }
 
 type Descarte = "estrutura" | "titulo" | "alvo" | "protegida" | "evidencia" | "limite" | "repetida" | "titulo-em-uso";
@@ -143,8 +109,13 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   const titulo = validarTitulo(limparTitulo(p.titulo));
   if (!titulo.ok) return "titulo";
   const chave = normalizarTexto(titulo.titulo);
-  // O modelo só aponta para o que viu; a identidade que o próprio servidor resolve dispensa isso.
-  if (p.alvoId && !c.candidatas.some((v) => v.nota.id === p.alvoId)) return "alvo";
+  // O modelo só aponta para uma síntese que viu: entre as candidatas ou no índice.
+  if (p.alvoId && !c.candidatas.some((v) => v.nota.id === p.alvoId)) {
+    const doIndice = c.indice.entradas.find((e) => e.id === p.alvoId);
+    // Do índice ele só leu título e apelidos: se a proposta não fala do mesmo assunto, o id provavelmente está errado,
+    // e anexar afirmações a outra síntese a contaminaria.
+    if (!doIndice || !palavrasEmComum(`${p.titulo} ${p.aliases.join(" ")}`, `${doIndice.titulo} ${doIndice.aliases.join(" ")}`)) return "alvo";
+  }
   const alvoId = p.alvoId ?? identidadeConhecida(conceitos, chave);
   const alvo = alvoId ? await repo.obterNota(alvoId) : null;
   const meta = alvoId ? await repo.wiki!.obter(alvoId) : null;
@@ -241,9 +212,14 @@ export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAuto
     if (!origem || origem.revisao !== trabalho.revisao || await repo.wiki!.obter(origem.id)) throw new ErroWiki("Entrada superada.", 409);
     if (!origem.conteudo.trim()) { await fila.concluir(trabalho, [], null); return { tipo: "processado" as const, publicadas: 0, descartadas: 0 }; }
     const trecho = trechoDaOrigem(origem.conteudo, trabalho.cursor);
-    const contexto: ContextoWiki = { origem, trecho, candidatas: await recuperarCandidatas(repo, origem, trecho.texto) };
+    const contexto: ContextoWiki = { origem, trecho, ...await recuperarContexto(repo, origem, trecho.texto, await fila.conceitos()) };
     // Um byte por token é uma reserva conservadora, não uma medição de tokenização.
-    while (Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8") > 65_000 && contexto.candidatas.length) contexto.candidatas.pop();
+    // Primeiro as candidatas; só depois o índice, das entradas menos próximas da nota para as mais.
+    while (Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8") > 65_000) {
+      if (contexto.candidatas.length) contexto.candidatas.pop();
+      else if (contexto.indice.entradas.length) contexto.indice.entradas.pop();
+      else break;
+    }
     const quantidade = Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8") + 8192 + 4096;
     reserva = await fila.reservar(trabalho, quantidade, opcoes.tetoDiario);
     if (!reserva) { await fila.falhar(trabalho, "orcamento"); return { tipo: "orcamento" as const }; }
@@ -256,7 +232,8 @@ export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAuto
     const { publicacoes, descartadas, tentadas } = await prepararPublicacoes(repo, contexto, resultado.proposta);
     if (descartadas.length) console.info("[wiki] Propostas descartadas na validação.", { quantidade: descartadas.length, motivos: [...new Set(descartadas)] });
     const atualizadas = new Set(publicacoes.flatMap((p) => p.alvo ? [p.alvo.id] : []));
-    const vistas = new Set(contexto.candidatas.map((c) => c.nota.id));
+    // Só as dependentes que cabiam nas propostas desta chamada contam como vistas; as outras esperam a próxima onda.
+    const vistas = new Set(contexto.dependentes.filter((id) => contexto.candidatas.some((c) => c.nota.id === id)));
     const desatualizadas = (await fila.conceitos()).filter((c) => dependeDeRevisaoAnterior(c, origem) && !atualizadas.has(c.notaId));
     // O modelo viu estas dependentes e não propôs mudança: ficam avaliadas para esta revisão, sem nova chamada.
     const avaliadas = desatualizadas.filter((c) => vistas.has(c.notaId) && !tentadas.has(c.notaId)).map((c) => c.notaId);

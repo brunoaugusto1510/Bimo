@@ -240,6 +240,16 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     async listarComConteudo() { return listar(db); },
     async obterNota(id) { return idValido(id) ? ler(id) : null; },
 
+    async buscarIdsPorConteudo(consulta, limite) {
+      if (!/[\p{L}\p{N}]/u.test(consulta) || limite <= 0) return [];
+      const quantidade = Number.isNaN(limite) ? 10 : Math.min(50, Math.floor(limite));
+      const consultaTs = sql`websearch_to_tsquery('public.portugues_sem_acento', ${consulta})`;
+      const linhas = await db.select({ id: sql<string>`${notas.id}::text` }).from(notas)
+        .where(and(doUsuario, sql`${notas.vetorBusca} @@ ${consultaTs}`))
+        .orderBy(sql`ts_rank(${notas.vetorBusca}, ${consultaTs}) desc`, asc(notas.id)).limit(quantidade);
+      return linhas.map((linha) => linha.id);
+    },
+
     async buscarPorConteudo(consulta, limite) {
       if (!/[\p{L}\p{N}]/u.test(consulta) || limite <= 0) return [];
       const quantidade = Number.isNaN(limite) ? 10 : Math.min(50, Math.floor(limite));

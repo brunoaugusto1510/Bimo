@@ -180,6 +180,24 @@ describe("persistência local da Wiki Viva", () => {
   });
 });
 
+describe("busca só de ids no Postgres", () => {
+  it("devolve os mesmos acertos da busca completa, na mesma ordem, só do dono, e respeita o limite", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Quórum", conteudo: "O quórum decide a eleição do líder." }, autor);
+    await repo.criarNota({ titulo: "Raft", conteudo: "No Raft o quórum de maioria elege o líder; quórum, quórum." }, autor);
+    await repo.criarNota({ titulo: "Outra", conteudo: "nada a ver" }, autor);
+    await criarRepositorioDoBanco(donoB).criarNota({ titulo: "De outro dono", conteudo: "quórum alheio" }, autor);
+    const completos = await repo.buscarPorConteudo("quórum", 10);
+    const ids = await repo.buscarIdsPorConteudo("quórum", 10);
+    expect(ids).toEqual(completos.map((r) => r.id));
+    expect(ids).toHaveLength(2);
+    expect(await repo.buscarIdsPorConteudo("quórum", 1)).toHaveLength(1);
+    expect(await repo.buscarIdsPorConteudo("inexistente", 5)).toEqual([]);
+    expect(await repo.buscarIdsPorConteudo("!!!", 5)).toEqual([]);
+    expect(await repo.buscarIdsPorConteudo("quórum", 0)).toEqual([]);
+  });
+});
+
 describe("regressões da fila no Postgres", () => {
   const vazio = { proposta: { propostas: [] }, uso: { entrada: 10, saida: 10 } };
   const trabalho = async () => (await pg.query("select revisao, geracao, estado, tentativas, ultimo_erro, cursor from trabalhos_wiki")).rows[0] as

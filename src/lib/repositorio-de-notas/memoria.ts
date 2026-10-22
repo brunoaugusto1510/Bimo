@@ -154,6 +154,10 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       return nota ? copiar(nota) : null;
     },
 
+    async buscarIdsPorConteudo(consulta, limite) {
+      return (await this.buscarPorConteudo(consulta, limite)).map((resultado) => resultado.id);
+    },
+
     async buscarPorConteudo(consulta, limite) {
       const palavras = normalizarTexto(consulta).split(/\s+/).filter(Boolean);
       if (palavras.length === 0) return [];

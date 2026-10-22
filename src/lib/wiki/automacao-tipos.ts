@@ -30,9 +30,16 @@ export interface AutomacaoWiki {
   gerenciar(notaId: string, revisaoBase: number, gerenciada: boolean): Promise<"ok" | "conflito" | "nao-encontrada">;
 }
 export type CandidataWiki = { nota: FonteWiki; metadados?: MetadadosWiki; conceito?: ConceitoWiki };
+/** Uma síntese existente, só pela identidade: o modelo escolhe enriquecê-la ou evitar duplicá-la sem ler o texto. */
+export type EntradaDoIndice = { id: string; titulo: string; aliases: string[]; protegida: boolean };
+/** `total` é o número de sínteses; `entradas` pode ser menor, com as mais próximas da nota primeiro. */
+export type IndiceWiki = { total: number; entradas: EntradaDoIndice[] };
 export type ContextoWiki = {
   origem: FonteWiki; trecho: { inicio: number; fim: number; texto: string };
   candidatas: CandidataWiki[];
+  indice: IndiceWiki;
+  /** Sínteses desatualizadas por esta origem que o modelo tem garantia de poder atualizar nesta chamada (no máximo três). */
+  dependentes: string[];
 };
 export type ResultadoDaGeracaoWiki = { proposta: unknown; uso: ConsumoWiki | null };
 export type GeradorAutomaticoWiki = (contexto: ContextoWiki, sinal: AbortSignal) => Promise<ResultadoDaGeracaoWiki>;

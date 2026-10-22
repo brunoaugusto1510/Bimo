@@ -293,7 +293,7 @@ describe("achados da segunda revisão", () => {
     expect((await repo.wiki!.automacao!.cobertura()).concluidos).toBe(1);
   });
 
-  it("com mais dependentes que cabem numa onda, o modelo as vê em ondas e a origem conclui", async () => {
+  it("com mais dependentes que cabem numa onda, o modelo as vê em duas ondas e a origem conclui", async () => {
     const repo = criarRepositorioEmMemoria([{ titulo: "Cache", conteudo: "O cache guarda cópias locais e remotas e antigas." }]);
     const criar = (nomes: string[], citacao: string) => gerador(...nomes.map((nome) => (id: string) => proposta(`Conceito ${nome}`, id, citacao)));
     vi.advanceTimersByTime(ESPERA);
