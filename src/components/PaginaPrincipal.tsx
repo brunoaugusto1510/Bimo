@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { mesclarNotasLocais, podarNotasLocais, type NotasLocais } from "@/lib/espaco-de-trabalho/notas-locais";
 import { useCriacaoDeNota, type FocoPedido } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
 import type { CapacidadesDoRepositorio } from "@/lib/repositorio-de-notas/tipos";
@@ -266,6 +267,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
         />
 
         <div className="flex items-center gap-2 justify-self-end">
+          <Link href="/wiki" target="_blank" rel="noopener noreferrer" aria-label="Wiki Viva (abre em outra aba)" className="flex min-h-10 items-center rounded-full border border-borda bg-painel px-3 text-controle transition-[background-color] hover:bg-painel-alt">Wiki</Link>
           <AlternadorDeTema />
           <button
             type="button"

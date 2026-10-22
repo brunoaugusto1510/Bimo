@@ -1,4 +1,5 @@
 import { exigirSessao } from "@/lib/autenticacao";
+import { agendarManutencaoWiki } from "@/lib/wiki/agendar";
 import {
   exigirMesmaOrigem,
   lerJsonComLimite,
@@ -36,6 +37,7 @@ export async function POST(request: Request, { params }: Contexto) {
       revisaoBase: validado.data.revisaoBase,
       autor: { criadoPor: "usuario", ferramenta: "renomear_nota" },
     });
+    if (resultado.tipo === "ok") agendarManutencaoWiki();
     return respostaDeEscrita(resultado);
   } catch (erro) {
     return tratarErroDeRepositorio(erro, "POST /api/notas/[id]/renomear");

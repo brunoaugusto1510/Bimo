@@ -13,6 +13,9 @@ import { CONFIGURACAO_PADRAO } from "../fisica-do-grafo";
 import { trechoAoRedor } from "../markdown-da-nota";
 import { planejarMudanca, planejarRenomeacao } from "./renomeacao";
 import { NOTAS_DE_EXEMPLO } from "./semente";
+import { conferirFontes, ErroWiki, type MetadadosWiki } from "../wiki/tipos";
+import type { PublicacaoWiki } from "../wiki/tipos";
+import { criarFilaWikiEmMemoria } from "../wiki/fila-memoria";
 import type {
   EntradaDeNota,
   IdDeNota,
@@ -52,6 +55,8 @@ function chaveDeTitulo(pasta: string | null, titulo: string): string {
 
 export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = []): RepositorioDeNotas {
   const notas = new Map<IdDeNota, NotaCompleta>();
+  const paginas = new Map<string, MetadadosWiki>();
+  const copiarWiki = (valor: MetadadosWiki) => JSON.parse(JSON.stringify(valor)) as MetadadosWiki;
   let proximoId = 1;
   let versao = 0;
 
@@ -87,10 +92,45 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
     return { tipo: "ok", nota: copiar(nota) };
   }
 
-  for (const entrada of iniciais) inserir(entrada);
+  function publicar(entrada: PublicacaoWiki): ResultadoDeEscrita {
+    conferirFontes(entrada.fontes, entrada.fontes.map((f) => notas.get(f.id) ?? null), new Set(paginas.keys()));
+    let resultado: ResultadoDeEscrita;
+    if (entrada.alvo) {
+      const nota = notas.get(entrada.alvo.id); const meta = paginas.get(entrada.alvo.id);
+      if (!nota || !meta) throw new ErroWiki("Essa nota não é uma página gerenciada da wiki.");
+      if (nota.revisao !== entrada.alvo.revisao || (!entrada.conceito && nota.revisao !== meta.revisaoPublicada)) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
+      const nova = { ...nota, conteudo: entrada.conteudo, revisao: nota.revisao + 1, atualizadoEm: agora() };
+      notas.set(nova.id, nova); versao++; resultado = { tipo: "ok", nota: copiar(nova) };
+    } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta === undefined ? "Wiki" : entrada.pasta, conteudo: entrada.conteudo });
+    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes }));
+    return resultado;
+  }
+  const automacao = criarFilaWikiEmMemoria({ notas, paginas, publicarAtomico(publicacoes) {
+    const antesNotas = new Map(notas); const antesPaginas = new Map(paginas); const antesVersao = versao; const antesId = proximoId;
+    try {
+      return publicacoes.map((p) => { const resultado = publicar(p); if (resultado.tipo !== "ok") throw new ErroWiki("Conflito na publicação.", 409); return resultado.nota.id; });
+    } catch (erro) {
+      notas.clear(); for (const [id, nota] of antesNotas) notas.set(id, nota);
+      paginas.clear(); for (const [id, pagina] of antesPaginas) paginas.set(id, pagina);
+      versao = antesVersao; proximoId = antesId; throw erro;
+    }
+  } });
+  for (const entrada of iniciais) { const resultado = inserir(entrada); if (resultado.tipo === "ok") automacao.registrar(resultado.nota); }
+  const comGerencia = (pagina: MetadadosWiki): MetadadosWiki => {
+    const gerencia = automacao.gerencia(pagina.notaId);
+    return gerencia ? { ...pagina, gerencia } : pagina;
+  };
 
   return {
     capacidades: { escrita: true, datas: true },
+    wiki: {
+      automacao: automacao.fila,
+      async listar() { return [...paginas.values()].map((pagina) => comGerencia(copiarWiki(pagina))); },
+      async obter(id) { const pagina = paginas.get(id); return pagina ? comGerencia(copiarWiki(pagina)) : null; },
+      async publicar(entrada) {
+        return publicar(entrada);
+      },
+    },
 
     async marcaDeVersao() {
       return `memoria-${versao}`;
@@ -149,7 +189,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
     },
 
     async criarNota(entrada) {
-      return inserir(entrada);
+      const resultado = inserir(entrada); if (resultado.tipo === "ok") automacao.registrar(resultado.nota); return resultado;
     },
 
     async atualizarNota(id, mudancas, { revisaoBase }) {
@@ -196,6 +236,8 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
         revisao: nota.revisao + 1,
       };
       notas.set(id, atualizada);
+      automacao.registrar(atualizada, nota.conteudo !== conteudo ? "conteudo" : "organizacao");
+      for (const reescrita of reescritas.filter((r) => r.id !== id)) automacao.registrar(notas.get(reescrita.id)!, "organizacao");
       versao++;
       return {
         tipo: "ok",
@@ -230,6 +272,8 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
         revisao: reescritas.some((r) => r.id === id) ? atual.revisao : atual.revisao + 1,
       };
       notas.set(id, renomeada);
+      automacao.registrar(renomeada, "organizacao");
+      for (const reescrita of reescritas.filter((r) => r.id !== id)) automacao.registrar(notas.get(reescrita.id)!, "organizacao");
       versao++;
 
       return {

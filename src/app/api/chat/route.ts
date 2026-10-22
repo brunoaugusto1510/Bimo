@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { responder, type PassoDoServidor } from "@/lib/agente";
 import { exigirSessao } from "@/lib/autenticacao";
+import { agendarManutencaoWiki } from "@/lib/wiki/agendar";
 import { exigirMesmaOrigem, lerJsonComLimite, respostaDeErro, tratarErroDeRepositorio } from "@/lib/http-de-notas";
 import { ErroDeConfiguracao } from "@/lib/repositorio-de-notas/config";
 import type { Mensagem } from "@/lib/types";
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   }
 
   if (!process.env.OPENAI_API_KEY?.trim()) return respostaDeErro(503, "O Bimo está indisponível no momento. Tente mais tarde.");
+  agendarManutencaoWiki();
   if (aceitaNdjson(request)) return respostaEmFluxo(mensagens, request.signal);
 
   try {

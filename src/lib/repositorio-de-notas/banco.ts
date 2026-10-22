@@ -2,7 +2,12 @@ import "server-only";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { adotarGrafiaDaPasta, normalizarPasta } from "../caminho-da-nota";
 import { db } from "../db/cliente";
-import { nos, notas, versoesNota } from "../db/schema";
+import { nos, notas, versoesNota, paginasWiki, conceitosWiki } from "../db/schema";
+import { conferirFontes, ErroWiki, type PublicacaoWiki } from "../wiki/tipos";
+import { automacaoWikiHabilitada } from "../wiki/configuracao";
+import { aquecerSondagemDaWiki, automacaoWikiDisponivel, sondarTabelasDaWiki } from "../wiki/disponibilidade";
+import { acompanharOrganizacaoWiki, registrarAlteracaoWiki } from "../wiki/eventos-banco";
+import { criarFilaWikiDoBanco } from "../wiki/fila-banco";
 import { CONFIGURACAO_PADRAO } from "../fisica-do-grafo";
 import { planejarMudanca, planejarRenomeacao } from "./renomeacao";
 import { REGEX_UUID } from "./config";
@@ -87,7 +92,27 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     await tx.insert(versoesNota).values({ ...valores, notaId: sql`${nota.id}::bigint`, userId });
   }
 
-  async function gravarNota(tx: Transacao, nota: NotaCompleta, autor: AutorDaEscrita, aberta: boolean, reaproveitar = false) {
+  /**
+   * O que uma gravação significa para a Wiki Viva: conteúdo novo (reprocessa a origem e protege a síntese editada),
+   * organização (renomear, mover, etiquetar e reescrever ligações só acompanham a revisão) ou nada (a própria publicação).
+   */
+  type EfeitoNaWiki = "conteudo" | "organizacao" | "nenhum";
+  async function acompanharWiki(tx: Transacao, nota: NotaCompleta, efeito: EfeitoNaWiki) {
+    if (efeito === "nenhum" || !(await automacaoWikiDisponivel(tx))) return;
+    const daSintese = and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${nota.id}::bigint`);
+    if (efeito === "conteudo") {
+      await tx.update(conceitosWiki).set({ protegida: true }).where(daSintese);
+      await registrarAlteracaoWiki(tx, userId, nota.id, nota.revisao);
+      return;
+    }
+    // Só acompanha quem estava em dia: uma edição manual anterior continua detectável pela divergência.
+    await tx.update(conceitosWiki).set({ revisaoGerenciada: nota.revisao })
+      .where(and(daSintese, eq(conceitosWiki.protegida, false), eq(conceitosWiki.revisaoGerenciada, nota.revisao - 1)));
+    await acompanharOrganizacaoWiki(tx, userId, nota.id, nota.revisao);
+  }
+
+  async function gravarNota(tx: Transacao, nota: NotaCompleta, autor: AutorDaEscrita, aberta: boolean, reaproveitar: boolean,
+    efeito: EfeitoNaWiki) {
     const [linha] = await tx.update(notas).set({
       titulo: nota.titulo, conteudo: nota.conteudo, pasta: nota.pasta, tags: nota.tags,
       revisao: sql`${notas.revisao} + 1`, atualizadoEm: sql`clock_timestamp()`,
@@ -98,6 +123,7 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     }
     const atual = paraNota(linha);
     await versionar(tx, atual, autor, aberta, reaproveitar);
+    await acompanharWiki(tx, atual, efeito);
     return { tipo: "ok" as const, nota: atual };
   }
 
@@ -106,6 +132,7 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     executar: (tx: Transacao, colisao: Colisao) => Promise<T>,
   ): Promise<T | { tipo: "titulo-em-uso"; idExistente: string }> {
     const colisao: Colisao = { pasta: null, titulo: "" };
+    await aquecerSondagemDaWiki(db);
     try {
       return await db.transaction(async (tx) => {
         await tx.execute(sql.raw(`set local lock_timeout = '${TEMPO_LIMITE_DE_LOCK}'`));
@@ -124,8 +151,86 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     }
   }
 
+
+  /** A revisão que a automação considera sua em cada síntese; vazio quando ela não está disponível. */
+  async function gerenciasDasSinteses(id?: string) {
+    const gerencias = new Map<string, { revisao: number; protegida: boolean }>();
+    if (!(await automacaoWikiDisponivel(db))) return gerencias;
+    const linhas = await db.select({ notaId: sql<string>`${conceitosWiki.notaId}::text`, revisao: conceitosWiki.revisaoGerenciada, protegida: conceitosWiki.protegida })
+      .from(conceitosWiki).where(and(eq(conceitosWiki.userId, userId), id ? sql`${conceitosWiki.notaId} = ${id}::bigint` : undefined));
+    for (const linha of linhas) gerencias.set(linha.notaId, { revisao: linha.revisao, protegida: linha.protegida });
+    return gerencias;
+  }
+
+  async function publicarWiki(tx: Transacao, entrada: PublicacaoWiki, colisao: Colisao): Promise<ResultadoDeEscrita> {
+    if (entrada.fontes.some((f) => !idValido(f.id)) || (entrada.alvo && !idValido(entrada.alvo.id))) throw new ErroWiki("Referência inválida.");
+    const paginas = await tx.select({ id: sql<string>`${paginasWiki.notaId}::text` }).from(paginasWiki).where(eq(paginasWiki.userId, userId));
+    // Trava também os escritores que não usam o advisory lock das notas.
+    const fontes: (NotaCompleta | null)[] = [];
+    for (const fonte of [...entrada.fontes].sort((a, b) => a.id.localeCompare(b.id))) {
+      const [linha] = await tx.select(colunasDaNota).from(notas).where(daNota(fonte.id)).for("share");
+      fontes.push(linha ? paraNota(linha) : null);
+    }
+    const porId = new Map(fontes.filter((f): f is NotaCompleta => f !== null).map((f) => [f.id, f]));
+    conferirFontes(entrada.fontes, entrada.fontes.map((f) => porId.get(f.id) ?? null), new Set(paginas.map((p) => p.id)));
+    const autor = { criadoPor: "agente" as const, ferramenta: "compilar_wiki" };
+    let nota: NotaCompleta;
+    if (entrada.alvo) {
+      const atual = await ler(entrada.alvo.id, tx);
+      const [meta] = await tx.select({ revisao: paginasWiki.revisaoPublicada }).from(paginasWiki).where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${entrada.alvo.id}::bigint`)).orderBy(desc(paginasWiki.revisaoPublicada)).limit(1);
+      if (!meta || !atual) throw new ErroWiki("Essa nota não é uma página gerenciada da wiki.");
+      if ((!entrada.conceito && atual.revisao !== meta.revisao) || atual.revisao !== entrada.alvo.revisao) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
+      if (entrada.conceito) {
+        const [conceito] = await tx.select({ protegida: conceitosWiki.protegida, revisao: conceitosWiki.revisaoGerenciada }).from(conceitosWiki)
+          .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${atual.id}::bigint`));
+        if (conceito?.protegida || atual.revisao !== (conceito?.revisao ?? meta.revisao)) throw new ErroWiki("A edição manual está protegida.", 422);
+      }
+      const resultado = await gravarNota(tx, { ...atual, conteudo: entrada.conteudo }, autor, false, false, "nenhum");
+      if (resultado.tipo !== "ok") return resultado;
+      nota = resultado.nota;
+    } else {
+      const pastas = await tx.selectDistinct({ pasta: notas.pasta }).from(notas).where(doUsuario);
+      const pasta = adotarGrafiaDaPasta(entrada.pasta === undefined ? "Wiki" : entrada.pasta, pastas.map((p) => p.pasta));
+      Object.assign(colisao, { pasta, titulo: entrada.titulo });
+      const existente = await tituloEmUso(tx, pasta, entrada.titulo);
+      if (existente) return { tipo: "titulo-em-uso", idExistente: existente.id };
+      const [no] = await tx.insert(nos).values({ tipo: "nota", userId }).returning({ id: sql<string>`${nos.id}::text` });
+      const [linha] = await tx.insert(notas).values({ id: sql`${no.id}::bigint`, userId, titulo: entrada.titulo, pasta, conteudo: entrada.conteudo, tags: [], criadoPor: "agente", criadoPorFerramenta: "compilar_wiki" }).returning(colunasDaNota);
+      nota = paraNota(linha); await versionar(tx, nota, autor, false);
+    }
+    await tx.insert(paginasWiki).values({ notaId: sql`${nota.id}::bigint`, userId, revisaoPublicada: nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes });
+    return { tipo: "ok", nota };
+  }
+
   return {
     capacidades: { escrita: true, datas: true },
+    // Sem as migrações no banco, ligar a variável não derruba nada: a wiki fica vazia e as notas seguem funcionando.
+    wiki: process.env.WIKI_VIVA_ATIVA === "1" ? {
+      automacao: automacaoWikiHabilitada() ? criarFilaWikiDoBanco(userId, async (tx, entrada) => {
+        const resultado = await publicarWiki(tx, entrada, { pasta: null, titulo: "" });
+        if (resultado.tipo !== "ok") throw new ErroWiki("Conflito na publicação.", 409);
+        return resultado.nota.id;
+      }) : undefined,
+      async listar() {
+        if (!(await sondarTabelasDaWiki(db)).viva) return [];
+        const paginas = await db.selectDistinctOn([paginasWiki.notaId], { notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes })
+          .from(paginasWiki).where(eq(paginasWiki.userId, userId)).orderBy(paginasWiki.notaId, desc(paginasWiki.revisaoPublicada));
+        const gerencias = await gerenciasDasSinteses();
+        return paginas.map((pagina) => ({ ...pagina, ...(gerencias.has(pagina.notaId) ? { gerencia: gerencias.get(pagina.notaId) } : {}) }));
+      },
+      async obter(id) {
+        if (!idValido(id) || !(await sondarTabelasDaWiki(db)).viva) return null;
+        const [pagina] = await db.select({ notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes })
+          .from(paginasWiki).where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${id}::bigint`)).orderBy(desc(paginasWiki.revisaoPublicada)).limit(1);
+        if (!pagina) return null;
+        const gerencia = (await gerenciasDasSinteses(id)).get(id);
+        return gerencia ? { ...pagina, gerencia } : pagina;
+      },
+      async publicar(entrada) {
+        if (!(await sondarTabelasDaWiki(db)).viva) throw new ErroWiki("A Wiki Viva ainda não foi migrada neste banco.", 503);
+        return escrever<ResultadoDeEscrita>((tx, colisao) => publicarWiki(tx, entrada, colisao));
+      },
+    } : undefined,
     async obterAviso() { return undefined; },
     async obterConfiguracaoDoGrafo() { return CONFIGURACAO_PADRAO; },
 
@@ -173,6 +278,7 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
         }).returning(colunasDaNota);
         const nota = paraNota(linha);
         await versionar(tx, nota, autor, false);
+        await registrarAlteracaoWiki(tx, userId, nota.id, nota.revisao);
         return { tipo: "ok", nota };
       });
     },
@@ -208,10 +314,10 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
         // Primeiro o CAS da nota alvo: nenhuma reescrita deve preceder uma recusa.
         const resultado = await gravarNota(tx, {
           ...nota, pasta, tags, conteudo: reescritas.find((r) => r.id === id)?.conteudo ?? conteudo,
-        }, autor, !checkpoint, true);
+        }, autor, !checkpoint, true, nota.conteudo !== conteudo ? "conteudo" : "organizacao");
         if (resultado.tipo !== "ok") return resultado;
         for (const reescrita of reescritas.filter((r) => r.id !== id)) {
-          const gravacao = await gravarNota(tx, { ...todas.find((n) => n.id === reescrita.id)!, conteudo: reescrita.conteudo }, autor, false);
+          const gravacao = await gravarNota(tx, { ...todas.find((n) => n.id === reescrita.id)!, conteudo: reescrita.conteudo }, autor, false, false, "organizacao");
           if (gravacao.tipo !== "ok") throw new Error("Falha interna ao reescrever ligações da nota; transação cancelada.");
         }
         return {
@@ -235,11 +341,11 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
         const reescritas = planejarRenomeacao(todas, id, novoTitulo);
         const resultado = await gravarNota(tx, {
           ...nota, titulo: novoTitulo, conteudo: reescritas.find((r) => r.id === id)?.conteudo ?? nota.conteudo,
-        }, autor, false);
+        }, autor, false, false, "organizacao");
         if (resultado.tipo !== "ok") return resultado;
         let notasReescritas = 0;
         for (const reescrita of reescritas.filter((r) => r.id !== id)) {
-          const gravacao = await gravarNota(tx, { ...todas.find((n) => n.id === reescrita.id)!, conteudo: reescrita.conteudo }, autor, false);
+          const gravacao = await gravarNota(tx, { ...todas.find((n) => n.id === reescrita.id)!, conteudo: reescrita.conteudo }, autor, false, false, "organizacao");
           if (gravacao.tipo !== "ok") throw new Error("Falha interna ao reescrever ligações da nota; transação cancelada.");
           notasReescritas++;
         }

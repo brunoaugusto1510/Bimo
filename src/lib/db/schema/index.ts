@@ -13,3 +13,5 @@ export * from "./fontes";
 export * from "./relacoes";
 export * from "./proveniencia";
 export * from "./versoes";
+export * from "./wiki";
+export * from "./wiki-automatica";

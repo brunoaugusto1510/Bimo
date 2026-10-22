@@ -6,6 +6,7 @@ export type PedidoOpenAI = {
   instructions: string;
   input: Record<string, unknown>[];
   tools: Record<string, unknown>[];
+  text?: { format: { type: "json_schema"; name: string; strict: true; schema: Record<string, unknown> } };
 };
 
 const esquemaDaResposta = z.object({
@@ -18,6 +19,11 @@ const esquemaDaResposta = z.object({
     output_tokens_details: z.object({ reasoning_tokens: z.number().int().nonnegative() }).optional(),
   }).optional(),
 });
+
+export class ErroOpenAI extends Error {
+  override name = "ErroOpenAI";
+  constructor(readonly status: number) { super(`Falha na API OpenAI (HTTP ${status}).`); }
+}
 
 /** Transporte do servidor, sem repetição automática: uma ferramenta pode já ter gravado uma nota. */
 export async function criarRespostaOpenAI(pedido: PedidoOpenAI, sinal: AbortSignal) {
@@ -48,7 +54,7 @@ export async function criarRespostaOpenAI(pedido: PedidoOpenAI, sinal: AbortSign
   }
   if (!resposta.ok) {
     await resposta.body?.cancel();
-    throw new Error(`Falha na API OpenAI (HTTP ${resposta.status}).`);
+    throw new ErroOpenAI(resposta.status);
   }
   const dados = esquemaDaResposta.safeParse(await resposta.json());
   if (!dados.success) throw new Error("Resposta inválida da API OpenAI.");

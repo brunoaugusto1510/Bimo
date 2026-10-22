@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { respostaDeRecusaParaApi, verificarSessaoDoPedido } from "@/lib/autenticacao";
+import { executorWikiAutorizado } from "@/lib/wiki/configuracao";
 
 /**
  * A tranca da frente do Bimo: roda antes de qualquer rota e exige sessão.
@@ -19,6 +20,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLICOS.has(pathname)) return NextResponse.next();
+  if (pathname === "/api/wiki/processar" && request.method === "POST" && executorWikiAutorizado(request)) return NextResponse.next();
 
   const sessao = verificarSessaoDoPedido(request);
   if (sessao.tipo === "valida") return NextResponse.next();
