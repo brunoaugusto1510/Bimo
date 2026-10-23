@@ -40,6 +40,7 @@ import {
   type ConfiguracaoDoGrafo,
 } from "@/lib/fisica-do-grafo";
 import type { ArestaDoGrafo, NoDoGrafo } from "@/lib/grafo-de-notas";
+import type { EstadoDoNeuronio } from "@/lib/wiki/observabilidade-tipos";
 import {
   criarSimulacaoDoGrafo,
   montarVizinhos,
@@ -67,6 +68,9 @@ export type ControleDoGrafo = {
 };
 
 type Props = {
+  comPainelWiki?: boolean;
+  somenteNeuronios?: boolean;
+  estadosWiki?: ReadonlyMap<string, EstadoDoNeuronio>;
   nos: NoDoGrafo[];
   arestas: ArestaDoGrafo[];
   /** Decide forças e tamanho dos nós (hoje, sempre a configuração padrão). */
@@ -200,6 +204,9 @@ function pontoMedio(a: Ponto, b: Ponto): Ponto {
  * ficam o loop de animação e os gestos.
  */
 export default function GrafoDeFundo({
+  comPainelWiki = false,
+  somenteNeuronios = false,
+  estadosWiki,
   nos,
   arestas,
   configuracao,
@@ -257,6 +264,12 @@ export default function GrafoDeFundo({
   const pausadoRef = useRef(pausado);
   const selecionadoRef = useRef(selecionado);
   const notaAbertaRef = useRef(notaAberta);
+  const comPainelWikiRef = useRef(comPainelWiki);
+  const estadosWikiRef = useRef(estadosWiki);
+  const somenteNeuroniosRef = useRef(somenteNeuronios);
+  useEffect(() => { somenteNeuroniosRef.current = somenteNeuronios; }, [somenteNeuronios]);
+  useEffect(() => { estadosWikiRef.current = estadosWiki; }, [estadosWiki]);
+  useEffect(() => { comPainelWikiRef.current = comPainelWiki; }, [comPainelWiki]);
 
   const mapaDeCores = useMemo(
     () => criarMapaDeCoresPorGrupo(nos.flatMap((n) => (n.tipo === "nota" ? [n.grupo] : []))),
@@ -436,6 +449,7 @@ export default function GrafoDeFundo({
       canvas.style.width = `${largura}px`;
       canvas.style.height = `${altura}px`;
       contexto.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (comPainelWikiRef.current) acoesRef.current.enquadrar();
     };
     const observador = new ResizeObserver(ajustarTamanho);
     observador.observe(container);
@@ -656,6 +670,8 @@ export default function GrafoDeFundo({
           ),
           nascimentos: nascimentosRef.current,
           movimentoReduzido,
+          estadosWiki: estadosWikiRef.current,
+          somenteNeuronios: somenteNeuroniosRef.current,
           cores,
           corDoNo,
           raioNaTela: raioDe,
@@ -677,7 +693,7 @@ export default function GrafoDeFundo({
       return { x: evento.clientX - retangulo.left, y: evento.clientY - retangulo.top };
     };
 
-    const SO_NOTAS = (no: NoVisual) => no.tipo === "nota";
+    const SO_NOTAS = (no: NoVisual) => no.tipo === "nota" && (!somenteNeuroniosRef.current || no.neuronio === true);
 
     // Acerta onde o nó foi desenhado no último quadro (a vaga no cérebro, a respiração), não onde a simulação o deixou.
     const noEm = (ponto: Ponto, margem: number, apenasNotas = false): NoVisual | null =>
@@ -687,7 +703,7 @@ export default function GrafoDeFundo({
         ponto,
         raioDe,
         margem,
-        apenasNotas ? SO_NOTAS : undefined,
+        apenasNotas || somenteNeuroniosRef.current ? SO_NOTAS : undefined,
       );
 
     const selecionar = (id: string | null) => onSelecionarRef.current?.(id);
@@ -887,8 +903,12 @@ export default function GrafoDeFundo({
     if (interativo && id) acoesRef.current.mostrarNota(id);
   }, [interativo, focoPedido]);
 
+  useEffect(() => {
+    acoesRef.current.enquadrar();
+  }, [comPainelWiki]);
+
   return (
-    <div ref={containerRef} className="absolute inset-0 -z-0">
+    <div ref={containerRef} className={comPainelWiki ? "absolute inset-x-0 top-16 -z-0 h-48 md:right-80 md:bottom-0 md:h-auto" : "absolute inset-0 -z-0"}>
       <canvas
         ref={canvasRef}
         role={interativo && !pausado ? "img" : undefined}

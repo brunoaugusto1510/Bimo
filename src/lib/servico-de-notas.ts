@@ -68,13 +68,14 @@ async function montar(repositorio: RepositorioDeNotas): Promise<Montado> {
   const notas = await repositorio.listarComConteudo();
   const [configuracao, aviso] = await Promise.all([repositorio.obterConfiguracaoDoGrafo(), repositorio.obterAviso()]);
   const indice = construirIndiceDeLigacoes(notas);
+  const sinteses = new Map((await repositorio.wiki?.listar() ?? []).map((p) => [p.notaId, p]));
 
   return {
     notas,
     indice,
     dados: {
       itens: construirArvore(notas),
-      grafo: montarGrafoDeNotas({ notas, configuracao, indice }),
+      grafo: montarGrafoDeNotas({ notas, configuracao, indice, sinteses }),
       aviso,
       capacidades: repositorio.capacidades,
     },

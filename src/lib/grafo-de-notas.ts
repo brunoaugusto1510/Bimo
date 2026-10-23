@@ -19,11 +19,11 @@ import { extrairTags } from "./markdown-da-nota";
  * uma nota — um id de nota não contém `:`.
  */
 export type NoDoGrafo =
-  | { tipo: "nota"; id: string; titulo: string; grupo: string }
+  | { tipo: "nota"; id: string; titulo: string; grupo: string; neuronio?: true; nascidoEm?: string }
   | { tipo: "nao-resolvida"; id: string; titulo: string }
   | { tipo: "tag"; id: string; titulo: string };
 
-export type ArestaDoGrafo = { de: string; para: string };
+export type ArestaDoGrafo = { de: string; para: string; tipo?: "notas" | "sinapse" | "neuronios" };
 
 export type Grafo = {
   nos: NoDoGrafo[];
@@ -41,17 +41,19 @@ export function montarGrafoDeNotas({
   notas,
   configuracao,
   indice = construirIndiceDeLigacoes(notas),
+  sinteses,
 }: {
   notas: readonly NotaComConteudo[];
   configuracao: ConfiguracaoDoGrafo;
   /** O índice dessas mesmas notas, se quem chama já o tem — evita resolver todas as ligações duas vezes. */
   indice?: IndiceDeLigacoes;
+  sinteses?: ReadonlyMap<string, { fontes: readonly { id: string }[] }>;
 }): Grafo {
 
   const nosPorId = new Map<string, NoDoGrafo>(
     notas.map((nota) => [
       nota.id,
-      { tipo: "nota", id: nota.id, titulo: nota.titulo, grupo: grupoDaPasta(nota.pasta) },
+      { tipo: "nota", id: nota.id, titulo: nota.titulo, grupo: grupoDaPasta(nota.pasta), ...(sinteses?.has(nota.id) ? { neuronio: true as const, ...("criadoEm" in nota && typeof nota.criadoEm === "string" ? { nascidoEm: nota.criadoEm } : {}) } : {}) },
     ]),
   );
 
@@ -61,6 +63,7 @@ export function montarGrafoDeNotas({
   // grafo duas vezes: multiplicam a força do link naquele par na simulação e
   // inflam o "grau", que define o tamanho da bolinha (criando hubs que não existem).
   const paresJaVistos = new Set<string>();
+  const raizes = new Map([...(sinteses ?? [])].map(([id, p]) => [id, new Set(p.fontes.map((f) => f.id))]));
 
   function ligar(de: string, para: string) {
     if (de === para) return;
@@ -69,7 +72,9 @@ export function montarGrafoDeNotas({
     const chave = [de, para].sort().join("\n");
     if (paresJaVistos.has(chave)) return;
     paresJaVistos.add(chave);
-    arestas.push({ de, para });
+    const tipo = sinteses?.has(de) && sinteses.has(para) ? "neuronios"
+      : raizes.get(de)?.has(para) || raizes.get(para)?.has(de) ? "sinapse" : "notas";
+    arestas.push({ de, para, ...(sinteses?.size ? { tipo } : {}) });
   }
 
   function garantirNo(no: NoDoGrafo) {

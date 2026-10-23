@@ -42,7 +42,7 @@ export type NoSimulado = NoDoGrafo & {
   fy?: number | null;
 };
 
-export type LinkSimulado = { source: NoSimulado; target: NoSimulado };
+export type LinkSimulado = { source: NoSimulado; target: NoSimulado; tipo?: ArestaDoGrafo["tipo"] };
 
 export type SimulacaoDoGrafo = {
   nos: NoSimulado[];
@@ -127,7 +127,7 @@ export function criarSimulacaoDoGrafo({
     .map((aresta) => {
       const source = porId.get(aresta.de);
       const target = porId.get(aresta.para);
-      return source && target ? { source, target } : null;
+      return source && target ? { source, target, ...(aresta.tipo ? { tipo: aresta.tipo } : {}) } : null;
     })
     .filter((link): link is LinkSimulado => link !== null);
 
