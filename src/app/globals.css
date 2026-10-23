@@ -212,6 +212,12 @@ body {
   font-family: var(--fonte);
 }
 
+/* Energia e cobertura da Wiki Viva seguem o azul do sistema também nos controles nativos. */
+.wiki-progresso { appearance: none; width: 100%; height: 6px; border: 0; border-radius: var(--radius-tag); overflow: hidden; background: var(--borda); }
+.wiki-progresso::-webkit-progress-bar { background: var(--borda); }
+.wiki-progresso::-webkit-progress-value { background: var(--destaque); }
+.wiki-progresso::-moz-progress-bar { background: var(--destaque); }
+
 /*
  * BimoThinking (`src/components/BimoPensando.tsx`): as arestas se desenham
  * uma a uma enquanto um pulso azul passa de nó em nó. Copiado do preview do
