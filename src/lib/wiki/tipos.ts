@@ -2,6 +2,8 @@ import type { NotaCompleta } from "../repositorio-de-notas/tipos";
 
 export type FonteWiki = Pick<NotaCompleta, "id" | "titulo" | "pasta" | "revisao" | "conteudo">;
 export type AfirmacaoWiki = {
+  /** Estável entre publicações enquanto a afirmação não mudar; é por ele que o modelo mantém, substitui ou retira. */
+  id: string;
   texto: string;
   natureza: "explicita" | "inferencia";
   evidencias: { fonteId: string; citacao: string; inicio: number; fim: number }[];

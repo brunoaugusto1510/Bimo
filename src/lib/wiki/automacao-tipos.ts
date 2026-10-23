@@ -29,7 +29,8 @@ export interface AutomacaoWiki {
   retomar(): Promise<void>;
   gerenciar(notaId: string, revisaoBase: number, gerenciada: boolean): Promise<"ok" | "conflito" | "nao-encontrada">;
 }
-export type CandidataWiki = { nota: FonteWiki; metadados?: MetadadosWiki; conceito?: ConceitoWiki };
+/** `obsoletas`: ids das afirmações cuja origem mudou desde que a síntese foi escrita; o modelo as vê marcadas. */
+export type CandidataWiki = { nota: FonteWiki; metadados?: MetadadosWiki; conceito?: ConceitoWiki; obsoletas?: string[] };
 /** Uma síntese existente, só pela identidade: o modelo escolhe enriquecê-la ou evitar duplicá-la sem ler o texto. */
 export type EntradaDoIndice = { id: string; titulo: string; aliases: string[]; protegida: boolean };
 /** `total` é o número de sínteses; `entradas` pode ser menor, com as mais próximas da nota primeiro. */

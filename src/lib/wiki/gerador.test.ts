@@ -24,6 +24,26 @@ it("descoberta usa schema estrito, envia somente o trecho atual e devolve consum
   expect(enviado.instructions).toContain("indice");
 });
 
+it("o schema enviado ao modelo é estrito e exige as operações de manter, substituir e retirar", async () => {
+  vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta("completed", [{ type: "output_text", text: '{"propostas":[]}' }]));
+  await gerarConhecimentoWiki(contexto, new AbortController().signal);
+  const schema = (vi.mocked(criarRespostaOpenAI).mock.calls[0][0].text as unknown as { format: { schema: { properties: { propostas: { items: { required: string[]; additionalProperties: boolean; properties: Record<string, unknown> } } } } } }).format.schema;
+  const proposta = schema.properties.propostas.items;
+  expect(proposta.additionalProperties).toBe(false);
+  // Em modo estrito todo campo é obrigatório; os que têm padrão no servidor também precisam estar no schema.
+  expect(proposta.required).toEqual(expect.arrayContaining(["afirmacoes", "substituicoes", "retiradas"]));
+  expect(Object.keys(proposta.properties)).toEqual(expect.arrayContaining(["substituicoes", "retiradas"]));
+  // `default` é do zod, não do contrato com o modelo, e o modo estrito não o garante: nada dele no schema enviado.
+  expect(JSON.stringify(schema)).not.toContain('"default"');
+  // A afirmação aninhada em substituicoes também é estrita.
+  const aninhada = (proposta.properties.substituicoes as { items: { required: string[]; additionalProperties: boolean; properties: { afirmacao: { additionalProperties: boolean; required: string[] } } } }).items;
+  expect(aninhada.additionalProperties).toBe(false);
+  expect(aninhada.properties.afirmacao.additionalProperties).toBe(false);
+  expect(aninhada.properties.afirmacao.required).toEqual(expect.arrayContaining(["texto", "natureza", "evidencias"]));
+  const instrucoes = vi.mocked(criarRespostaOpenAI).mock.calls[0][0].instructions;
+  for (const palavra of ["substituicoes", "retiradas", "limiteDeAfirmacoes"]) expect(instrucoes).toContain(palavra);
+});
+
 it.each(["incomplete", "failed"])("resposta %s vira erro que carrega o uso já cobrado", async (status) => {
   vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta(status, []));
   const erro = await gerarConhecimentoWiki(contexto, new AbortController().signal).catch((e: unknown) => e);

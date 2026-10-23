@@ -1,6 +1,7 @@
 import { normalizarTexto } from "../caminho-da-nota";
 import type { RepositorioDeNotas, ResumoDeNota } from "../repositorio-de-notas/tipos";
 import type { CandidataWiki, ConceitoWiki, IndiceWiki } from "./automacao-tipos";
+import { garantirIds } from "./afirmacoes";
 import { mesmoConteudo } from "./citacoes";
 import type { FonteWiki } from "./tipos";
 
@@ -91,12 +92,16 @@ export const casa = (palavra: string, termo: string) => {
   return curta.length >= 4 && PLURAIS.some((sufixo) => longa === curta + sufixo);
 };
 
-/** Alguma palavra (4+ letras) de um lado casa com alguma do outro; barreira barata contra o id errado vindo do índice. */
-export function palavrasEmComum(a: string, b: string) {
-  const palavras = (texto: string) => (normalizarTexto(texto).match(/[\p{L}\p{N}]{4,}/gu) ?? []).filter((p) => !PALAVRAS_COMUNS.has(p));
-  const dasB = palavras(b);
-  return palavras(a).some((p) => dasB.some((q) => casa(p, q)));
+const palavrasDe = (texto: string) => (normalizarTexto(texto).match(/[\p{L}\p{N}]{4,}/gu) ?? []).filter((p) => !PALAVRAS_COMUNS.has(p));
+
+/** Comparador que tokeniza o texto de referência uma vez: alguma palavra (4+ letras) do outro texto casa com alguma dele? */
+export function comPalavrasDe(referencia: string) {
+  const dela = palavrasDe(referencia);
+  return (outro: string) => palavrasDe(outro).some((p) => dela.some((q) => casa(p, q)));
 }
+
+/** Alguma palavra (4+ letras) de um lado casa com alguma do outro; barreira barata contra o id errado vindo do índice. */
+export const palavrasEmComum = (a: string, b: string) => comPalavrasDe(b)(a);
 
 function pontuacaoDoTexto(texto: string, termos: TermoPontuado[]) {
   if (!termos.length) return 0;
@@ -167,6 +172,7 @@ export async function recuperarContexto(repo: RepositorioDeNotas, origem: FonteW
   for (const id of ids) {
     const nota = await repo.obterNota(id); if (!nota || id === origem.id) continue;
     const metadados = await repo.wiki!.obter(id) ?? undefined;
+    let obsoletas: string[] | undefined;
     if (metadados) {
       // Renomear ou mover uma raiz muda a revisão sem mudar o que ela diz: vale o conteúdo.
       const validas = new Set<string>();
@@ -174,9 +180,12 @@ export async function recuperarContexto(repo: RepositorioDeNotas, origem: FonteW
         const atual = await repo.obterNota(fonte.id);
         if (atual && mesmoConteudo(atual.conteudo, fonte.conteudo)) validas.add(fonte.id);
       }
-      metadados.afirmacoes = metadados.afirmacoes.filter((a) => a.evidencias.every((e) => validas.has(e.fonteId)));
+      // Não se esconde a afirmação cuja origem mudou: é justamente a que o modelo precisa poder corrigir. Ela segue com
+      // o id e vai marcada como desatualizada.
+      metadados.afirmacoes = garantirIds(metadados.afirmacoes);
+      obsoletas = metadados.afirmacoes.filter((a) => !a.evidencias.every((e) => validas.has(e.fonteId))).map((a) => a.id);
     }
-    candidatas.push({ nota, metadados, conceito: conceitos.find((c) => c.notaId === id) });
+    candidatas.push({ nota, metadados, conceito: conceitos.find((c) => c.notaId === id), obsoletas });
   }
   return { candidatas, dependentes, indice: construirIndice(conceitos, new Map(resumos.map((r) => [r.id, r])), termos) };
 }

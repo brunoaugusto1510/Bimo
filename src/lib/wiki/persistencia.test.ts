@@ -198,6 +198,33 @@ describe("busca só de ids no Postgres", () => {
   });
 });
 
+describe("afirmações com id no Postgres", () => {
+  const afirmacao = (texto: string, fonteId: string, citacao: string) => ({ texto, natureza: "explicita" as const, evidencias: [{ fonteId, citacao }] });
+  const proposta = (extras: object) => ({ titulo: "Regras do pedido", alvoId: null, aliases: [], lacunas: [], afirmacoes: [], substituicoes: [], retiradas: [], ...extras });
+
+  it("os ids atravessam o jsonb, e retirar ou substituir por id publica uma versão nova sem a afirmação antiga", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Limites", conteudo: "O limite de itens por pedido é 10. O prazo de entrega é de 5 dias." }, autor); await liberar();
+    await processarWiki(repo, async (c) => ({ proposta: { propostas: [proposta({ afirmacoes: [
+      afirmacao("Limite de 10 itens", c.origem.id, "O limite de itens por pedido é 10"), afirmacao("Prazo de 5 dias", c.origem.id, "O prazo de entrega é de 5 dias")] })] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+    const [pagina] = await repo.wiki!.listar();
+    const [idLimite, idPrazo] = pagina.afirmacoes.map((a) => a.id);
+    expect([idLimite, idPrazo].every((id) => /^a[0-9a-f]{10}$/.test(id))).toBe(true);
+    expect((await repo.wiki!.obter(pagina.notaId))!.afirmacoes.map((a) => a.id)).toEqual([idLimite, idPrazo]);
+
+    const origem = await repo.criarNota({ titulo: "Atualização", conteudo: "A partir de março o limite de itens por pedido passou a ser 20." }, autor);
+    await liberar();
+    await processarWiki(repo, async (c) => ({ proposta: { propostas: [proposta({ alvoId: pagina.notaId,
+      substituicoes: [{ id: idLimite, afirmacao: afirmacao("Limite de 20 itens", c.origem.id, "o limite de itens por pedido passou a ser 20") }] })] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+    const [depois] = await repo.wiki!.listar();
+    expect(origem.tipo).toBe("ok");
+    expect(depois.afirmacoes.map((a) => a.texto)).toEqual(["Prazo de 5 dias", "Limite de 20 itens"]);
+    expect(depois.afirmacoes[0].id).toBe(idPrazo);
+    expect((await repo.obterNota(pagina.notaId))!.conteudo).not.toContain("Limite de 10 itens");
+    expect((await pg.query("select count(*)::int as n from paginas_wiki where nota_id = $1", [pagina.notaId])).rows).toEqual([{ n: 2 }]);
+  });
+});
+
 describe("regressões da fila no Postgres", () => {
   const vazio = { proposta: { propostas: [] }, uso: { entrada: 10, saida: 10 } };
   const trabalho = async () => (await pg.query("select revisao, geracao, estado, tentativas, ultimo_erro, cursor from trabalhos_wiki")).rows[0] as

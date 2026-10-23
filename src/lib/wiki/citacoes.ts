@@ -1,3 +1,5 @@
+import { normalizarTexto } from "../caminho-da-nota";
+
 /** Abaixo disso, uma citação casa com quase qualquer texto e não prova nada — salvo quando é a entrada inteira. */
 export const TAMANHO_MINIMO_DA_CITACAO = 12;
 
@@ -23,6 +25,9 @@ function normalizar(texto: string) {
   if (saida.endsWith(" ")) { saida = saida.slice(0, -1); posicoes.pop(); }
   return { saida, posicoes };
 }
+
+/** O texto como a comparação de citações o enxerga: sem acento, caixa, espaços repetidos, aspas tipográficas e ênfase. */
+export const textoComparavel = (texto: string) => normalizar(normalizarTexto(texto)).saida;
 
 /**
  * Localiza a citação no texto tolerando espaços, aspas tipográficas e marcação de ênfase.
