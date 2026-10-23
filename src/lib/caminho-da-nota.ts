@@ -108,6 +108,13 @@ export function juntarCaminho(pasta: string | null, titulo: string): string {
   return pasta ? `${pasta}/${titulo}` : titulo;
 }
 
+/** Referência exata para a raiz ou para caminhos com delimitadores de wikilink. Preserva pastas já existentes. */
+export function caminhoParaLigacao(pasta: string | null, titulo: string): string {
+  const caminho = juntarCaminho(pasta, titulo);
+  return !pasta || /[%[\]#^|\r\n]/.test(caminho) ? `/${escaparCaminhoDaLigacao(caminho)}` : caminho;
+}
+export const escaparCaminhoDaLigacao = (caminho: string) => caminho.replace(/[%[\]#^|\r\n]/g, (c) => encodeURIComponent(c));
+
 /** Cor e agrupamento no grafo: a pasta de topo, ou "Raiz" para notas soltas. */
 export function grupoDaPasta(pasta: string | null): string {
   if (!pasta) return "Raiz";
