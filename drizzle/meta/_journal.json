@@ -71,6 +71,13 @@
       "when": 1792696771997,
       "tag": "0009_wiki_ultimo_erro",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792761307774,
+      "tag": "0010_wiki_estrutura",
+      "breakpoints": true
     }
   ]
 }

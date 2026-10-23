@@ -13,7 +13,7 @@ import { CONFIGURACAO_PADRAO } from "../fisica-do-grafo";
 import { trechoAoRedor } from "../markdown-da-nota";
 import { planejarMudanca, planejarRenomeacao } from "./renomeacao";
 import { NOTAS_DE_EXEMPLO } from "./semente";
-import { conferirFontes, ErroWiki, type MetadadosWiki } from "../wiki/tipos";
+import { conferirDestinos, conferirFontes, ErroWiki, type MetadadosWiki } from "../wiki/tipos";
 import type { PublicacaoWiki } from "../wiki/tipos";
 import { criarFilaWikiEmMemoria } from "../wiki/fila-memoria";
 import type {
@@ -94,6 +94,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
 
   function publicar(entrada: PublicacaoWiki): ResultadoDeEscrita {
     conferirFontes(entrada.fontes, entrada.fontes.map((f) => notas.get(f.id) ?? null), new Set(paginas.keys()));
+    conferirDestinos(entrada.destinos, entrada.destinos.map((d) => notas.get(d.id) ?? null), new Set(paginas.keys()));
     let resultado: ResultadoDeEscrita;
     if (entrada.alvo) {
       const nota = notas.get(entrada.alvo.id); const meta = paginas.get(entrada.alvo.id);
@@ -102,7 +103,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       const nova = { ...nota, conteudo: entrada.conteudo, revisao: nota.revisao + 1, atualizadoEm: agora() };
       notas.set(nova.id, nova); versao++; resultado = { tipo: "ok", nota: copiar(nova) };
     } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta, conteudo: entrada.conteudo });
-    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes }));
+    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes, estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas } }));
     return resultado;
   }
   const automacao = criarFilaWikiEmMemoria({ notas, paginas, publicarAtomico(publicacoes) {

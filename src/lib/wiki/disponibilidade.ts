@@ -36,7 +36,10 @@ export async function aquecerSondagemDaWiki(conexao: Conexao) {
 }
 
 async function consultar(conexao: Conexao): Promise<TabelasDaWiki> {
-  const resultado = await conexao.execute(sql`select to_regclass('public.paginas_wiki') is not null as viva,
+  const resultado = await conexao.execute(sql`select (to_regclass('public.paginas_wiki') is not null
+      -- A migração 0010 acrescentou a coluna da estrutura (ligações e perguntas em aberto): sem ela, gravar e ler quebrariam.
+      and exists (select 1 from information_schema.columns where table_schema = 'public'
+        and table_name = 'paginas_wiki' and column_name = 'estrutura')) as viva,
     (to_regclass('public.conceitos_wiki') is not null and to_regclass('public.trabalhos_wiki') is not null
       and to_regclass('public.consumos_wiki') is not null
       -- A migração 0009 acrescentou esta coluna: com ela ausente, concluir e falhar quebrariam depois da chamada paga.

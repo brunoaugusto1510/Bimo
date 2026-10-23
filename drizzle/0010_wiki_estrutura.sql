@@ -1,0 +1,1 @@
+ALTER TABLE "paginas_wiki" ADD COLUMN "estrutura" jsonb DEFAULT '{"ligacoes":[],"lacunas":[]}'::jsonb NOT NULL;

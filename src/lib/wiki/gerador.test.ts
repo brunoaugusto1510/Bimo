@@ -31,7 +31,7 @@ it("o schema enviado ao modelo é estrito e exige as operações de manter, subs
   const proposta = schema.properties.propostas.items;
   expect(proposta.additionalProperties).toBe(false);
   // Em modo estrito todo campo é obrigatório; os que têm padrão no servidor também precisam estar no schema.
-  expect(proposta.required).toEqual(expect.arrayContaining(["afirmacoes", "substituicoes", "retiradas"]));
+  expect(proposta.required).toEqual(expect.arrayContaining(["afirmacoes", "substituicoes", "retiradas", "ligacoes", "lacunas"]));
   expect(Object.keys(proposta.properties)).toEqual(expect.arrayContaining(["substituicoes", "retiradas"]));
   // `default` é do zod, não do contrato com o modelo, e o modo estrito não o garante: nada dele no schema enviado.
   expect(JSON.stringify(schema)).not.toContain('"default"');
@@ -41,7 +41,7 @@ it("o schema enviado ao modelo é estrito e exige as operações de manter, subs
   expect(aninhada.properties.afirmacao.additionalProperties).toBe(false);
   expect(aninhada.properties.afirmacao.required).toEqual(expect.arrayContaining(["texto", "natureza", "evidencias"]));
   const instrucoes = vi.mocked(criarRespostaOpenAI).mock.calls[0][0].instructions;
-  for (const palavra of ["substituicoes", "retiradas", "limiteDeAfirmacoes"]) expect(instrucoes).toContain(palavra);
+  for (const palavra of ["substituicoes", "retiradas", "limiteDeAfirmacoes", "ligacoes", "lacunas"]) expect(instrucoes).toContain(palavra);
 });
 
 it.each(["incomplete", "failed"])("resposta %s vira erro que carrega o uso já cobrado", async (status) => {

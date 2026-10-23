@@ -8,13 +8,23 @@ export type AfirmacaoWiki = {
   natureza: "explicita" | "inferencia";
   evidencias: { fonteId: string; citacao: string; inicio: number; fim: number }[];
 };
+/**
+ * O que a síntese tem além das afirmações, guardado como dado (o texto da nota só o mostra):
+ * `ligacoes` são os ids de outras sínteses a que ela se liga (não são evidência) e `lacunas`, as perguntas em aberto.
+ */
+export type EstruturaWiki = { ligacoes: string[]; lacunas: string[] };
 export type MetadadosWiki = {
-  notaId: string; revisaoPublicada: number; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[];
+  notaId: string; revisaoPublicada: number; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[]; estrutura: EstruturaWiki;
   /** Presente em sínteses da automação: a revisão que ela considera sua (renomear e mover a acompanham). */
   gerencia?: { revisao: number; protegida: boolean };
 };
+export type DestinoDeLigacao = Pick<NotaCompleta, "id" | "titulo" | "pasta">;
 export type PublicacaoWiki = {
   titulo: string; conteudo: string; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[];
+  /** Ids de outras sínteses a que esta se liga; já validados (existem, não são ela mesma). */
+  ligacoes: string[]; lacunas: string[];
+  /** Onde cada síntese ligada estava quando o texto foi escrito: renomeada ou movida até a publicação, o link ficaria errado. */
+  destinos: DestinoDeLigacao[];
   alvo: { id: string; revisao: number } | null;
   /** Uma síntese nova nasce na organização da origem. */
   pasta: string | null;
@@ -38,6 +48,16 @@ export class ErroWiki extends Error {
 export class ErroDaGeracaoWiki extends Error {
   override name = "ErroDaGeracaoWiki";
   constructor(mensagem: string, readonly uso: { entrada: number; saida: number } | null) { super(mensagem); }
+}
+
+/** Dentro da publicação: cada síntese ligada ainda existe, continua sendo uma síntese e está onde o link diz. */
+export function conferirDestinos(destinos: DestinoDeLigacao[], atuais: (NotaCompleta | null)[], paginas: Set<string>) {
+  for (const [i, destino] of destinos.entries()) {
+    const atual = atuais[i];
+    if (!atual || !paginas.has(destino.id) || atual.titulo !== destino.titulo || atual.pasta !== destino.pasta) {
+      throw new ErroWiki("Uma síntese ligada foi renomeada, movida ou removida. Refaça a compilação.", 409);
+    }
+  }
 }
 
 /** Executado novamente dentro da transação/trecho síncrono da publicação. */

@@ -32,6 +32,9 @@ export const gerarConhecimentoWiki: GeradorAutomaticoWiki = async (contexto, sin
       "use retiradas (ids) para as que esta nota torna falsas ou obsoletas, junto de uma afirmação nova ou substituta que a nota sustente. " +
       "Uma afirmação marcada desatualizada tem evidência numa nota que mudou: confira com o texto atual e, se já não vale, substitua ou retire (essas podem ser retiradas sozinhas); se continua valendo, deixe-a. " +
       "Afirmações que você não citar são mantidas. " +
+      "Use ligacoes (ids de sínteses do índice ou de candidatas gerenciadas, no máximo oito) para conectar esta síntese a outras de assuntos relacionados ou complementares: " +
+      "uma ligação não é evidência, não altera a outra síntese e não exige citação; em síntese que já existe as ligações atuais ficam e você só acrescenta (pode propor só novas ligações ou perguntas, sem afirmações). " +
+      "Em lacunas devolva a lista completa das perguntas ainda em aberto (veja lacunas da candidata); vazia, numa síntese que já existe, mantém as atuais. " +
       "Só use ids que aparecem em afirmacoes de candidatas; em síntese nova, substituicoes e retiradas ficam vazias. " +
       "Divergência entre duas anotações não é correção: mantenha as duas afirmações, registrando o contexto de cada uma. " +
       "Uma síntese guarda no máximo limiteDeAfirmacoes afirmações (veja totalDeAfirmacoes): libere espaço substituindo ou retirando em vez de só somar. " +

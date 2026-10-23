@@ -21,8 +21,15 @@ const esquemaDaProposta = z.object({
   substituicoes: z.array(z.object({ id: z.string(), afirmacao: esquemaDaAfirmacao }).strict()).max(24).default([]),
   /** Retira afirmações existentes, pelo id que o modelo viu. */
   retiradas: z.array(z.string()).max(24).default([]),
+  /** Ids de outras sínteses a que esta se liga (o que o modelo viu no índice ou nas candidatas); não são evidência. */
+  // Sem teto aqui: o servidor guarda no máximo `LIMITE_DE_LIGACOES`, e um excesso não pode custar a proposta inteira.
+  ligacoes: z.array(z.string()).default([]),
+  /** A lista completa de perguntas em aberto; vazia (ou só de espaços) numa síntese que já existe mantém as que ela tinha. */
   lacunas: z.array(z.string().max(1000)).max(10),
 }).strict();
+const LIMITE_DE_LIGACOES = 8;
+/** O que se lê das ligações pedidas, para que uma lista enorme não vire uma enxurrada de consultas. */
+const LIMITE_DE_PEDIDAS = 32;
 export const esquemaDaDescoberta = z.object({ propostas: z.array(esquemaDaProposta).max(3) }).strict();
 /** O servidor valida o envelope e depois cada proposta: uma malformada não derruba as outras. */
 const esquemaDoEnvelope = z.object({ propostas: z.array(z.unknown()).max(3) }).strict();
@@ -46,6 +53,9 @@ export function entradaDaDescoberta(c: ContextoWiki) {
       afirmacoes: p.metadados && afirmacoesVisiveis(garantirIds(p.metadados.afirmacoes), { origemId: c.origem.id, obsoletas: new Set(p.obsoletas), relacionada })
         .map((a) => (p.obsoletas?.includes(a.id) ? { ...a, desatualizada: true } : a)),
       totalDeAfirmacoes: p.metadados?.afirmacoes.length,
+      // O que a síntese já liga e as perguntas que ela ainda tem em aberto: o modelo devolve a lista completa das perguntas.
+      ligacoes: p.metadados?.estrutura?.ligacoes,
+      lacunas: p.metadados?.estrutura?.lacunas,
     })),
     limiteDeAfirmacoes: LIMITE_DE_AFIRMACOES,
   };
@@ -82,6 +92,22 @@ const caminhoOcupado = (pasta: string | null, titulo: string) => `${(pasta ?? ""
 /** O título proposto ou, se a pasta já tiver uma nota assim (a própria origem, por exemplo), uma variante de síntese. */
 function tituloLivre(titulo: string, pasta: string | null, ocupados: Set<string>) {
   return [titulo, `${titulo} (síntese)`].find((opcao) => validarTitulo(opcao).ok && !ocupados.has(caminhoOcupado(pasta, opcao))) ?? null;
+}
+
+/**
+ * As sínteses a que esta se liga: as que já tinha, que ainda existem, e as novas que o modelo pediu e viu (índice ou
+ * candidatas). Sem repetição, sem ela mesma, no máximo oito. Id que não é de uma síntese (nota pessoal, inexistente) sai
+ * sozinho: ligar é uma sugestão, e uma sugestão ruim não derruba a proposta.
+ */
+async function ligacoesDaSintese(repo: RepositorioDeNotas, c: ContextoWiki, pedidas: string[], existentes: string[], propria: string | null) {
+  const vistas = new Set([...c.indice.entradas.map((e) => e.id), ...c.candidatas.filter((v) => v.metadados).map((v) => v.nota.id)]);
+  const notas: { id: string; pasta: string | null; titulo: string }[] = [];
+  for (const id of [...existentes, ...pedidas.slice(0, LIMITE_DE_PEDIDAS).filter((p) => vistas.has(p))]) {
+    if (id === propria || notas.some((n) => n.id === id) || notas.length >= LIMITE_DE_LIGACOES) continue;
+    const nota = await repo.obterNota(id);
+    if (nota && await repo.wiki!.obter(id)) notas.push({ id, pasta: nota.pasta, titulo: nota.titulo });
+  }
+  return notas;
 }
 
 /** Identidade já existente para o título: a chave exata ou, sem ambiguidade, um alias. */
@@ -158,9 +184,17 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   const conceito = conceitos.find((v) => v.notaId === alvoId);
   if (alvoId && (!alvo || !meta)) return "alvo";
   if (conceito?.protegida) return "protegida";
+  // As perguntas em aberto são a lista completa: vazia (ou só de espaços), numa síntese que já existe, mantém as que ela tinha.
+  const pedidasEmAberto = p.lacunas.map((l) => l.trim()).filter(Boolean);
+  const lacunas = pedidasEmAberto.length ? pedidasEmAberto : meta?.estrutura?.lacunas ?? [];
+  const ligadas = await ligacoesDaSintese(repo, c, p.ligacoes, meta?.estrutura?.ligacoes ?? [], alvoId ?? null);
+  // Ligar a outra síntese ou mudar as perguntas é uma mudança por si só, mesmo sem afirmação nova: sem isso uma síntese
+  // antiga nunca ganharia a ligação a uma criada depois.
+  const mudaEstrutura = Boolean(alvoId) && (JSON.stringify(lacunas) !== JSON.stringify(meta?.estrutura?.lacunas ?? [])
+    || JSON.stringify(ligadas.map((n) => n.id)) !== JSON.stringify(meta?.estrutura?.ligacoes ?? []));
   // Uma síntese que já existe e nenhuma operação pedida: o modelo a viu e decidiu não mudar nada. Isso é uma decisão,
   // não uma falha, e a síntese conta como avaliada em vez de travar a nota em chamadas repetidas.
-  if (alvoId && !p.afirmacoes.length && !p.substituicoes.length && !p.retiradas.length) return "sem-mudanca";
+  if (alvoId && !p.afirmacoes.length && !p.substituicoes.length && !p.retiradas.length && !mudaEstrutura) return "sem-mudanca";
   const fontes = await fontesPermitidas(repo, c, meta);
   const validar = (a: z.infer<typeof esquemaDaAfirmacao>): AfirmacaoWiki | null => {
     const evidencias = a.evidencias.map((e) => localizarEvidencia(e, fontes, textos, c));
@@ -194,7 +228,7 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     if (!mostradas?.ids.has(id) || substituicoes.has(id)) continue;
     if ((justificada || mostradas.obsoletas.has(id)) && podeMexer(id)) retiradas.add(id);
   }
-  if (!novas.length && !substituicoes.size && !retiradas.size) return "evidencia";
+  if (!novas.length && !substituicoes.size && !retiradas.size && !mudaEstrutura) return "evidencia";
   // O que nenhuma operação cita é mantido, desde que a evidência ainda exista nas origens atuais.
   const preservadas: AfirmacaoWiki[] = [];
   for (const a of anteriores) {
@@ -221,7 +255,9 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   if (!nome) return "titulo-em-uso";
   const conteudo = [`# ${nome}`, "Síntese do Bimo baseada nas anotações de origem. Inferências são interpretações.",
     ...afirmacoes.map((a) => `${a.natureza === "inferencia" ? "**Inferência:** " : ""}${escapar(a.texto)} ${a.evidencias.map((e) => `[${raizes.findIndex((f) => f.id === e.fonteId) + 1}]`).join(" ")}`),
-    ...(p.lacunas.length ? ["## Questões em aberto", ...p.lacunas.map((v) => `- ${escapar(v)}`)] : []),
+    ...(lacunas.length ? ["## Questões em aberto", ...lacunas.map((v) => `- ${escapar(v)}`)] : []),
+    // Links de verdade: o grafo deriva as arestas do texto, sem espelhar nada em outra tabela.
+    ...(ligadas.length ? ["## Neurônios relacionados", ...ligadas.map((n) => `- [[${juntarCaminho(n.pasta, n.titulo)}]]`)] : []),
     "## Notas de origem", ...raizes.map((f, i) => `${i + 1}. [[${juntarCaminho(f.pasta, f.titulo)}]] — revisão ${f.revisao}`),
   ].join("\n\n");
   const aliases = [...new Set([...(conceito?.aliases ?? []), ...p.aliases])].slice(0, 24);
@@ -229,7 +265,7 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   // O markdown não mostra a evidência (só o número da origem): comparar também as afirmações, senão uma evidência nova
   // para o mesmo texto seria descartada como "sem mudança".
   if (alvo && conteudo === alvo.conteudo && aliases.length === (conceito?.aliases.length ?? 0) && assinatura(afirmacoes) === assinatura(anteriores)) return "sem-mudanca";
-  return { titulo: nome, conteudo, fontes: raizes, afirmacoes,
+  return { titulo: nome, conteudo, fontes: raizes, afirmacoes, ligacoes: ligadas.map((n) => n.id), destinos: ligadas, lacunas,
     alvo: alvo ? { id: alvo.id, revisao: alvo.revisao } : null, pasta,
     conceito: { chave: conceito?.chave ?? chave, aliases },
   };

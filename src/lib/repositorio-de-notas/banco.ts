@@ -3,7 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { adotarGrafiaDaPasta, normalizarPasta } from "../caminho-da-nota";
 import { db } from "../db/cliente";
 import { nos, notas, versoesNota, paginasWiki, conceitosWiki } from "../db/schema";
-import { conferirFontes, ErroWiki, type PublicacaoWiki } from "../wiki/tipos";
+import { conferirDestinos, conferirFontes, ErroWiki, type PublicacaoWiki } from "../wiki/tipos";
 import { automacaoWikiHabilitada } from "../wiki/configuracao";
 import { aquecerSondagemDaWiki, automacaoWikiDisponivel, sondarTabelasDaWiki } from "../wiki/disponibilidade";
 import { acompanharOrganizacaoWiki, registrarAlteracaoWiki } from "../wiki/eventos-banco";
@@ -173,6 +173,14 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     }
     const porId = new Map(fontes.filter((f): f is NotaCompleta => f !== null).map((f) => [f.id, f]));
     conferirFontes(entrada.fontes, entrada.fontes.map((f) => porId.get(f.id) ?? null), new Set(paginas.map((p) => p.id)));
+    // Trava as sínteses ligadas contra renomear e mover até o fim da transação, na mesma ordem das fontes (sem deadlock).
+    if (entrada.destinos.some((d) => !idValido(d.id))) throw new ErroWiki("Referência inválida.");
+    const destinos = new Map<string, NotaCompleta>();
+    for (const destino of [...entrada.destinos].sort((a, b) => a.id.localeCompare(b.id))) {
+      const [linha] = await tx.select(colunasDaNota).from(notas).where(daNota(destino.id)).for("share");
+      if (linha) destinos.set(destino.id, paraNota(linha));
+    }
+    conferirDestinos(entrada.destinos, entrada.destinos.map((d) => destinos.get(d.id) ?? null), new Set(paginas.map((p) => p.id)));
     const autor = { criadoPor: "agente" as const, ferramenta: "compilar_wiki" };
     let nota: NotaCompleta;
     if (entrada.alvo) {
@@ -196,7 +204,8 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       const [linha] = await tx.insert(notas).values({ id: sql`${no.id}::bigint`, userId, titulo: entrada.titulo, pasta, conteudo: entrada.conteudo, tags: [], criadoPor: "agente", criadoPorFerramenta: "compilar_wiki" }).returning(colunasDaNota);
       nota = paraNota(linha); await versionar(tx, nota, autor, false);
     }
-    await tx.insert(paginasWiki).values({ notaId: sql`${nota.id}::bigint`, userId, revisaoPublicada: nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes });
+    await tx.insert(paginasWiki).values({ notaId: sql`${nota.id}::bigint`, userId, revisaoPublicada: nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes,
+      estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas } });
     return { tipo: "ok", nota };
   }
 
@@ -211,14 +220,14 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       }) : undefined,
       async listar() {
         if (!(await sondarTabelasDaWiki(db)).viva) return [];
-        const paginas = await db.selectDistinctOn([paginasWiki.notaId], { notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes })
+        const paginas = await db.selectDistinctOn([paginasWiki.notaId], { notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes, estrutura: paginasWiki.estrutura })
           .from(paginasWiki).where(eq(paginasWiki.userId, userId)).orderBy(paginasWiki.notaId, desc(paginasWiki.revisaoPublicada));
         const gerencias = await gerenciasDasSinteses();
         return paginas.map((pagina) => ({ ...pagina, ...(gerencias.has(pagina.notaId) ? { gerencia: gerencias.get(pagina.notaId) } : {}) }));
       },
       async obter(id) {
         if (!idValido(id) || !(await sondarTabelasDaWiki(db)).viva) return null;
-        const [pagina] = await db.select({ notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes })
+        const [pagina] = await db.select({ notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes, estrutura: paginasWiki.estrutura })
           .from(paginasWiki).where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${id}::bigint`)).orderBy(desc(paginasWiki.revisaoPublicada)).limit(1);
         if (!pagina) return null;
         const gerencia = (await gerenciasDasSinteses(id)).get(id);

@@ -96,3 +96,20 @@ it("migração parcial (sem a coluna da 0009) mantém a fila desligada em vez de
   expect((await processarWiki(repo, gerar, { tetoDiario: 200_000 })).tipo).toBe("ocioso");
   expect(gerar).not.toHaveBeenCalled();
 });
+
+it("sem a 0010 (coluna da estrutura) a wiki continua desligada; com ela, volta a funcionar", async () => {
+  // Neste ponto o banco tem a 0007 e a 0008 (o teste anterior). A 0009 sozinha ainda não basta.
+  await pg.exec(await readFile("drizzle/0009_wiki_ultimo_erro.sql", "utf8"));
+  esquecerSondagemDaWiki();
+  const repo = criarRepositorioDoBanco(dono);
+  expect((await repo.criarNota({ titulo: "C", conteudo: "texto" }, autor)).tipo).toBe("ok");
+  expect(await repo.wiki!.listar()).toEqual([]);
+  expect(await repo.wiki!.automacao!.cobertura()).toMatchObject({ elegiveis: 0 });
+  expect((await pg.query("select * from trabalhos_wiki")).rows).toHaveLength(0);
+
+  await pg.exec(await readFile("drizzle/0010_wiki_estrutura.sql", "utf8"));
+  esquecerSondagemDaWiki();
+  const pronta = criarRepositorioDoBanco(dono);
+  await pronta.criarNota({ titulo: "D", conteudo: "outro texto" }, autor);
+  expect((await pronta.wiki!.automacao!.cobertura()).elegiveis).toBeGreaterThan(0);
+});

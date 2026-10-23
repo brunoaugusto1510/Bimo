@@ -37,7 +37,7 @@ beforeAll(async () => {
     create table versoes_nota (id bigint generated always as identity primary key, nota_id bigint references notas(id), user_id uuid not null,
       titulo text not null, conteudo text not null, pasta text, tags text[], criado_por text not null, criado_por_ferramenta text,
       sessao_aberta boolean not null default false, versionado_em timestamptz not null default now());`);
-  for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql", "drizzle/0009_wiki_ultimo_erro.sql"]) await pg.exec(await readFile(caminho, "utf8"));
+  for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql", "drizzle/0009_wiki_ultimo_erro.sql", "drizzle/0010_wiki_estrutura.sql"]) await pg.exec(await readFile(caminho, "utf8"));
 }, 30_000);
 beforeEach(async () => {
   vi.stubEnv("WIKI_VIVA_ATIVA", "1"); vi.stubEnv("WIKI_AUTOMATICA_ATIVA", "1");
@@ -222,6 +222,52 @@ describe("afirmações com id no Postgres", () => {
     expect(depois.afirmacoes[0].id).toBe(idPrazo);
     expect((await repo.obterNota(pagina.notaId))!.conteudo).not.toContain("Limite de 10 itens");
     expect((await pg.query("select count(*)::int as n from paginas_wiki where nota_id = $1", [pagina.notaId])).rows).toEqual([{ n: 2 }]);
+  });
+});
+
+describe("ligações e perguntas em aberto no Postgres", () => {
+  it("a estrutura atravessa o jsonb e uma síntese enriquecida mantém as ligações e as perguntas", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Pão", conteudo: "A massa fermenta devagar na geladeira por doze horas." }, autor); await liberar();
+    await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo: "Fermentação lenta", alvoId: null, aliases: [], lacunas: [],
+      afirmacoes: [{ texto: "Fermenta devagar", natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: "A massa fermenta devagar na geladeira" }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+    const [fermentacao] = await repo.wiki!.listar();
+    expect(fermentacao.estrutura).toEqual({ ligacoes: [], lacunas: [] });
+
+    await repo.criarNota({ titulo: "Diário", conteudo: "Hoje percebi que paciência serve tanto para o pão quanto para os livros." }, autor); await liberar();
+    await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo: "Paciência como método", alvoId: null, aliases: [], lacunas: ["Quanto é paciência demais?"],
+      ligacoes: [fermentacao.notaId, "9999"],
+      afirmacoes: [{ texto: "Paciência liga as duas coisas", natureza: "inferencia", evidencias: [{ fonteId: c.origem.id, citacao: "paciência serve tanto para o pão quanto para os livros" }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+    const paciencia = (await repo.wiki!.listar()).find((p) => p.notaId !== fermentacao.notaId)!;
+    expect(paciencia.estrutura).toEqual({ ligacoes: [fermentacao.notaId], lacunas: ["Quanto é paciência demais?"] });
+    expect((await repo.obterNota(paciencia.notaId))!.conteudo).toContain("[[Fermentação lenta]]");
+    expect((await pg.query("select estrutura from paginas_wiki where nota_id = $1", [paciencia.notaId])).rows).toEqual([{ estrutura: paciencia.estrutura }]);
+
+    await repo.criarNota({ titulo: "Corrida", conteudo: "A paciência também vale para a corrida de domingo, sempre devagar." }, autor); await liberar();
+    await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo: "Paciência como método", alvoId: paciencia.notaId, aliases: [], lacunas: [],
+      afirmacoes: [{ texto: "Vale para a corrida", natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: "paciência também vale para a corrida de domingo" }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+    expect((await repo.wiki!.obter(paciencia.notaId))!.estrutura).toEqual(paciencia.estrutura);
+  });
+
+  it("renomear a síntese ligada entre o preparo e a publicação recusa a publicação em vez de gravar o link velho", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Pão", conteudo: "A massa fermenta devagar na geladeira por doze horas." }, autor); await liberar();
+    await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo: "Fermentação lenta", alvoId: null, aliases: [], lacunas: [],
+      afirmacoes: [{ texto: "Fermenta devagar", natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: "A massa fermenta devagar na geladeira" }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+    const [fermentacao] = await repo.wiki!.listar();
+    await repo.criarNota({ titulo: "Diário", conteudo: "Hoje percebi que paciência serve tanto para o pão quanto para os livros." }, autor); await liberar();
+    const fila = repo.wiki!.automacao!;
+    const concluir = fila.concluir.bind(fila);
+    const espiao = vi.spyOn(fila, "concluir").mockImplementationOnce(async (...args) => {
+      const ligada = (await repo.obterNota(fermentacao.notaId))!;
+      await repo.renomearNota(fermentacao.notaId, "Fermentação lenta e fria", { revisaoBase: ligada.revisao, autor: { criadoPor: "usuario" } });
+      return concluir(...args);
+    });
+    const gerar = async (c: ContextoWiki) => ({ proposta: { propostas: [{ titulo: "Paciência como método", alvoId: null, aliases: [], lacunas: [], ligacoes: [fermentacao.notaId],
+      afirmacoes: [{ texto: "Paciência liga as duas coisas", natureza: "inferencia" as const, evidencias: [{ fonteId: c.origem.id, citacao: "paciência serve tanto para o pão quanto para os livros" }] }] }] }, uso: { entrada: 1, saida: 1 } });
+    await processarWiki(repo, gerar, { tetoDiario: 200_000 });
+    espiao.mockRestore();
+    expect(await repo.wiki!.listar()).toHaveLength(1);
   });
 });
 
