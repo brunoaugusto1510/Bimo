@@ -321,6 +321,28 @@ Executor independente via npm run wiki:executar e aceleração oportunista após
 
 Validação: 1.801 testes passaram em 150 arquivos offline. Após o endurecimento final das políticas e a nova regressão de expiração durante a publicação, 27 testes focados passaram novamente, incluindo dez de SQL real em PGlite descartável, sem Supabase remoto ou modelos reais. A suíte completa não foi repetida após essa última alteração coberta pelo foco. TypeScript, ESLint src/scripts, sintaxe do executor e diff --check passaram. As integrações que leem configuração real foram excluídas; o build não foi executado para evitar leitura automática de .env. Não houve aplicação das migrações no ambiente do usuário, mudança de configuração, ativação paga, commit ou push. Passos de ativação, limites e pendências de avaliação estão em [Wiki Viva — Operação](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
 
+## Wiki Viva — diário, diagnósticos e neurônios — 23/10/2026
+
+As pendências de backend anotadas após a revisão do Claude foram implementadas na `feat/estrutura-llmwiki`, preservando os commits existentes. Por decisão do usuário, novas sínteses nascem na pasta **Neurônios** e o executor ganha GET protegido por `CRON_SECRET`, com Cron diário em `vercel.json` para o plano Hobby. O POST do executor contínuo foi preservado. As telas foram autorizadas, mas dependem do arquivo visual que o usuário enviará; nenhuma tela nova foi desenhada nesta etapa.
+
+Diário transacional por dono, leitura por período/cursor, diagnóstico local periódico sem modelo, estados dos neurônios, pausa com revisão-base e divergências estruturadas foram acrescentados. GET `/api/wiki/cerebro` retorna resumo e índice compacto, GET `/api/wiki/diario` retorna eventos e o detalhe existente informa estado/pausa/alertas. O grafo identifica neurônios e distingue notas, sinapses e ligações entre neurônios, preservando as arestas derivadas do texto. Chat e GrafoDeFundo não foram remontados nem redesenhados.
+
+Snapshots de fontes passam a hashes SHA-256 e trechos citados; a migração **0011_wiki_observabilidade**, gerada offline, inclui o backfill compatível com Unicode. Também foram tratados retirada de ligações, perguntas legadas recuperadas do markdown, raiz explícita para notas homônimas, codificação de delimitadores em pastas existentes, expiração da sonda negativa em 30 segundos e coleta do Vitest restrita ao aplicativo. O teste de cinco mil títulos verifica resultados e limites sem depender de 500 ms de relógio.
+
+Validação offline: **1.945 testes em 163 arquivos**. Após os últimos ajustes, **281 testes focados em 26 arquivos** e, depois da indicação de pausa no contexto do modelo, **41 testes em três arquivos** passaram. TypeScript, ESLint e diff --check passaram. PGlite executou as migrações 0007–0011 e verificou rollback do diário/publicação, RLS, custo, pausa concorrente, backfill, legado e paginação com microssegundos. Não houve Supabase remoto, leitura de `.env`, build, navegador, inferência real, migração de produção, commit ou push. Estado e passos de ativação estão em [Wiki Viva — Pendências](./Bimo%20-%20Wiki%20Viva%20-%20Pendencias.md) e [Wiki Viva — Operação](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
+
+## Wiki Viva — telas do Cérebro, Diário e neurônios — 23/10/2026
+
+Implementadas as telas autorizadas na `feat/estrutura-llmwiki`, usando as 17 pranchas do HTML "Bimo — Wiki Viva conceitos e telas" enviado pelo usuário e os tokens existentes do projeto. Cérebro e Diário abrem na página principal, com contagens reais, cobertura, energia, filtros e paginação por cursor. O detalhe do neurônio mostra afirmações, inferências, sinapses com trechos e revisão, divergências e perguntas em aberto. Citações levam o foco à evidência; origens e relacionados abrem por id. Referências do chat também abrem o detalhe quando a nota tem metadados de neurônio.
+
+Editar usa o editor e o autosave existentes. Pausar, retomar e devolver ao Bimo enviam a revisão lida e mostram conflitos sem repetir a escrita. O texto atual da pessoa é preservado no detalhe mesmo quando o neurônio está pausado. Chat e GrafoDeFundo continuam na mesma árvore; teste de navegação verifica a conservação do rascunho e dos elementos. O grafo distingue tipos de ligação, desenha anel duplo e os seis estados, filtra Só neurônios sem reconstruir a simulação e anima nascimento respeitando movimento reduzido.
+
+Validação: **778 testes em 78 arquivos** no recorte ampliado e **88 testes em seis arquivos** após os ajustes finais; TypeScript sem emissão, ESLint e `git diff --check` passaram. A prévia visual isolada, com APIs simuladas, foi conferida em desktop/celular e temas claro/escuro. Isso não comprova integração autenticada nem o piloto com notas reais. Não houve leitura de `.env`, build, migração remota, inferência paga, commit ou push. A ativação segue os passos do documento de operação.
+
+## Wiki Viva — versionamento por funcionalidade e tela — 23/10/2026
+
+Por solicitação do usuário, a entrega foi separada em commits de testes, correção de wikilinks, backend da Wiki Viva, Cron autenticado, grafo, telas do Cérebro/Diário, detalhe do neurônio, integração com notas/chat e documentação. Os testes acompanham as respectivas alterações. O código validado na etapa anterior foi mantido; os relatos de ausência de commit acima descrevem aquele momento da implementação. Não houve push, migração ou ativação nesta etapa de versionamento.
+
 ## Continuar em outro computador
 
 1. `git fetch && git checkout main && git pull`, depois `npm install` (a Fase 10 está na `feat/corte-para-o-banco` até ser mergeada).
