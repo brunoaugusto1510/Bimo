@@ -7,19 +7,24 @@ type Conexao = { execute(consulta: SQL): PromiseLike<unknown> };
 
 /**
  * Uma sondagem por processo. Ligar as variáveis antes de aplicar as migrações não pode derrubar
- * a gravação das notas: sem as tabelas, a Wiki Viva fica desligada. Aplicar depois exige reiniciar,
- * como já acontece com as demais capacidades do repositório.
+ * a gravação das notas: sem as tabelas, a Wiki Viva fica desligada. Resultados negativos expiram
+ * em 30 segundos, permitindo reconhecer a migração também numa instância quente.
  */
 let sondagem: Promise<TabelasDaWiki> | undefined;
 let falhouEm = 0;
+let negativaAte = 0;
 const DESLIGADA: TabelasDaWiki = { viva: false, automatica: false };
 const ESPERA_APOS_FALHA_MS = 30_000;
 
 /** Nunca lança: se a sondagem falhar, a wiki fica desligada por 30 s em vez de derrubar a gravação das notas. */
 export function sondarTabelasDaWiki(conexao: Conexao): Promise<TabelasDaWiki> {
-  if (sondagem) return sondagem;
+  if (sondagem && (!negativaAte || Date.now() < negativaAte)) return sondagem;
   if (Date.now() - falhouEm < ESPERA_APOS_FALHA_MS) return Promise.resolve(DESLIGADA);
-  sondagem = consultar(conexao).catch((erro: unknown) => {
+  negativaAte = 0;
+  sondagem = consultar(conexao).then((tabelas) => {
+    negativaAte = tabelas.viva && tabelas.automatica ? 0 : Date.now() + ESPERA_APOS_FALHA_MS;
+    return tabelas;
+  }).catch((erro: unknown) => {
     sondagem = undefined; falhouEm = Date.now();
     console.error("[wiki] Não foi possível verificar as tabelas da wiki; ela fica desligada por 30 segundos.", { erro: descreverErro(erro) });
     return DESLIGADA;
@@ -42,6 +47,11 @@ async function consultar(conexao: Conexao): Promise<TabelasDaWiki> {
         and table_name = 'paginas_wiki' and column_name = 'estrutura')) as viva,
     (to_regclass('public.conceitos_wiki') is not null and to_regclass('public.trabalhos_wiki') is not null
       and to_regclass('public.consumos_wiki') is not null
+      and to_regclass('public.eventos_wiki') is not null
+      and exists (select 1 from information_schema.columns where table_schema = 'public'
+        and table_name = 'conceitos_wiki' and column_name = 'pausada')
+      and exists (select 1 from information_schema.columns where table_schema = 'public'
+        and table_name = 'conceitos_wiki' and column_name = 'diagnostico')
       -- A migração 0009 acrescentou esta coluna: com ela ausente, concluir e falhar quebrariam depois da chamada paga.
       and exists (select 1 from information_schema.columns where table_schema = 'public'
         and table_name = 'trabalhos_wiki' and column_name = 'ultimo_erro')) as automatica`);
@@ -58,5 +68,5 @@ export async function automacaoWikiDisponivel(conexao: Conexao) {
 
 /** Só para testes: esquece a sondagem guardada. */
 export function esquecerSondagemDaWiki() {
-  sondagem = undefined; falhouEm = 0;
+  sondagem = undefined; falhouEm = 0; negativaAte = 0;
 }

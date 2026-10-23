@@ -1,6 +1,11 @@
 import type { NotaCompleta } from "../repositorio-de-notas/tipos";
+import { hashDoConteudo } from "./fontes";
 
 export type FonteWiki = Pick<NotaCompleta, "id" | "titulo" | "pasta" | "revisao" | "conteudo">;
+export type FonteCompactaWiki = Omit<FonteWiki, "conteudo"> & {
+  hash: string; hashSemOrganizacao: string; trechos: { inicio: number; fim: number; texto: string }[];
+};
+export type FontePersistidaWiki = FonteWiki | FonteCompactaWiki;
 export type AfirmacaoWiki = {
   /** Estável entre publicações enquanto a afirmação não mudar; é por ele que o modelo mantém, substitui ou retira. */
   id: string;
@@ -12,9 +17,10 @@ export type AfirmacaoWiki = {
  * O que a síntese tem além das afirmações, guardado como dado (o texto da nota só o mostra):
  * `ligacoes` são os ids de outras sínteses a que ela se liga (não são evidência) e `lacunas`, as perguntas em aberto.
  */
-export type EstruturaWiki = { ligacoes: string[]; lacunas: string[] };
+export type DivergenciaWiki = { a: { afirmacaoId: string; contexto: string }; b: { afirmacaoId: string; contexto: string } };
+export type EstruturaWiki = { ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[] };
 export type MetadadosWiki = {
-  notaId: string; revisaoPublicada: number; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[]; estrutura: EstruturaWiki;
+  notaId: string; revisaoPublicada: number; fontes: FontePersistidaWiki[]; afirmacoes: AfirmacaoWiki[]; estrutura: EstruturaWiki;
   /** Presente em sínteses da automação: a revisão que ela considera sua (renomear e mover a acompanham). */
   gerencia?: { revisao: number; protegida: boolean };
 };
@@ -22,11 +28,11 @@ export type DestinoDeLigacao = Pick<NotaCompleta, "id" | "titulo" | "pasta">;
 export type PublicacaoWiki = {
   titulo: string; conteudo: string; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[];
   /** Ids de outras sínteses a que esta se liga; já validados (existem, não são ela mesma). */
-  ligacoes: string[]; lacunas: string[];
+  ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[];
   /** Onde cada síntese ligada estava quando o texto foi escrito: renomeada ou movida até a publicação, o link ficaria errado. */
   destinos: DestinoDeLigacao[];
   alvo: { id: string; revisao: number } | null;
-  /** Uma síntese nova nasce na organização da origem. */
+  /** Uma síntese nova nasce na pasta Neurônios; mover depois preserva a organização escolhida. */
   pasta: string | null;
   conceito: { chave: string; aliases: string[] };
 };
@@ -61,12 +67,13 @@ export function conferirDestinos(destinos: DestinoDeLigacao[], atuais: (NotaComp
 }
 
 /** Executado novamente dentro da transação/trecho síncrono da publicação. */
-export function conferirFontes(fontes: FonteWiki[], atuais: (NotaCompleta | null)[], paginas: Set<string>) {
+export function conferirFontes(fontes: FontePersistidaWiki[], atuais: (NotaCompleta | null)[], paginas: Set<string>) {
   if (!fontes.length || fontes.length > 10 || new Set(fontes.map((f) => f.id)).size !== fontes.length) throw new ErroWiki("Escolha de uma a dez notas diferentes.");
   for (const [i, fonte] of fontes.entries()) {
     const atual = atuais[i];
     if (paginas.has(fonte.id)) throw new ErroWiki("Uma página derivada não pode ser fonte de si mesma ou de outra síntese.");
-    if (!atual || [atual.revisao, atual.titulo, atual.pasta, atual.conteudo].some((valor, j) => valor !== [fonte.revisao, fonte.titulo, fonte.pasta, fonte.conteudo][j])) {
+    const hash = "conteudo" in fonte ? hashDoConteudo(fonte.conteudo) : fonte.hash;
+    if (!atual || atual.revisao !== fonte.revisao || atual.titulo !== fonte.titulo || atual.pasta !== fonte.pasta || hashDoConteudo(atual.conteudo) !== hash) {
       throw new ErroWiki("Uma nota de origem mudou ou não está mais disponível. Refaça a compilação.", 409);
     }
   }

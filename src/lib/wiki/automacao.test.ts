@@ -26,7 +26,7 @@ describe("Wiki Viva integrada", () => {
     const gerar = vi.fn<GeradorAutomaticoWiki>().mockImplementation(async (c) => resposta(c));
     expect((await rodar(repo, gerar)).tipo).toBe("processado");
     const [pagina] = await repo.wiki!.listar();
-    expect((await repo.obterNota(pagina.notaId))?.pasta).toBeNull();
+    expect((await repo.obterNota(pagina.notaId))?.pasta).toBe("Neurônios");
     expect(await repo.obterNota("1")).toEqual(original.tipo === "ok" ? original.nota : null);
     expect(pagina.afirmacoes[0].evidencias[0]).toMatchObject({ fonteId: "1", inicio: 0 });
     expect(await repo.buscarPorConteudo("Consistência", 8)).toHaveLength(1);

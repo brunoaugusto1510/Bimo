@@ -2,7 +2,7 @@ import { normalizarTexto } from "../caminho-da-nota";
 import type { RepositorioDeNotas, ResumoDeNota } from "../repositorio-de-notas/tipos";
 import type { CandidataWiki, ConceitoWiki, IndiceWiki } from "./automacao-tipos";
 import { garantirIds } from "./afirmacoes";
-import { mesmoConteudo } from "./citacoes";
+import { fonteConfere } from "./fontes";
 import type { FonteWiki } from "./tipos";
 
 /** Sínteses desatualizadas por esta origem entram primeiro, em ondas pequenas. */
@@ -110,7 +110,7 @@ function pontuacaoDoTexto(texto: string, termos: TermoPontuado[]) {
 }
 
 export const dependeDeRevisaoAnterior = (conceito: ConceitoWiki, origem: FonteWiki) =>
-  !conceito.protegida && conceito.origens[origem.id] !== undefined && conceito.origens[origem.id] !== origem.revisao;
+  !conceito.protegida && !conceito.pausada && conceito.origens[origem.id] !== undefined && conceito.origens[origem.id] !== origem.revisao;
 
 const porId = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
@@ -126,7 +126,7 @@ export function construirIndice(conceitos: ConceitoWiki[], resumos: Map<string, 
   }).sort((a, b) => b.pontos - a.pontos || porId(b.c.notaId, a.c.notaId));
   const entradas: IndiceWiki["entradas"] = []; let tamanho = 0;
   for (const { c, titulo } of todas) {
-    const entrada = { id: c.notaId, titulo, aliases: c.aliases.slice(0, ALIASES_NO_INDICE), protegida: c.protegida };
+    const entrada = { id: c.notaId, titulo, aliases: c.aliases.slice(0, ALIASES_NO_INDICE), protegida: c.protegida || Boolean(c.pausada) };
     const custo = JSON.stringify(entrada).length + 1;
     if (entradas.length >= ENTRADAS_NO_INDICE || tamanho + custo > TAMANHO_DO_INDICE) break;
     entradas.push(entrada); tamanho += custo;
@@ -178,7 +178,7 @@ export async function recuperarContexto(repo: RepositorioDeNotas, origem: FonteW
       const validas = new Set<string>();
       for (const fonte of metadados.fontes) {
         const atual = await repo.obterNota(fonte.id);
-        if (atual && mesmoConteudo(atual.conteudo, fonte.conteudo)) validas.add(fonte.id);
+        if (atual && fonteConfere(atual.conteudo, fonte)) validas.add(fonte.id);
       }
       // Não se esconde a afirmação cuja origem mudou: é justamente a que o modelo precisa poder corrigir. Ela segue com
       // o id e vai marcada como desatualizada.

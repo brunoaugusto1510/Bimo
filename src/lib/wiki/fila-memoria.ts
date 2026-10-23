@@ -2,6 +2,8 @@ import { ErroWiki, conferirFontes, type MetadadosWiki, type PublicacaoWiki } fro
 import type { NotaCompleta } from "../repositorio-de-notas/tipos";
 import type { AutomacaoWiki, ConceitoWiki, TrabalhoWiki } from "./automacao-tipos";
 import { ESTABILIDADE_DA_WIKI_SEGUNDOS } from "./configuracao";
+import { renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
+import { eventoDoDiagnostico, textoDaPublicacao } from "./diario";
 
 type Registro = Omit<TrabalhoWiki, "posse"> & { posse: string | null; ate: number; disponivel: number; estado: string; ultimoErro?: string };
 /** Conteúdo novo pede processamento; renomear, mover, etiquetar ou reescrever ligações só acompanha a revisão. */
@@ -14,6 +16,10 @@ export function criarFilaWikiEmMemoria(acesso: {
   const trabalhos = new Map<string, Registro>();
   const conceitos = new Map<string, ConceitoWiki>();
   const consumo = new Map<string, { dia: string; reservado: number; confirmado: boolean }>();
+  const eventos = new Map<string, EventoWiki>();
+  const evento = (chave: string, dados: Omit<EventoWiki, "id" | "criadoEm">) => {
+    if (!eventos.has(chave)) eventos.set(chave, { ...dados, id: crypto.randomUUID(), criadoEm: new Date().toISOString() });
+  };
   const dia = () => new Date().toISOString().slice(0, 10);
   function registrar(nota: NotaCompleta, mudanca: MudancaDeNota = "conteudo") {
     if (acesso.paginas.has(nota.id)) {
@@ -59,7 +65,8 @@ export function criarFilaWikiEmMemoria(acesso: {
       return { notaId: trabalho.notaId, revisao: trabalho.revisao, geracao: trabalho.geracao,
         cursor: trabalho.cursor, posse: trabalho.posse, tentativas: trabalho.tentativas };
     },
-    async conceitos() { return [...conceitos.values()].map((c) => ({ ...c, aliases: [...c.aliases], origens: { ...c.origens } })); },
+    async conceitos() { return [...conceitos.values()].map((c) => ({ ...c, aliases: [...c.aliases], origens: { ...c.origens },
+      ...(c.diagnostico ? { diagnostico: { ...c.diagnostico, alertas: [...c.diagnostico.alertas] } } : {}) })); },
     async cobertura() {
       const valores = [...trabalhos.values()].filter((t) => acesso.notas.has(t.notaId) && !acesso.paginas.has(t.notaId));
       const elegiveis = [...acesso.notas.values()].filter((n) => !acesso.paginas.has(n.id));
@@ -89,21 +96,26 @@ export function criarFilaWikiEmMemoria(acesso: {
         chaves.add(p.conceito.chave);
         if ([...conceitos.values()].some((c) => c.chave === p.conceito!.chave && c.notaId !== p.alvo?.id)) throw new ErroWiki("Conceito já existente.", 409);
         if (p.alvo) {
-          if (alvos.has(p.alvo.id) || !acesso.paginas.has(p.alvo.id) || conceitos.get(p.alvo.id)?.protegida || acesso.notas.get(p.alvo.id)?.revisao !== p.alvo.revisao) throw new ErroWiki("Edição protegida ou superada.", 422);
+          if (alvos.has(p.alvo.id) || !acesso.paginas.has(p.alvo.id) || conceitos.get(p.alvo.id)?.protegida || conceitos.get(p.alvo.id)?.pausada || acesso.notas.get(p.alvo.id)?.revisao !== p.alvo.revisao) throw new ErroWiki("Edição protegida ou superada.", 422);
           alvos.add(p.alvo.id);
         }
       }
       const ids = acesso.publicarAtomico(publicacoes);
-      for (const [i, p] of publicacoes.entries()) conceitos.set(ids[i], { notaId: ids[i], ...p.conceito!, protegida: false, origens: Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao])), revisaoGerenciada: acesso.notas.get(ids[i])!.revisao });
+      for (const [i, p] of publicacoes.entries()) {
+        const revisao = acesso.notas.get(ids[i])!.revisao;
+        conceitos.set(ids[i], { notaId: ids[i], ...p.conceito!, protegida: false, pausada: false, origens: Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao])), revisaoGerenciada: revisao });
+        evento(`publicacao:${ids[i]}:${revisao}`, { tipo: p.alvo ? "cresceu" : "nasceu", sinteseId: ids[i], origemId: trabalho.notaId, texto: textoDaPublicacao(p.titulo, !p.alvo) });
+      }
       for (const id of avaliadas) {
         const conceito = conceitos.get(id);
-        if (conceito && !conceito.protegida && conceito.origens[trabalho.notaId] !== undefined) conceito.origens[trabalho.notaId] = trabalho.revisao;
+        if (conceito && !conceito.protegida && !conceito.pausada && conceito.origens[trabalho.notaId] !== undefined) conceito.origens[trabalho.notaId] = trabalho.revisao;
       }
       const progresso = publicacoes.some((p) => p.alvo) || avaliadas.length > 0 || cursor !== trabalho.cursor;
       atual.cursor = cursor ?? atual.cursor; atual.estado = cursor === null ? "concluido" : "pendente";
       atual.posse = null; atual.ate = 0; atual.ultimoErro = undefined;
       atual.disponivel = progresso || cursor === null ? Date.now() : Date.now() + 30_000 * atual.tentativas;
       if (progresso) atual.tentativas = 0;
+      if (!publicacoes.length && cursor === null) evento(`leitura:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "sem_novidade", sinteseId: null, origemId: trabalho.notaId, texto: "Li esta anotação e não encontrei novidade sustentada para os neurônios." });
     },
     async falhar(trabalho, motivo, erro) {
       let atual: Registro; try { atual = exigir(trabalho); } catch { return; }
@@ -112,6 +124,8 @@ export function criarFilaWikiEmMemoria(acesso: {
       if (motivo === "orcamento") atual.tentativas = Math.max(0, atual.tentativas - 1);
       atual.estado = motivo === "temporario" && atual.tentativas < 3 || motivo === "orcamento" ? "pendente" : motivo;
       atual.disponivel = motivo === "orcamento" ? Date.parse(`${dia()}T00:00:00Z`) + 86_400_000 : Date.now() + 30_000 * atual.tentativas;
+      if (motivo === "orcamento") evento(`energia:${dia()}`, { tipo: "energia", sinteseId: null, origemId: null, texto: "A energia disponível não comporta outra leitura. A fila retoma após a renovação diária." });
+      else if (atual.estado !== "pendente") evento(`falha:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "precisa_de_voce", sinteseId: null, origemId: trabalho.notaId, texto: "Uma leitura precisa de atenção antes de continuar. As anotações foram preservadas." });
     },
     async retomar() {
       for (const t of trabalhos.values()) if (["configuracao", "temporario"].includes(t.estado) || t.estado === "revisar" && t.ultimoErro?.startsWith("ErroOpenAI:")) {
@@ -130,6 +144,34 @@ export function criarFilaWikiEmMemoria(acesso: {
         trabalho.estado = "pendente"; trabalho.tentativas = 0; trabalho.disponivel = Date.now();
       }
       return "ok";
+    },
+    async pausar(id, revisao, pausada) {
+      const nota = acesso.notas.get(id); const conceito = conceitos.get(id);
+      if (!nota || !conceito) return "nao-encontrada";
+      if (nota.revisao !== revisao) return "conflito";
+      conceito.pausada = pausada;
+      if (!pausada && !conceito.protegida) for (const raiz of Object.keys(conceito.origens)) {
+        const t = trabalhos.get(raiz); if (!t) continue;
+        t.geracao++; t.cursor = 0; t.estado = "pendente"; t.tentativas = 0; t.posse = null; t.ate = 0; t.disponivel = Date.now();
+      }
+      return "ok";
+    },
+    async diario(p) {
+      const antesEm = p.antes && new Date(p.antes.criadoEm).toISOString();
+      return [...eventos.values()].filter((e) => e.criadoEm >= new Date(p.inicio).toISOString() && e.criadoEm < new Date(p.fim).toISOString()
+        && (!p.antes || e.criadoEm < antesEm! || e.criadoEm === antesEm && e.id < p.antes.id))
+        .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm) || b.id.localeCompare(a.id)).slice(0, Math.max(1, Math.min(p.limite ?? 50, 101))).map((e) => ({ ...e }));
+    },
+    async energia(teto) {
+      const utilizada = [...consumo.values()].filter((v) => v.dia === dia()).reduce((s, v) => s + v.reservado, 0);
+      return { teto, utilizada, restante: Math.max(0, teto - utilizada), renovaEm: renovarEnergiaEm() };
+    },
+    async registrarDiagnostico(id, revisao, diagnostico) {
+      const c = conceitos.get(id); if (!c || acesso.notas.get(id)?.revisao !== revisao) return;
+      if (c.diagnostico?.assinatura !== diagnostico.assinatura && diagnostico.alertas.length) {
+        evento(`lint:${id}:${diagnostico.verificadoEm}:${diagnostico.assinatura}`, { ...eventoDoDiagnostico(diagnostico.alertas), sinteseId: id, origemId: null });
+      }
+      c.diagnostico = { ...diagnostico, alertas: [...diagnostico.alertas] };
     },
   };
   /** Revisão que a automação considera sua; divergir dela é edição manual. */

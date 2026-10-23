@@ -87,7 +87,7 @@ describe("validação por proposta", () => {
     vi.advanceTimersByTime(ESPERA);
     expect(await rodar(repo, gerar)).toMatchObject({ tipo: "processado", publicadas: 1 });
     const [pagina] = await repo.wiki!.listar();
-    expect((await repo.obterNota(pagina.notaId))?.titulo).toBe("TCP (síntese)");
+    expect(await repo.obterNota(pagina.notaId)).toMatchObject({ titulo: "TCP", pasta: "Neurônios" });
     expect((await repo.wiki!.automacao!.conceitos())[0].chave).toBe("tcp");
     expect(gerar).toHaveBeenCalledTimes(1);
   });

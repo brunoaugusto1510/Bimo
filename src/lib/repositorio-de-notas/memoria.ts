@@ -16,6 +16,7 @@ import { NOTAS_DE_EXEMPLO } from "./semente";
 import { conferirDestinos, conferirFontes, ErroWiki, type MetadadosWiki } from "../wiki/tipos";
 import type { PublicacaoWiki } from "../wiki/tipos";
 import { criarFilaWikiEmMemoria } from "../wiki/fila-memoria";
+import { compactarFontes } from "../wiki/fontes";
 import type {
   EntradaDeNota,
   IdDeNota,
@@ -103,7 +104,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       const nova = { ...nota, conteudo: entrada.conteudo, revisao: nota.revisao + 1, atualizadoEm: agora() };
       notas.set(nova.id, nova); versao++; resultado = { tipo: "ok", nota: copiar(nova) };
     } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta, conteudo: entrada.conteudo });
-    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes, estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas } }));
+    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: compactarFontes(entrada.fontes, entrada.afirmacoes), afirmacoes: entrada.afirmacoes, estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [] } }));
     return resultado;
   }
   const automacao = criarFilaWikiEmMemoria({ notas, paginas, publicarAtomico(publicacoes) {

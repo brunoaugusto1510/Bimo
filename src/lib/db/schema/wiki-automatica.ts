@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { bigint, boolean, check, date, foreignKey, index, integer, jsonb, pgPolicy, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { notas } from "./notas";
 import { usuariosAuth } from "./auth";
+import type { DiagnosticoWiki, TipoDeEventoWiki } from "../../wiki/observabilidade-tipos";
 
 export const conceitosWiki = pgTable("conceitos_wiki", {
   notaId: bigint("nota_id", { mode: "number" }).primaryKey(),
@@ -9,6 +10,8 @@ export const conceitosWiki = pgTable("conceitos_wiki", {
   chave: text("chave").notNull(), aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
   origens: jsonb("origens").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
   protegida: boolean("protegida").notNull().default(false),
+  pausada: boolean("pausada").notNull().default(false),
+  diagnostico: jsonb("diagnostico").$type<DiagnosticoWiki>(),
   revisaoGerenciada: integer("revisao_gerenciada").notNull().default(1),
 }, (t) => [
   foreignKey({ columns: [t.notaId, t.userId], foreignColumns: [notas.id, notas.userId] }).onDelete("cascade"),
@@ -18,6 +21,20 @@ export const conceitosWiki = pgTable("conceitos_wiki", {
   check("conceitos_wiki_chave_valida", sql`char_length(${t.chave}) between 1 and 200`),
   pgPolicy("conceitos_wiki_dono_policy", { for: "select", to: "authenticated",
     using: sql`(select auth.uid()) = ${t.userId}` }),
+]).enableRLS();
+
+/** Diário imutável: ids ficam como rótulos mesmo quando uma nota é removida. Só o backend grava. */
+export const eventosWiki = pgTable("eventos_wiki", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => usuariosAuth.id, { onDelete: "cascade" }),
+  chave: text("chave").notNull(), tipo: text("tipo").$type<TipoDeEventoWiki>().notNull(),
+  sinteseId: text("sintese_id"), origemId: text("origem_id"), texto: text("texto").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("eventos_wiki_dono_chave_idx").on(t.userId, t.chave),
+  index("eventos_wiki_dono_periodo_idx").on(t.userId, t.criadoEm, t.id),
+  check("eventos_wiki_texto_curto", sql`char_length(${t.texto}) between 1 and 500`),
+  check("eventos_wiki_tipo_valido", sql`${t.tipo} in ('nasceu', 'cresceu', 'discordam', 'precisa_de_voce', 'sem_novidade', 'despertar', 'energia')`),
+  pgPolicy("eventos_wiki_dono_policy", { for: "select", to: "authenticated", using: sql`(select auth.uid()) = ${t.userId}` }),
 ]).enableRLS();
 
 export const trabalhosWiki = pgTable("trabalhos_wiki", {

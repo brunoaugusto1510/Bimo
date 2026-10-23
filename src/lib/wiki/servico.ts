@@ -1,5 +1,5 @@
 import type { RepositorioDeNotas } from "../repositorio-de-notas/tipos";
-import { mesmoConteudo } from "./citacoes";
+import { fonteConfere } from "./fontes";
 import { ErroWiki, type MetadadosWiki } from "./tipos";
 
 export function exigirWiki(repo: RepositorioDeNotas) {
@@ -16,7 +16,7 @@ export async function estadoDaPagina(repo: RepositorioDeNotas, meta: MetadadosWi
   for (const fonte of meta.fontes) {
     const atual = await repo.obterNota(fonte.id);
     // Vale o que a origem diz: renomeá-la ou movê-la não invalida a síntese.
-    if (!atual || !mesmoConteudo(atual.conteudo, fonte.conteudo)) return "desatualizada" as const;
+    if (!atual || !fonteConfere(atual.conteudo, fonte)) return "desatualizada" as const;
   }
   return "atualizada" as const;
 }

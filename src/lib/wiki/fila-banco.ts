@@ -1,11 +1,13 @@
 import "server-only";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/cliente";
-import { conceitosWiki, consumosWiki, notas, paginasWiki, trabalhosWiki } from "../db/schema";
+import { conceitosWiki, consumosWiki, eventosWiki, notas, paginasWiki, trabalhosWiki } from "../db/schema";
 import { ErroWiki, type PublicacaoWiki } from "./tipos";
 import type { AutomacaoWiki, TrabalhoWiki } from "./automacao-tipos";
 import { automacaoWikiDisponivel } from "./disponibilidade";
 import { registrarAlteracaoWiki } from "./eventos-banco";
+import { renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
+import { eventoDoDiagnostico, textoDaPublicacao } from "./diario";
 
 export type TransacaoWiki = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const colunas = { notaId: sql<string>`${trabalhosWiki.notaId}::text`, revisao: trabalhosWiki.revisao,
@@ -14,6 +16,9 @@ const idValido = (id: string) => /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= Big
 
 
 export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWiki, entrada: PublicacaoWiki) => Promise<string>): AutomacaoWiki {
+  async function evento(tx: TransacaoWiki, chave: string, dados: Omit<EventoWiki, "id" | "criadoEm">) {
+    await tx.insert(eventosWiki).values({ userId, chave, ...dados }).onConflictDoNothing({ target: [eventosWiki.userId, eventosWiki.chave] });
+  }
   const doTrabalho = (id: string) => and(eq(trabalhosWiki.userId, userId), sql`${trabalhosWiki.notaId} = ${id}::bigint`);
   async function transacao<T>(executar: (tx: TransacaoWiki) => Promise<T>) {
     return db.transaction(async (tx) => {
@@ -44,6 +49,9 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
             sql`not exists (select 1 from ${trabalhosWiki} t where t.user_id = ${userId}::uuid and t.nota_id = ${notas.id} and t.revisao = ${notas.revisao})`))
           .orderBy(asc(notas.id)).limit(Math.max(1, Math.min(limite, 100)));
         for (const nota of linhas) await registrarAlteracaoWiki(tx, userId, nota.id, nota.revisao);
+        if (linhas.length) await evento(tx, `despertar:${linhas.map((n) => `${n.id}:${n.revisao}`).join(",")}`, {
+          tipo: "despertar", sinteseId: null, origemId: null, texto: `${linhas.length} anotações entraram na fila de leitura, incluindo as anteriores à ativação.`,
+        });
         return linhas.length;
       });
     },
@@ -67,7 +75,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async conceitos() {
       return db.select({ notaId: sql<string>`${conceitosWiki.notaId}::text`, chave: conceitosWiki.chave, aliases: conceitosWiki.aliases,
         protegida: sql<boolean>`(${conceitosWiki.protegida} or ${conceitosWiki.revisaoGerenciada} <> ${notas.revisao})`,
-        origens: conceitosWiki.origens, revisaoGerenciada: conceitosWiki.revisaoGerenciada })
+        origens: conceitosWiki.origens, revisaoGerenciada: conceitosWiki.revisaoGerenciada, pausada: conceitosWiki.pausada, diagnostico: conceitosWiki.diagnostico })
         .from(conceitosWiki).innerJoin(notas, and(eq(notas.userId, userId), eq(notas.id, conceitosWiki.notaId)))
         .where(eq(conceitosWiki.userId, userId)).orderBy(asc(conceitosWiki.notaId));
     },
@@ -107,20 +115,22 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         if (!origem || origem.revisao !== trabalho.revisao) throw new ErroWiki("Origem superada.", 409);
         for (const p of publicacoes) {
           if (!p.conceito) throw new ErroWiki("Conceito ausente.", 422);
-          const [existente] = await tx.select({ id: sql<string>`${conceitosWiki.notaId}::text`, protegida: conceitosWiki.protegida })
+          const [existente] = await tx.select({ id: sql<string>`${conceitosWiki.notaId}::text`, protegida: conceitosWiki.protegida, pausada: conceitosWiki.pausada })
             .from(conceitosWiki).where(and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.chave, p.conceito.chave)));
-          if (existente && (existente.protegida || existente.id !== p.alvo?.id)) throw new ErroWiki("Conceito protegido ou existente.", 422);
+          if (existente && (existente.protegida || existente.pausada || existente.id !== p.alvo?.id)) throw new ErroWiki("Conceito protegido ou existente.", 422);
           const id = await publicar(tx, p);
           const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`));
           const origens = Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao]));
           await tx.insert(conceitosWiki).values({ userId, notaId: sql`${id}::bigint`, ...p.conceito, origens, revisaoGerenciada: nota.revisao })
-            .onConflictDoUpdate({ target: conceitosWiki.notaId, set: { aliases: p.conceito.aliases, origens, revisaoGerenciada: nota.revisao },
-              setWhere: and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.protegida, false)) });
+            .onConflictDoUpdate({ target: conceitosWiki.notaId, set: { aliases: p.conceito.aliases, origens, revisaoGerenciada: nota.revisao, diagnostico: null },
+              setWhere: and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.protegida, false), eq(conceitosWiki.pausada, false)) });
+          await evento(tx, `publicacao:${id}:${nota.revisao}`, { tipo: p.alvo ? "cresceu" : "nasceu", sinteseId: id,
+            origemId: trabalho.notaId, texto: textoDaPublicacao(p.titulo, !p.alvo) });
         }
         if (avaliadas.length) {
           // O modelo viu estas sínteses desatualizadas e não as mudou: a dependência passa a esta revisão.
           await tx.update(conceitosWiki).set({ origens: sql`jsonb_set(${conceitosWiki.origens}, array[${trabalho.notaId}]::text[], to_jsonb(${trabalho.revisao}::int))` })
-            .where(and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.protegida, false), sql`${conceitosWiki.origens} ? ${trabalho.notaId}`,
+            .where(and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.protegida, false), eq(conceitosWiki.pausada, false), sql`${conceitosWiki.origens} ? ${trabalho.notaId}`,
               sql`${conceitosWiki.notaId} in (${sql.join(avaliadas.filter(idValido).map((id) => sql`${id}::bigint`), sql`, `)})`));
         }
         // Só onda sem progresso conta como tentativa; ela também espera antes de voltar.
@@ -131,16 +141,24 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
           disponivelEm: progresso || cursor === null ? sql`clock_timestamp()` : sql`clock_timestamp() + make_interval(secs => ${30 * trabalho.tentativas})` })
           .where(filtroDaPosse(trabalho)).returning({ id: colunas.notaId });
         if (!conclusao) throw new ErroWiki("A posse expirou durante a publicação.", 409);
+        if (!publicacoes.length && cursor === null) await evento(tx, `leitura:${trabalho.notaId}:${trabalho.geracao}`, {
+          tipo: "sem_novidade", sinteseId: null, origemId: trabalho.notaId, texto: "Li esta anotação e não encontrei novidade sustentada para os neurônios.",
+        });
       });
     },
     async falhar(trabalho, motivo, erro) {
       await transacao(async (tx) => {
-        await tx.update(trabalhosWiki).set({ posse: null, posseAte: null, ultimoErro: motivo === "orcamento" ? "orcamento" : erro?.slice(0, 100) ?? null,
+        const [alterado] = await tx.update(trabalhosWiki).set({ posse: null, posseAte: null, ultimoErro: motivo === "orcamento" ? "orcamento" : erro?.slice(0, 100) ?? null,
           // Faltar orçamento não é falha do trabalho: a tentativa da reivindicação é devolvida.
           ...(motivo === "orcamento" ? { tentativas: sql`greatest(${trabalhosWiki.tentativas} - 1, 0)` } : {}),
           estado: motivo === "orcamento" || motivo === "temporario" && trabalho.tentativas < 3 ? "pendente" : motivo,
           disponivelEm: motivo === "orcamento" ? sql`date_trunc('day', clock_timestamp() at time zone 'UTC') at time zone 'UTC' + interval '1 day'`
-            : sql`clock_timestamp() + make_interval(secs => ${30 * trabalho.tentativas})` }).where(filtroDaPosse(trabalho));
+            : sql`clock_timestamp() + make_interval(secs => ${30 * trabalho.tentativas})` }).where(filtroDaPosse(trabalho)).returning({ estado: trabalhosWiki.estado });
+        if (!alterado) return;
+        if (motivo === "orcamento") await evento(tx, `energia:${new Date().toISOString().slice(0, 10)}`, { tipo: "energia", sinteseId: null, origemId: null,
+          texto: "A energia disponível não comporta outra leitura. A fila retoma após a renovação diária." });
+        else if (alterado.estado !== "pendente") await evento(tx, `falha:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "precisa_de_voce", sinteseId: null, origemId: trabalho.notaId,
+          texto: "Uma leitura precisa de atenção antes de continuar. As anotações foram preservadas." });
       });
     },
     async retomar() {
@@ -169,6 +187,53 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         return "ok" as const;
       });
     },
+    async pausar(id, revisaoBase, pausada) {
+      if (!idValido(id)) return "nao-encontrada";
+      return transacao(async (tx) => {
+        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`)).for("update");
+        const [conceito] = await tx.select({ origens: conceitosWiki.origens, protegida: conceitosWiki.protegida }).from(conceitosWiki)
+          .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`));
+        if (!nota || !conceito) return "nao-encontrada" as const;
+        if (nota.revisao !== revisaoBase) return "conflito" as const;
+        await tx.update(conceitosWiki).set({ pausada }).where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`));
+        if (!pausada && !conceito.protegida) for (const raiz of Object.keys(conceito.origens).filter(idValido)) {
+          const [origem] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${raiz}::bigint`));
+          if (!origem) continue;
+          await registrarAlteracaoWiki(tx, userId, raiz, origem.revisao);
+          await tx.update(trabalhosWiki).set({ geracao: sql`${trabalhosWiki.geracao} + 1`, cursor: 0, estado: "pendente", tentativas: 0,
+            posse: null, posseAte: null, disponivelEm: sql`clock_timestamp()` }).where(doTrabalho(raiz));
+        }
+        return "ok" as const;
+      });
+    },
+    async diario(p) {
+      const linhas = await db.select({ id: eventosWiki.id, tipo: eventosWiki.tipo, sinteseId: eventosWiki.sinteseId,
+        origemId: eventosWiki.origemId, texto: eventosWiki.texto,
+        // Mantém microssegundos no cursor; Date.toISOString cortaria eventos do mesmo milissegundo.
+        criadoEm: sql<string>`to_char(${eventosWiki.criadoEm} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(eventosWiki)
+        .where(and(eq(eventosWiki.userId, userId), sql`${eventosWiki.criadoEm} >= ${p.inicio}::timestamptz and ${eventosWiki.criadoEm} < ${p.fim}::timestamptz`,
+          p.antes ? sql`(${eventosWiki.criadoEm}, ${eventosWiki.id}) < (${p.antes.criadoEm}::timestamptz, ${p.antes.id}::uuid)` : undefined))
+        .orderBy(desc(eventosWiki.criadoEm), desc(eventosWiki.id)).limit(Math.max(1, Math.min(p.limite ?? 50, 101)));
+      return linhas;
+    },
+    async energia(teto) {
+      const [linha] = await db.select({ utilizada: sql<number>`coalesce(sum(coalesce(${consumosWiki.utilizado}, ${consumosWiki.reservado})), 0)::int` })
+        .from(consumosWiki).where(and(eq(consumosWiki.userId, userId), sql`${consumosWiki.dia} = (clock_timestamp() at time zone 'UTC')::date`));
+      return { teto, utilizada: linha.utilizada, restante: Math.max(0, teto - linha.utilizada), renovaEm: renovarEnergiaEm() };
+    },
+    async registrarDiagnostico(id, revisao, diagnostico) {
+      if (!idValido(id)) return;
+      await transacao(async (tx) => {
+        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`)).for("share");
+        if (!nota || nota.revisao !== revisao) return;
+        const filtro = and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`);
+        const [c] = await tx.select({ diagnostico: conceitosWiki.diagnostico }).from(conceitosWiki).where(filtro).for("update");
+        if (!c || (c.diagnostico?.verificadoEm ?? "") > diagnostico.verificadoEm) return;
+        await tx.update(conceitosWiki).set({ diagnostico }).where(filtro);
+        if (c.diagnostico?.assinatura !== diagnostico.assinatura && diagnostico.alertas.length) await evento(tx,
+          `lint:${id}:${diagnostico.verificadoEm}:${diagnostico.assinatura}`, { ...eventoDoDiagnostico(diagnostico.alertas), sinteseId: id, origemId: null });
+      });
+    },
   };
   return comSondagem(fila);
 }
@@ -189,5 +254,9 @@ function comSondagem(fila: AutomacaoWiki): AutomacaoWiki {
     falhar: async (trabalho, motivo, erro) => { if (await disponivel()) await fila.falhar(trabalho, motivo, erro); },
     retomar: async () => { if (await disponivel()) await fila.retomar(); },
     gerenciar: async (id, revisaoBase, gerenciada) => (await disponivel() ? fila.gerenciar(id, revisaoBase, gerenciada) : "nao-encontrada"),
+    pausar: async (id, revisaoBase, pausada) => (await disponivel() ? fila.pausar(id, revisaoBase, pausada) : "nao-encontrada"),
+    diario: async (periodo) => (await disponivel() ? fila.diario(periodo) : []),
+    energia: async (teto) => (await disponivel() ? fila.energia(teto) : { teto, utilizada: 0, restante: teto, renovaEm: renovarEnergiaEm() }),
+    registrarDiagnostico: async (id, revisao, diagnostico) => { if (await disponivel()) await fila.registrarDiagnostico(id, revisao, diagnostico); },
   };
 }

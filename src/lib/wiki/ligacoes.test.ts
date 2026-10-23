@@ -44,6 +44,15 @@ const paciencia = (c: { diario: string }, ligacoes: string[], extras: Partial<Pr
 const idDaNova = async (repo: Repo, antes: string[]) => (await repo.wiki!.listar()).find((p) => !antes.includes(p.notaId))!.notaId;
 
 describe("ligações entre neurônios", () => {
+  it("retira uma ligação pelo id sem editar manualmente nem proteger a síntese", async () => {
+    const c = await comDoisNeuronios();
+    await rodar(c.repo, com(proposta({ alvoId: c.fermentacao, titulo: "Fermentação lenta", ligacoes: [c.leitura] })));
+    await c.repo.criarNota({ titulo: "Fermentação lenta outra vez", conteudo: "A fermentação lenta merece uma nova leitura sobre paciência." }, autor);
+    vi.advanceTimersByTime(ESPERA);
+    await rodar(c.repo, async () => ({ proposta: { propostas: [{ ...proposta({ alvoId: c.fermentacao, titulo: "Fermentação lenta" }), ligacoesRetiradas: [c.leitura] }] }, uso: null }));
+    expect((await c.repo.wiki!.obter(c.fermentacao))!.estrutura.ligacoes).toEqual([]);
+    expect((await c.repo.wiki!.automacao!.conceitos()).find((p) => p.notaId === c.fermentacao)!.protegida).toBe(false);
+  });
   it("uma síntese nova liga outras sínteses: a lista fica guardada e o texto traz links de verdade", async () => {
     const c = await comDoisNeuronios();
     const antes = (await c.repo.wiki!.listar()).map((p) => p.notaId);
@@ -53,8 +62,8 @@ describe("ligações entre neurônios", () => {
     expect((await c.repo.wiki!.obter(id))!.estrutura.ligacoes).toEqual([c.fermentacao, c.leitura]);
     const conteudo = (await c.repo.obterNota(id))!.conteudo;
     expect(conteudo).toContain("## Neurônios relacionados");
-    expect(conteudo).toContain("[[Fermentação lenta]]");
-    expect(conteudo).toContain("[[Ler devagar]]");
+    expect(conteudo).toContain("[[Neurônios/Fermentação lenta]]");
+    expect(conteudo).toContain("[[Neurônios/Ler devagar]]");
     // Quem é ligado não é tocado: nada de ligação de volta escrita no outro neurônio.
     expect(await Promise.all(antes.map(async (n) => (await c.repo.obterNota(n))!.revisao))).toEqual(revisoes);
   });
@@ -106,8 +115,8 @@ describe("ligações entre neurônios", () => {
       afirmacoes: [afirmacao("Vale para a corrida", outra.tipo === "ok" ? outra.nota.id : "", "paciência também vale para a corrida de domingo")] })));
     expect((await c.repo.wiki!.obter(id))!.estrutura.ligacoes).toEqual([c.fermentacao, c.leitura]);
     const conteudo = (await c.repo.obterNota(id))!.conteudo;
-    expect(conteudo).toContain("[[Fermentação lenta]]");
-    expect(conteudo).toContain("[[Ler devagar]]");
+    expect(conteudo).toContain("[[Neurônios/Fermentação lenta]]");
+    expect(conteudo).toContain("[[Neurônios/Ler devagar]]");
   });
 
   it("uma síntese editada à mão por você continua podendo ser ligada, sem ser alterada", async () => {
@@ -127,14 +136,14 @@ describe("ligações entre neurônios", () => {
     const id = await idDaNova(c.repo, antes);
     const ligada = (await c.repo.obterNota(c.fermentacao))!;
     await c.repo.renomearNota(c.fermentacao, "Fermentação lenta e fria", { revisaoBase: ligada.revisao, autor });
-    expect((await c.repo.obterNota(id))!.conteudo).toContain("[[Fermentação lenta e fria]]");
+    expect((await c.repo.obterNota(id))!.conteudo).toContain("[[Neurônios/Fermentação lenta e fria]]");
     const outra = await c.repo.criarNota({ titulo: "Corrida", conteudo: "A paciência também vale para a corrida de domingo, sempre devagar." }, autor);
     vi.advanceTimersByTime(ESPERA);
     await rodar(c.repo, com(proposta({ alvoId: id,
       afirmacoes: [afirmacao("Vale para a corrida", outra.tipo === "ok" ? outra.nota.id : "", "paciência também vale para a corrida de domingo")] })));
     const conteudo = (await c.repo.obterNota(id))!.conteudo;
-    expect(conteudo).toContain("[[Fermentação lenta e fria]]");
-    expect(conteudo).not.toContain("[[Fermentação lenta]]");
+    expect(conteudo).toContain("[[Neurônios/Fermentação lenta e fria]]");
+    expect(conteudo).not.toContain("[[Neurônios/Fermentação lenta]]");
   });
 
   it("no máximo oito ligações por síntese", async () => {
@@ -171,7 +180,7 @@ describe("ligações entre neurônios", () => {
     const ligar = proposta({ alvoId: c.fermentacao, titulo: "Fermentação lenta", ligacoes: [c.leitura] });
     expect(await rodar(c.repo, com(ligar))).toMatchObject({ publicadas: 1, descartadas: 0 });
     expect((await c.repo.wiki!.obter(c.fermentacao))!.estrutura.ligacoes).toEqual([c.leitura]);
-    expect((await c.repo.obterNota(c.fermentacao))!.conteudo).toContain("[[Ler devagar]]");
+    expect((await c.repo.obterNota(c.fermentacao))!.conteudo).toContain("[[Neurônios/Ler devagar]]");
     // As afirmações continuam as mesmas: nada foi perdido ao só ligar.
     expect((await c.repo.wiki!.obter(c.fermentacao))!.afirmacoes).toHaveLength(1);
     // Nova nota para a fila ter o que avaliar; o modelo repete a mesma ligação e a síntese não é republicada.
@@ -201,7 +210,7 @@ describe("ligações entre neurônios", () => {
     vi.advanceTimersByTime(ESPERA);
     await rodar(c.repo, com(paciencia(c, [c.fermentacao])));
     const conteudo = (await c.repo.obterNota(await idDaNova(c.repo, antes)))!.conteudo;
-    expect(conteudo).toContain("[[Fermentação lenta e fria]]");
+    expect(conteudo).toContain("[[Neurônios/Fermentação lenta e fria]]");
   });
 
   it("o modelo vê as ligações atuais e as perguntas em aberto de cada candidata", async () => {
@@ -243,6 +252,16 @@ describe("perguntas em aberto", () => {
     const x = await comPergunta();
     await rodar(x.repo, com(enriquecer(x, [])));
     expect((await x.repo.wiki!.obter(x.id))!.estrutura.lacunas).toEqual(["Quanto tempo é paciência demais?"]);
+    expect((await x.repo.obterNota(x.id))!.conteudo).toContain("Quanto tempo é paciência demais?");
+  });
+  it("recupera perguntas do markdown de uma síntese anterior à estrutura da 0010", async () => {
+    const x = await comPergunta();
+    const obter = x.repo.wiki!.obter.bind(x.repo.wiki);
+    vi.spyOn(x.repo.wiki!, "obter").mockImplementation(async (id) => {
+      const meta = await obter(id);
+      return meta?.notaId === x.id ? { ...meta, estrutura: { ligacoes: [], lacunas: [] } } : meta;
+    });
+    await rodar(x.repo, com(enriquecer(x, [])));
     expect((await x.repo.obterNota(x.id))!.conteudo).toContain("Quanto tempo é paciência demais?");
   });
 

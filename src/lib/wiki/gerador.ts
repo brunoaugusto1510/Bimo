@@ -33,7 +33,12 @@ export const gerarConhecimentoWiki: GeradorAutomaticoWiki = async (contexto, sin
       "Uma afirmação marcada desatualizada tem evidência numa nota que mudou: confira com o texto atual e, se já não vale, substitua ou retire (essas podem ser retiradas sozinhas); se continua valendo, deixe-a. " +
       "Afirmações que você não citar são mantidas. " +
       "Use ligacoes (ids de sínteses do índice ou de candidatas gerenciadas, no máximo oito) para conectar esta síntese a outras de assuntos relacionados ou complementares: " +
-      "uma ligação não é evidência, não altera a outra síntese e não exige citação; em síntese que já existe as ligações atuais ficam e você só acrescenta (pode propor só novas ligações ou perguntas, sem afirmações). " +
+      "uma ligação não é evidência, não altera a outra síntese e não exige citação; em síntese que já existe as ligações atuais ficam. " +
+      "Use ligacoesRetiradas para retirar ids que constam das ligações da candidata, liberando espaço entre as oito vagas. " +
+      "Pode propor só ligações, perguntas ou divergências, sem afirmações novas. " +
+      "Em divergencias registre pares a e b, cada um com afirmacaoId e contexto, quando duas afirmações divergem; mantenha ambas com suas evidências. " +
+      "Use ids das afirmações visíveis ou nova:1, nova:2 etc. para as posições em afirmacoes desta proposta (a partir de 1). " +
+      "Não invente ids nem conclua que um contexto substitui o outro sem suporte nas notas. Pares anteriores continuam enquanto as duas afirmações existirem. " +
       "Em lacunas devolva a lista completa das perguntas ainda em aberto (veja lacunas da candidata); vazia, numa síntese que já existe, mantém as atuais. " +
       "Só use ids que aparecem em afirmacoes de candidatas; em síntese nova, substituicoes e retiradas ficam vazias. " +
       "Divergência entre duas anotações não é correção: mantenha as duas afirmações, registrando o contexto de cada uma. " +

@@ -97,7 +97,7 @@ it("migração parcial (sem a coluna da 0009) mantém a fila desligada em vez de
   expect(gerar).not.toHaveBeenCalled();
 });
 
-it("sem a 0010 (coluna da estrutura) a wiki continua desligada; com ela, volta a funcionar", async () => {
+it("espera a 0011 para automatizar e reconhece a migração sem reiniciar a instância", async () => {
   // Neste ponto o banco tem a 0007 e a 0008 (o teste anterior). A 0009 sozinha ainda não basta.
   await pg.exec(await readFile("drizzle/0009_wiki_ultimo_erro.sql", "utf8"));
   esquecerSondagemDaWiki();
@@ -111,5 +111,9 @@ it("sem a 0010 (coluna da estrutura) a wiki continua desligada; com ela, volta a
   esquecerSondagemDaWiki();
   const pronta = criarRepositorioDoBanco(dono);
   await pronta.criarNota({ titulo: "D", conteudo: "outro texto" }, autor);
-  expect((await pronta.wiki!.automacao!.cobertura()).elegiveis).toBeGreaterThan(0);
+  expect((await pronta.wiki!.automacao!.cobertura()).elegiveis).toBe(0);
+  await pg.exec(await readFile("drizzle/0011_wiki_observabilidade.sql", "utf8"));
+  const relogio = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31_000);
+  try { expect((await pronta.wiki!.automacao!.cobertura()).elegiveis).toBeGreaterThan(0); }
+  finally { relogio.mockRestore(); }
 });

@@ -5,6 +5,7 @@ import { processarWiki } from "./automacao";
 import type { GeradorAutomaticoWiki } from "./automacao-tipos";
 import { ESTABILIDADE_DA_WIKI_SEGUNDOS } from "./configuracao";
 import { estadoDaPagina, exigirWiki, obterIndiceWiki } from "./servico";
+import { hashDoConteudo } from "./fontes";
 
 const autor = { criadoPor: "usuario" as const };
 const sintetizar: GeradorAutomaticoWiki = async (c) => ({ proposta: { propostas: [{ titulo: "Consistência", alvoId: null, aliases: ["cache"], lacunas: [],
@@ -54,9 +55,10 @@ describe("índice e estado das sínteses", () => {
     const repo = await preparar();
     expect(await obterIndiceWiki(criarRepositorioEmMemoria())).toEqual([]);
     const [meta] = await repo.wiki!.listar();
-    meta.fontes[0].conteudo = "adulterado"; meta.afirmacoes.length = 0;
+    meta.fontes[0].titulo = "adulterado"; meta.afirmacoes.length = 0;
     const [deNovo] = await repo.wiki!.listar();
-    expect(deNovo.fontes[0].conteudo).toBe("O cache guarda cópias locais.");
+    expect(deNovo.fontes[0]).toMatchObject({ titulo: "Cache", hash: hashDoConteudo("O cache guarda cópias locais.") });
+    expect(deNovo.fontes[0]).not.toHaveProperty("conteudo");
     expect(deNovo.afirmacoes).toHaveLength(1);
   });
 

@@ -78,6 +78,13 @@
       "when": 1792761307774,
       "tag": "0010_wiki_estrutura",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792774952809,
+      "tag": "0011_wiki_observabilidade",
+      "breakpoints": true
     }
   ]
 }

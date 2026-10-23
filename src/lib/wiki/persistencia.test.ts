@@ -8,6 +8,8 @@ import { processarWiki } from "./automacao";
 import type { ContextoWiki } from "./automacao-tipos";
 import { evidenciasDaWiki } from "./consulta";
 import { estadoDaPagina } from "./servico";
+import { compactarFontes, hashDoConteudo } from "./fontes";
+import { obterCerebroWiki, verificarSinteses } from "./observabilidade";
 
 const sim = vi.hoisted(() => ({ db: null as unknown }));
 vi.mock("server-only", () => ({}));
@@ -37,7 +39,7 @@ beforeAll(async () => {
     create table versoes_nota (id bigint generated always as identity primary key, nota_id bigint references notas(id), user_id uuid not null,
       titulo text not null, conteudo text not null, pasta text, tags text[], criado_por text not null, criado_por_ferramenta text,
       sessao_aberta boolean not null default false, versionado_em timestamptz not null default now());`);
-  for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql", "drizzle/0009_wiki_ultimo_erro.sql", "drizzle/0010_wiki_estrutura.sql"]) await pg.exec(await readFile(caminho, "utf8"));
+  for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql", "drizzle/0009_wiki_ultimo_erro.sql", "drizzle/0010_wiki_estrutura.sql", "drizzle/0011_wiki_observabilidade.sql"]) await pg.exec(await readFile(caminho, "utf8"));
 }, 30_000);
 beforeEach(async () => {
   vi.stubEnv("WIKI_VIVA_ATIVA", "1"); vi.stubEnv("WIKI_AUTOMATICA_ATIVA", "1");
@@ -84,7 +86,7 @@ describe("persistência local da Wiki Viva", () => {
     expect(await repo.wiki!.listar()).toHaveLength(0);
     expect((await pg.query("select revisao, geracao, estado from trabalhos_wiki")).rows).toEqual([{ revisao: 2, geracao: 2, estado: "pendente" }]);
     await liberar(); await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 });
-    expect((await repo.wiki!.listar())[0].fontes[0].conteudo).toBe("depois");
+    expect((await repo.wiki!.listar())[0].fontes[0]).toMatchObject({ hash: hashDoConteudo("depois") });
   });
   it("reserva consumo sem corrida e mantém custo incerto mesmo após apagar a origem", async () => {
     const repo = criarRepositorioDoBanco(donoA);
@@ -180,6 +182,101 @@ describe("persistência local da Wiki Viva", () => {
   });
 });
 
+describe("diário, diagnóstico e snapshots compactos no Postgres", () => {
+  it("uma pausa entre geração e publicação impede escrita, mesmo depois do uso do modelo", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "A", conteudo: "Uma evidência verificável para esta síntese." }, autor); await liberar();
+    await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 });
+    const [p] = await repo.wiki!.listar();
+    await repo.criarNota({ titulo: "B", conteudo: "Mais evidências verificáveis para enriquecer esta síntese." }, autor); await liberar();
+    const fila = repo.wiki!.automacao!; const concluir = fila.concluir.bind(fila);
+    const espiao = vi.spyOn(fila, "concluir").mockImplementationOnce(async (...args) => {
+      await fila.pausar(p.notaId, 1, true); return concluir(...args);
+    });
+    try { expect((await processarWiki(repo, async (c) => resposta(c, p.notaId), { tetoDiario: 200_000 })).tipo).toBe("adiado"); }
+    finally { espiao.mockRestore(); }
+    expect((await repo.obterNota(p.notaId))!.revisao).toBe(1);
+    expect((await pg.query("select * from eventos_wiki where user_id = $1 and tipo = 'cresceu'", [donoA])).rows).toEqual([]);
+    expect((await fila.energia(200_000)).utilizada).toBe(400);
+  });
+  it("falhar ao gravar o diário desfaz a publicação inteira e preserva o custo", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Memória", conteudo: "A memória liga conceitos com evidência." }, autor); await liberar();
+    await pg.exec(`create function recusar_diario() returns trigger language plpgsql as $$ begin raise exception 'falha de teste'; end $$;
+      create trigger falha_diario before insert on eventos_wiki for each row when (new.tipo = 'nasceu') execute function recusar_diario()`);
+    try {
+      expect((await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 })).tipo).toBe("adiado");
+      expect(await repo.wiki!.listar()).toEqual([]);
+      expect((await pg.query("select * from conceitos_wiki")).rows).toEqual([]);
+      expect((await pg.query("select * from eventos_wiki")).rows).toEqual([]);
+      expect(await repo.listarResumos()).toHaveLength(1);
+      expect((await repo.wiki!.automacao!.energia(200_000)).utilizada).toBe(200);
+    } finally { await pg.exec("drop trigger falha_diario on eventos_wiki; drop function recusar_diario()"); }
+  });
+  it("isola diário e energia por dono, pagina eventos e impede escrita direta por RLS", async () => {
+    const repo = criarRepositorioDoBanco(donoA); const outro = criarRepositorioDoBanco(donoB);
+    await repo.criarNota({ titulo: "A", conteudo: "Esta anotação traz uma evidência verificável." }, autor); await liberar();
+    await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 });
+    const periodo = { inicio: "2020-01-01T00:00:00Z", fim: "2100-01-01T00:00:00Z" };
+    const eventos = await repo.wiki!.automacao!.diario(periodo);
+    expect(eventos).toHaveLength(1); expect(eventos[0].tipo).toBe("nasceu");
+    expect(await repo.wiki!.automacao!.diario({ ...periodo, antes: { criadoEm: eventos[0].criadoEm, id: eventos[0].id } })).toEqual([]);
+    expect(await outro.wiki!.automacao!.diario(periodo)).toEqual([]);
+    expect((await outro.wiki!.automacao!.energia(200_000)).utilizada).toBe(0);
+    await pg.exec("grant select, insert, update, delete on eventos_wiki to authenticated; grant usage on schema public, auth to authenticated; set role authenticated");
+    try {
+      await pg.query("select set_config('request.jwt.claim.sub', $1, false)", [donoB]);
+      expect((await pg.query("select * from eventos_wiki")).rows).toEqual([]);
+      await pg.query("select set_config('request.jwt.claim.sub', $1, false)", [donoA]);
+      expect((await pg.query("select * from eventos_wiki")).rows).toHaveLength(1);
+      await expect(pg.query("insert into eventos_wiki (user_id, chave, tipo, texto) values ($1, 'forjado', 'nasceu', 'Forjado')", [donoA])).rejects.toThrow();
+      expect((await pg.query("delete from eventos_wiki returning id")).rows).toEqual([]);
+    } finally { await pg.exec("reset role"); }
+  });
+  it("pausa, conflito de revisão e alerta sem raízes sobrevivem à leitura por outro repositório", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "A", conteudo: "Esta anotação traz uma evidência verificável." }, autor); await liberar();
+    await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 });
+    const [p] = await repo.wiki!.listar(); const fila = repo.wiki!.automacao!;
+    expect(await fila.pausar(p.notaId, 5, true)).toBe("conflito");
+    expect(await criarRepositorioDoBanco(donoB).wiki!.automacao!.pausar(p.notaId, 1, true)).toBe("nao-encontrada");
+    expect(await fila.pausar(p.notaId, 1, true)).toBe("ok");
+    expect((await obterCerebroWiki(criarRepositorioDoBanco(donoA), 200_000)).neuronios[0].estado).toBe("em_pausa");
+    await fila.pausar(p.notaId, 1, false);
+    await pg.query("delete from versoes_nota where user_id = $1 and nota_id = 1", [donoA]);
+    await pg.query("delete from notas where user_id = $1 and id = 1", [donoA]);
+    await verificarSinteses(repo); await verificarSinteses(repo);
+    expect((await obterCerebroWiki(repo, 200_000)).neuronios[0].estado).toBe("sem_raizes");
+    expect((await pg.query("select tipo from eventos_wiki where user_id = $1 and tipo = 'precisa_de_voce'", [donoA])).rows).toHaveLength(1);
+  });
+  it("migra fontes antigas com Unicode para hashes compatíveis sem copiar conteúdo e ainda lê o legado", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "A", conteudo: "🧠 Quórum e memória com evidência. Veja [[Antes]]." }, autor); await liberar();
+    await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 });
+    const [p] = await repo.wiki!.listar(); const fonte = (await repo.obterNota("1"))!;
+    await pg.query("update paginas_wiki set fontes = $1::jsonb where user_id = $2", [JSON.stringify([fonte]), donoA]);
+    expect(await estadoDaPagina(repo, (await repo.wiki!.obter(p.notaId))!)).toBe("atualizada");
+    const migracao = await readFile("drizzle/0011_wiki_observabilidade.sql", "utf8");
+    await pg.exec(migracao.slice(migracao.indexOf("-- SHA-256")));
+    const compactas = (await repo.wiki!.obter(p.notaId))!.fontes;
+    expect(compactas).toEqual(compactarFontes([fonte], p.afirmacoes));
+    expect(compactas[0]).not.toHaveProperty("conteudo");
+    expect((await evidenciasDaWiki(repo, p.notaId))!.afirmacoes).toHaveLength(1);
+    await pg.query("update notas set conteudo = replace(conteudo, '[[Antes]]', '[[Depois]]') where user_id = $1 and id = 1", [donoA]);
+    expect(await estadoDaPagina(repo, (await repo.wiki!.obter(p.notaId))!)).toBe("atualizada");
+  });
+  it("o cursor preserva eventos com microssegundos diferentes dentro do mesmo milissegundo", async () => {
+    await pg.query(`insert into eventos_wiki (user_id, chave, tipo, texto, criado_em) values
+      ($1, 'a', 'sem_novidade', 'A', '2026-10-23T12:00:00.123456Z'),
+      ($1, 'b', 'sem_novidade', 'B', '2026-10-23T12:00:00.123123Z')`, [donoA]);
+    const fila = criarRepositorioDoBanco(donoA).wiki!.automacao!;
+    const periodo = { inicio: "2026-10-23T00:00:00Z", fim: "2026-10-24T00:00:00Z", limite: 1 };
+    const [primeiro] = await fila.diario(periodo);
+    const [segundo] = await fila.diario({ ...periodo, antes: { criadoEm: primeiro.criadoEm, id: primeiro.id } });
+    expect([primeiro.texto, segundo.texto]).toEqual(["A", "B"]);
+  });
+});
+
 describe("busca só de ids no Postgres", () => {
   it("devolve os mesmos acertos da busca completa, na mesma ordem, só do dono, e respeita o limite", async () => {
     const repo = criarRepositorioDoBanco(donoA);
@@ -232,15 +329,15 @@ describe("ligações e perguntas em aberto no Postgres", () => {
     await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo: "Fermentação lenta", alvoId: null, aliases: [], lacunas: [],
       afirmacoes: [{ texto: "Fermenta devagar", natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: "A massa fermenta devagar na geladeira" }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
     const [fermentacao] = await repo.wiki!.listar();
-    expect(fermentacao.estrutura).toEqual({ ligacoes: [], lacunas: [] });
+    expect(fermentacao.estrutura).toEqual({ ligacoes: [], lacunas: [], divergencias: [] });
 
     await repo.criarNota({ titulo: "Diário", conteudo: "Hoje percebi que paciência serve tanto para o pão quanto para os livros." }, autor); await liberar();
     await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo: "Paciência como método", alvoId: null, aliases: [], lacunas: ["Quanto é paciência demais?"],
       ligacoes: [fermentacao.notaId, "9999"],
       afirmacoes: [{ texto: "Paciência liga as duas coisas", natureza: "inferencia", evidencias: [{ fonteId: c.origem.id, citacao: "paciência serve tanto para o pão quanto para os livros" }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
     const paciencia = (await repo.wiki!.listar()).find((p) => p.notaId !== fermentacao.notaId)!;
-    expect(paciencia.estrutura).toEqual({ ligacoes: [fermentacao.notaId], lacunas: ["Quanto é paciência demais?"] });
-    expect((await repo.obterNota(paciencia.notaId))!.conteudo).toContain("[[Fermentação lenta]]");
+    expect(paciencia.estrutura).toEqual({ ligacoes: [fermentacao.notaId], lacunas: ["Quanto é paciência demais?"], divergencias: [] });
+    expect((await repo.obterNota(paciencia.notaId))!.conteudo).toContain("[[Neurônios/Fermentação lenta]]");
     expect((await pg.query("select estrutura from paginas_wiki where nota_id = $1", [paciencia.notaId])).rows).toEqual([{ estrutura: paciencia.estrutura }]);
 
     await repo.criarNota({ titulo: "Corrida", conteudo: "A paciência também vale para a corrida de domingo, sempre devagar." }, autor); await liberar();

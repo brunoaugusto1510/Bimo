@@ -2,14 +2,14 @@ import { sql } from "drizzle-orm";
 import { bigint, index, integer, jsonb, pgPolicy, pgTable, primaryKey, uuid } from "drizzle-orm/pg-core";
 import { usuariosAuth } from "./auth";
 import { notas } from "./notas";
-import type { AfirmacaoWiki, EstruturaWiki, FonteWiki } from "../../wiki/tipos";
+import type { AfirmacaoWiki, EstruturaWiki, FontePersistidaWiki } from "../../wiki/tipos";
 
 /** Snapshots imutáveis por publicação; o histórico da nota preserva o texto anterior. */
 export const paginasWiki = pgTable("paginas_wiki", {
   notaId: bigint("nota_id", { mode: "number" }).notNull().references(() => notas.id, { onDelete: "cascade" }),
   userId: uuid("user_id").notNull().references(() => usuariosAuth.id, { onDelete: "cascade" }),
   revisaoPublicada: integer("revisao_publicada").notNull(),
-  fontes: jsonb("fontes").$type<FonteWiki[]>().notNull(),
+  fontes: jsonb("fontes").$type<FontePersistidaWiki[]>().notNull(),
   afirmacoes: jsonb("afirmacoes").$type<AfirmacaoWiki[]>().notNull(),
   /** Ligações a outras sínteses e perguntas em aberto; ver `EstruturaWiki`. */
   estrutura: jsonb("estrutura").$type<EstruturaWiki>().notNull().default(sql`'{"ligacoes":[],"lacunas":[]}'::jsonb`),

@@ -1,9 +1,10 @@
 import type { FonteWiki, MetadadosWiki, PublicacaoWiki } from "./tipos";
+import type { DiagnosticoWiki, EnergiaWiki, EventoWiki, PeriodoDoDiario } from "./observabilidade-tipos";
 
 export type TrabalhoWiki = {
   notaId: string; revisao: number; geracao: number; cursor: number; posse: string; tentativas: number;
 };
-export type ConceitoWiki = { notaId: string; chave: string; aliases: string[]; protegida: boolean; origens: Record<string, number>; revisaoGerenciada: number };
+export type ConceitoWiki = { notaId: string; chave: string; aliases: string[]; protegida: boolean; pausada?: boolean; diagnostico?: DiagnosticoWiki | null; origens: Record<string, number>; revisaoGerenciada: number };
 export type CoberturaWiki = { elegiveis: number; naoRegistradas: number; pendentes: number; concluidos: number; impedidos: number };
 export type ConsumoWiki = { entrada: number; saida: number };
 export type MotivoDaFalhaWiki = "temporario" | "revisar" | "configuracao" | "orcamento";
@@ -28,6 +29,11 @@ export interface AutomacaoWiki {
   /** Operação explícita após resolver configuração/falha; preserva proteção editorial. */
   retomar(): Promise<void>;
   gerenciar(notaId: string, revisaoBase: number, gerenciada: boolean): Promise<"ok" | "conflito" | "nao-encontrada">;
+  pausar(notaId: string, revisaoBase: number, pausada: boolean): Promise<"ok" | "conflito" | "nao-encontrada">;
+  diario(periodo: PeriodoDoDiario): Promise<EventoWiki[]>;
+  energia(teto: number): Promise<EnergiaWiki>;
+  /** CAS de revisão e assinatura evita alertas duplicados em executores concorrentes. */
+  registrarDiagnostico(notaId: string, revisao: number, diagnostico: DiagnosticoWiki): Promise<void>;
 }
 /** `obsoletas`: ids das afirmações cuja origem mudou desde que a síntese foi escrita; o modelo as vê marcadas. */
 export type CandidataWiki = { nota: FonteWiki; metadados?: MetadadosWiki; conceito?: ConceitoWiki; obsoletas?: string[] };

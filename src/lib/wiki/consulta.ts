@@ -1,7 +1,8 @@
 import { normalizarTexto } from "../caminho-da-nota";
 import type { NotaCompleta, RepositorioDeNotas } from "../repositorio-de-notas/tipos";
 import { caminhoDaNota } from "../resolver-nota-do-agente";
-import { localizarCitacao, mesmoConteudo } from "./citacoes";
+import { localizarCitacao } from "./citacoes";
+import { fonteConfere } from "./fontes";
 import { estadoDaPagina } from "./servico";
 
 /** Só devolve citações que continuam acessíveis e localizáveis no texto atual. */
@@ -11,7 +12,7 @@ export async function evidenciasDaWiki(repo: RepositorioDeNotas, id: string) {
   const origens = new Map<string, NotaCompleta>();
   for (const fonte of meta.fontes) {
     const atual = await repo.obterNota(fonte.id);
-    if (atual && mesmoConteudo(atual.conteudo, fonte.conteudo)) origens.set(fonte.id, atual);
+    if (atual && fonteConfere(atual.conteudo, fonte)) origens.set(fonte.id, atual);
   }
   const afirmacoes = meta.afirmacoes.slice(0, 12).flatMap((a) => {
     const evidencias = a.evidencias.flatMap((e) => {

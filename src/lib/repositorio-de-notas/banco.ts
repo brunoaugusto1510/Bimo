@@ -8,6 +8,7 @@ import { automacaoWikiHabilitada } from "../wiki/configuracao";
 import { aquecerSondagemDaWiki, automacaoWikiDisponivel, sondarTabelasDaWiki } from "../wiki/disponibilidade";
 import { acompanharOrganizacaoWiki, registrarAlteracaoWiki } from "../wiki/eventos-banco";
 import { criarFilaWikiDoBanco } from "../wiki/fila-banco";
+import { compactarFontes } from "../wiki/fontes";
 import { CONFIGURACAO_PADRAO } from "../fisica-do-grafo";
 import { planejarMudanca, planejarRenomeacao } from "./renomeacao";
 import { REGEX_UUID } from "./config";
@@ -204,8 +205,8 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       const [linha] = await tx.insert(notas).values({ id: sql`${no.id}::bigint`, userId, titulo: entrada.titulo, pasta, conteudo: entrada.conteudo, tags: [], criadoPor: "agente", criadoPorFerramenta: "compilar_wiki" }).returning(colunasDaNota);
       nota = paraNota(linha); await versionar(tx, nota, autor, false);
     }
-    await tx.insert(paginasWiki).values({ notaId: sql`${nota.id}::bigint`, userId, revisaoPublicada: nota.revisao, fontes: entrada.fontes, afirmacoes: entrada.afirmacoes,
-      estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas } });
+    await tx.insert(paginasWiki).values({ notaId: sql`${nota.id}::bigint`, userId, revisaoPublicada: nota.revisao, fontes: compactarFontes(entrada.fontes, entrada.afirmacoes), afirmacoes: entrada.afirmacoes,
+      estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [] } });
     return { tipo: "ok", nota };
   }
 
