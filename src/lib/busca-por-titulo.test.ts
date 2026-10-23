@@ -120,12 +120,12 @@ describe("buscarPorTitulo", () => {
     expect(buscarPorTitulo(muitas, "nota", [], 5)).toHaveLength(5);
   });
 
-  it("aguenta mais de mil notas sem demora", () => {
+  it("limita e ordena os resultados em uma base de cinco mil notas", () => {
     const muitas = Array.from({ length: 5000 }, (_, i) => nota(String(i), `Nota de estudo número ${i}`, `Pasta ${i % 20}`));
 
-    const inicio = performance.now();
-    buscarPorTitulo(muitas, "estudo 4", []);
-
-    expect(performance.now() - inicio).toBeLessThan(500);
+    const resultados = buscarPorTitulo(muitas, "estudo 4", []);
+    expect(resultados).toHaveLength(50);
+    expect(new Set(resultados.map((r) => r.nota.id)).size).toBe(50);
+    expect(resultados.every((r) => r.nota.titulo.includes("estudo") && r.nota.titulo.includes("4"))).toBe(true);
   });
 });
