@@ -15,3 +15,9 @@ it("o segredo do executor só libera POST no endpoint exato de manutenção", ()
     if (!permitido) expect(r.status).toBe(401);
   }
 });
+it("o segredo do Cron só libera GET no endpoint exato", () => {
+  vi.stubEnv("SEGREDO_SESSAO", "segredo-de-sessao-falso-com-mais-de-32-caracteres"); vi.stubEnv("CRON_SECRET", segredo);
+  for (const [caminho, metodo, permitido] of [["/api/wiki/processar", "GET", true], ["/api/wiki/processar", "POST", false], ["/api/notas", "GET", false]] as const) {
+    expect(proxy(new NextRequest(`https://bimo.local${caminho}`, { method: metodo, headers: { authorization: `Bearer ${segredo}` } })).headers.get("x-middleware-next") === "1").toBe(permitido);
+  }
+});

@@ -13,7 +13,14 @@ export function tetoDiarioWiki() {
 }
 /** Exclusivo do executor; não concede acesso às demais rotas da aplicação. */
 export function executorWikiAutorizado(request: Request) {
-  const segredo = process.env.WIKI_EXECUTOR_SEGREDO?.trim();
+  return conferirSegredo(request, process.env.WIKI_EXECUTOR_SEGREDO);
+}
+/** A Vercel envia CRON_SECRET no Authorization; sessão do navegador não autoriza GET com efeito. */
+export function cronWikiAutorizado(request: Request) {
+  return conferirSegredo(request, process.env.CRON_SECRET);
+}
+function conferirSegredo(request: Request, configurado: string | undefined) {
+  const segredo = configurado?.trim();
   if (!segredo || segredo.length < 32) return false;
   const recebido = request.headers.get("authorization") ?? "";
   const esperado = `Bearer ${segredo}`;
