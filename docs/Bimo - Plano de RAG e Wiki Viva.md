@@ -1,415 +1,313 @@
-# Bimo — Plano de RAG e Wiki Viva
+# Bimo — Plano funcional da Wiki Viva integrada ao agente
 
-Data: 21/10/2026. Estado: **proposta detalhada para revisão pelo Claude; implementação ainda não autorizada por este documento**.
+Plano original: 21/10/2026. Revisão de escopo: 22/10/2026.
 
-## 1. Intenção do produto
+Estado: **planejamento histórico, implementado e em operação**. A revisão funcional abaixo registra as decisões de 21–22/10/2026, anteriores à implementação autorizada. O fluxo manual experimental foi removido.
 
-O usuário anota livremente. O Bimo adapta sua organização ao conteúdo que aparece na base: assuntos, formatos, vocabulários e relações emergem das anotações. Não haverá uma taxonomia obrigatória nem exigência de transformar cada anotação em um formulário.
+**Implementação posterior, autorizada em 22/10/2026:** backend, agente, telas e grafo foram implementados, com fila, descoberta, evidências, orçamento e executor independente. Migrações, ativação em produção e piloto de duas notas foram concluídos em 23/10. Consulte [funcionamento, operação e limites](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md). Restam processamento inicial do acervo e avaliação ampliada de qualidade/custo. Os parágrafos sobre entrega apenas documental abaixo são históricos; não descrevem o estado atual do código.
 
-A Wiki Viva cria novas notas de conhecimento, amplia notas derivadas existentes e constrói sínteses entre diferentes registros. Ela deve permitir que uma descoberta útil permaneça disponível para perguntas futuras. Crescer significa melhorar explicações, conexões, evidências e cobertura; o número de páginas não é uma medida de sucesso.
+Branch de trabalho: feat/estrutura-llmwiki.
 
-Exemplo de aceitação: notas sobre cache, edição simultânea e sincronização offline sustentam uma nova nota sobre consistência entre cópias. Uma anotação posterior sobre sistemas distribuídos pode enriquecer essa síntese. O usuário consegue abrir as anotações que sustentam cada afirmação e distinguir informação registrada de inferência produzida pela IA.
+## 1. Decisão de produto e limite desta entrega
 
-Este plano define decisões recomendadas para o Bimo. A documentação da OpenAI fundamenta as capacidades das APIs; ela não prescreve o esquema de banco, a política editorial nem garante a qualidade da wiki. As propostas de produto e os parâmetros experimentais abaixo são decisões locais sujeitas à revisão.
+O Bimo deve acumular, conectar e desenvolver o conhecimento registrado pelo usuário. A pessoa anota livremente; o sistema adapta sua organização ao conteúdo da base, sem impor assunto, formato ou taxonomia.
 
-## 2. Escopo desta entrega e relação com o roadmap
+A Wiki Viva é uma camada persistente de conhecimento do agente. O Bimo identifica conceitos, encontra conexões, cria notas derivadas, enriquece sínteses existentes e reutiliza esse conhecimento nas conversas. Essas notas pertencem à mesma base das anotações pessoais.
 
-- Esta entrega adiciona o plano e registra sua existência no plano de notas. Também acompanha o commit das mudanças já pendentes da migração do chat para GPT-6 Luna.
-- Não implementa RAG, wiki, migrações, tarefas agendadas ou alterações de interface.
-- Não executa inferência real, ingestão da base, leitura de `.env`, migrações ou testes contra Supabase.
-- A implementação futura atravessa Retrieval, Agent 2.0 e consolidação do conhecimento, descritos em [Visão e Direção](./Bimo%20-%20Vis%C3%A3o%20e%20Dire%C3%A7%C3%A3o%20do%20Projeto.md). Não considerar essas fases concluídas pela criação deste plano.
-- [Retrieval — Fase 4](./Bimo%20-%20Retrieval%20%28Fase%204%29.md) permanece a referência histórica da busca textual. Recomenda-se antecipar citações e montagem de contexto em relação à ordem original do checklist.
-- [Sources & Ingestion](./Bimo%20-%20Sources%20%26%20Ingestion%20%28Fase%203%29.md) continua responsável por extração e preservação das fontes. Transcrição, OCR e novos formatos ficam fora do primeiro ciclo.
+O usuário não precisa abrir uma área separada, selecionar um lote de notas, inventar um título de síntese ou executar uma compilação a cada alteração. O processamento integra o ciclo de vida das notas e o trabalho do agente.
 
-## 3. Estado observado no checkout
+**Esta entrega altera somente planejamento e registro de decisões.** Telas, navegação, componentes, botões, disposição visual e apresentação de evidências serão definidos pelo usuário com o Claude. O plano estabelece dados e comportamentos que esses trabalhos poderão consumir, sem prescrever design.
 
-Base da inspeção: branch `feat/grafo-vivo`, HEAD `4185d0d`, com mudanças pendentes da migração do chat. Isto é uma inspeção local; não comprova o estado do banco remoto nem a disponibilidade dos modelos na conta.
+O documento não autoriza aplicar migrações, processar dados reais, chamar modelos pagos, habilitar automação ou fazer commit/push. Essas execuções continuam separadas da revisão funcional.
 
-| Área | Evidência no repositório | Consequência para o plano |
+## 2. Resultado esperado
+
+Exemplo de evolução:
+
+1. O usuário registra uma experiência sobre cache, uma anotação sobre edição simultânea e uma dúvida sobre sincronização offline.
+2. O Bimo identifica o tema comum e procura conhecimento existente sobre consistência entre cópias.
+3. Se encontrar uma nota derivada adequada, amplia essa nota. Caso contrário, pode criar uma síntese com identidade própria e referências às anotações que a sustentam.
+4. Uma nova anotação sobre sistemas distribuídos acrescenta outra perspectiva. A síntese evolui, preservando o que continua válido e registrando divergências.
+5. Em uma conversa futura, o agente encontra a síntese e consulta suas evidências para responder. A conexão construída anteriormente permanece disponível.
+
+O mesmo ciclo atende registros pessoais, receitas, projetos, estudo, listas, código, relatos e textos incompletos. Nenhum formato exige classificação prévia pelo usuário.
+
+Sucesso significa melhor compreensão, conexões úteis e respostas fundamentadas. Quantidade de notas e de ligações não são medidas suficientes de qualidade.
+
+## 3. Escopo funcional inicial
+
+Incluído no primeiro ciclo completo:
+
+- Reconhecer alterações relevantes nas notas e no conhecimento importado já representado na base.
+- Processar a base preexistente de forma gradual e retomável.
+- Descobrir conceitos e temas sem taxonomia fixa.
+- Encontrar conhecimento relacionado por índice, busca textual, aliases e ligações.
+- Decidir entre criar uma nota derivada, enriquecer uma existente, registrar divergência ou não alterar nada.
+- Guardar evidências, revisões de origem, autoria e dependências de cada publicação.
+- Atualizar o conhecimento afetado por novas anotações, correções e remoções.
+- Integrar consulta às sínteses e expansão até os originais à conversa normal com o agente.
+- Preservar anotações pessoais e edições manuais de notas derivadas.
+- Controlar consumo, repetição, concorrência e falhas antes de habilitar processamento contínuo.
+
+Fora do primeiro ciclo: embeddings, banco vetorial, File Search hospedado, reranking com outro modelo, fine-tuning, pesquisa externa automática, novos extratores, OCR, áudio/transcrição e mescla/exclusão/reescrita automática de notas pessoais. Telas e design também ficam fora deste planejamento.
+
+A memória está na base do Bimo, não nos pesos do modelo. Busca vetorial é uma possível melhoria futura, condicionada a erros de recuperação medidos. Não bloqueia a entrega da Wiki Viva.
+
+## 4. Base existente e reaproveitamento
+
+As referências abaixo descrevem o checkout local; não comprovam o estado do banco remoto. Revalidar os contratos antes de cada implementação.
+
+| Base existente | Uso no plano |
+| --- | --- |
+| RepositorioDeNotas e adaptadores banco/memória | Identidade, leitura e escrita; preservar contratos e testabilidade |
+| Busca textual em português no Postgres | Recuperação inicial; o mecanismo usa ts_rank, sem pressupor BM25 |
+| Revisão da nota e histórico do editor | Concorrência otimista; não presumir snapshot histórico imutável em cada autosave |
+| Índice de ligações | Wikilinks derivados do texto, sem duplicação na tabela relacoes |
+| Fontes, entidades, relações e proveniência | Preservar origens e identidades; ampliar somente o necessário para evidências e dependências |
+| Responses API no agente | Consulta por ferramentas e produção de propostas estruturadas |
+| Plano de login multiusuário | Contexto do dono acompanha cada operação até o armazenamento |
+
+Documentos relacionados: [Visão e Direção](./Bimo%20-%20Vis%C3%A3o%20e%20Dire%C3%A7%C3%A3o%20do%20Projeto.md), [Retrieval](./Bimo%20-%20Retrieval%20%28Fase%204%29.md), [Sources & Ingestion](./Bimo%20-%20Sources%20%26%20Ingestion%20%28Fase%203%29.md), [Architecture Audit](./Bimo%20-%20Architecture%20Audit.md) e [Login Multiusuario](./Bimo%20-%20Plano%20de%20Login%20Multiusuario.md).
+
+Há uma divergência histórica sobre wikilinks no Architecture Audit. A regra atual de CLAUDE.md e do código prevalece: as ligações do texto não são espelhadas em relacoes.
+
+## 5. Conceitos e invariantes
+
+**Anotação pessoal:** conteúdo do usuário ou importado para seu acervo. Pode estar incompleto, expressar uma hipótese ou opinião e usar qualquer organização. O compilador preserva autoria e contexto.
+
+**Nota derivada:** nota real da mesma base, criada ou mantida pelo Bimo. Possui identidade opaca, conteúdo, revisões e referências. Seu papel é identificado por metadados de domínio, não por pasta, tag, nome ou trecho de texto falsificável. Uma pasta chamada Wiki não é requisito.
+
+**Afirmação e evidência:** cada afirmação substantiva aponta para material localizável em revisões específicas das anotações/fontes originais. Distinguir informação explícita, inferência, hipótese, opinião, divergência e informação superada. Citação literal prova que um trecho existe; não prova que a conclusão decorre dele. Confiança declarada pelo modelo não é probabilidade calibrada.
+
+**Dependência:** vínculo que identifica quais entradas e revisões sustentam uma publicação. Permite verificar atualidade e impacto sem reler toda a base em cada conversa.
+
+**Raiz independente:** anotação pessoal ou fonte original que sustenta o conhecimento. Notas derivadas podem orientar e compor sínteses mais abrangentes, desde que a cadeia continue chegando às raízes autorizadas. Repetição de uma afirmação em várias sínteses não cria fontes independentes.
+
+## 6. Ciclo funcional integrado
+
+### 6.1 Registrar e agrupar alterações
+
+Criar, alterar, importar, renomear ou remover conteúdo produz um evento de conhecimento na mesma transação da operação correspondente. O evento contém identidades, revisões e tipo da alteração, sem precisar duplicar o texto completo.
+
+O salvamento não espera uma chamada ao modelo. Autosaves próximos são agrupados e o trabalho considera a revisão mais recente. Janela de estabilidade e encerramento de sessão de edição podem orientar o disparo; valores exatos serão definidos por medição.
+
+Conteúdo vazio ou sem mudança relevante pode encerrar o trabalho sem inferência. Alterar organização não exige reescrever conhecimento, embora referências e rótulos possam precisar de atualização.
+
+### 6.2 Capturar entradas
+
+Capturar snapshots imutáveis das entradas, separados das versões reaproveitadas pelo autosave. Guardar texto exato, identidade da origem, revisão/hash e localização das evidências.
+
+Textos grandes são divididos respeitando seções e estruturas. Registrar o que foi processado e o que continua pendente, sem truncar silenciosamente o restante. Não apresentar caracteres como tokens.
+
+### 6.3 Descobrir conhecimento
+
+Uma extração estruturada identifica conceitos candidatos, aliases, afirmações, questões abertas e possíveis relações. Categorias são livres e emergentes; o usuário não escolhe um tipo antes de anotar.
+
+Considerar contexto: a mesma palavra pode designar conceitos diferentes; experiência pessoal não vira regra universal; hipótese não é promovida a fato.
+
+### 6.4 Encontrar conhecimento relacionado
+
+Consultar índice de notas derivadas, aliases, busca textual e ligações resolvidas. Usar termos extraídos da anotação e seu contexto, com variações limitadas e observáveis quando necessário. A recuperação não depende de vetores.
+
+Limitar candidatos, profundidade e tokens. Preservar diversidade de fontes e evidências de divergência. Associação incerta pode resultar em nota distinta ou decisão adiada; não mesclar homônimos por semelhança do título.
+
+O índice é uma estrutura interna de navegação do agente. Não exige uma tela nem uma nota enorme contendo todo o acervo em cada chamada.
+
+### 6.5 Decidir o que persistir
+
+| Resultado | Quando é adequado |
+| --- | --- |
+| Nenhuma mudança | Repetição, ausência de novidade ou sustentação insuficiente |
+| Criar nota derivada | Conceito ou síntese útil com identidade própria e evidências |
+| Enriquecer nota existente | Conhecimento novo complementa uma síntese adequada |
+| Registrar divergência | Fontes sustentam perspectivas incompatíveis ou contextos diferentes |
+| Sugerir relação | Conexão justificável sem necessidade de nova nota narrativa |
+| Aguardar revisão | Ambiguidade, edição manual ou operação de maior impacto |
+
+Uma anotação pode gerar nenhuma, uma ou mais propostas, dentro de limites de crescimento e consumo. Não criar uma página para cada substantivo. Duas fontes não são requisito rígido: uma anotação pode sustentar conhecimento útil.
+
+### 6.6 Sintetizar e validar
+
+O compilador recebe entradas autorizadas e contexto relacionado e produz uma proposta estruturada. Não grava no banco diretamente.
+
+O servidor verifica schema, identidades, citações, localização, origem, revisão, gerenciamento, relações permitidas, independência das evidências e ausência de ciclos. Sugestões de título e organização não autorizam alterar identidade ou propriedade das notas.
+
+Cada proposta informa suas entradas e o resultado esperado. Nenhuma mudança é um resultado válido, sem nota vazia. Saída inválida, recusa, incompletude ou falha do modelo impede publicação.
+
+### 6.7 Publicar atomicamente
+
+Após gerar, uma transação curta revalida todas as entradas e a revisão-base da nota alvo. Confere posse do trabalho, geração desejada e proteção das edições manuais.
+
+Nota, histórico, afirmações, evidências e dependências são gravados juntos. Falha cancela o conjunto. Conclusão com entradas superadas não substitui uma versão recente. A chamada externa ocorre fora da transação.
+
+### 6.8 Evoluir continuamente
+
+Nova informação útil pode enriquecer uma síntese ou motivar outra mais abrangente. Dependentes são reavaliados em ondas limitadas. Mudanças em hashes, afirmações ou evidências independentes precisam justificar propagação; publicar texto derivado não inicia ciclos infinitos.
+
+Conexões entre áreas diferentes exigem justificativa e identificação de inferência. Avaliar essa capacidade com exemplos de conhecimento transversal, além de resumos individuais.
+
+## 7. Processar a base preexistente
+
+O ciclo alcança notas novas e anteriores à ativação:
+
+1. Registrar documentos elegíveis de cada dono e suas revisões.
+2. Percorrer a base por cursor, em lotes limitados, com progresso durável.
+3. Alimentar o mesmo processamento incremental das alterações novas.
+4. Retomar após falha sem duplicar conhecimento publicado.
+5. Detectar alterações durante a varredura e reprocessar entradas necessárias.
+6. Manter cobertura conhecida: elegíveis, processados, pendentes e impedidos por erro/orçamento.
+
+A organização emerge gradualmente. O conhecimento válido já pode ser consultado enquanto o restante é processado. Resposta global só afirma a cobertura efetivamente examinada; dados fora do acesso não entram nem nos totais.
+
+O disparo inicial depende de habilitação operacional e orçamento definidos, sem tornar seleção manual de notas um requisito. A interação dessa habilitação será definida separadamente com o Claude.
+
+## 8. Consultar pela conversa normal
+
+| Necessidade | Comportamento esperado |
+| --- | --- |
+| Localizar uma anotação | Buscar título, conteúdo e aliases e ler o resultado adequado |
+| Explicar um assunto estudado | Recuperar síntese válida e evidências originais |
+| Relacionar assuntos | Explorar conceitos, notas e ligações, identificando inferências |
+| Comparar perspectivas | Trazer divergências com contexto e revisões |
+| Entender mudança temporal | Distinguir revisões e contexto, sem assumir que o mais recente é mais correto |
+| Obter panorama | Consultar sínteses temáticas e informar cobertura efetiva |
+| Contar ou agregar | Calcular no servidor, sem estimar a partir de amostras do modelo |
+| Responder sem evidência | Indicar a lacuna e não atribuir à base informação ausente |
+
+Reaproveitar ferramentas existentes quando forem suficientes. Acrescentar busca de conhecimento, leitura de evidência e exploração de relações conforme necessidade demonstrada. O modelo recebe referências do servidor, sem SQL livre ou escolha de dono.
+
+O pacote de contexto deve ser útil dentro do limite do agente. Evitar consumir todas as voltas com leituras isoladas agrupáveis. Investigações longas podem se tornar trabalhos persistentes em etapa posterior.
+
+Referências finais devem resolver para material autorizado e informar a revisão usada. A apresentação e abertura dessas referências serão definidas com o Claude. Respostas do chat não viram fatos automaticamente; conhecimento adicional fornecido pelo usuário segue o fluxo de registro apropriado e as mesmas regras de evidência.
+
+## 9. Corrigir, proteger e remover conhecimento
+
+- Alteração em origem torna pendente o conhecimento dependente. Até revalidar, uma síntese não pode ser tratada sozinha como evidência atual suficiente.
+- Edição manual protege o conteúdo alterado. O domínio permite retirar uma nota do gerenciamento ou retomar processamento por decisão explícita, sem prescrever interface.
+- Movimento e renomeação preservam identidade. Distinguir organização de mudança semântica evita bloqueios editoriais desnecessários.
+- Correção e restauração criam novas revisões, preservando o histórico aplicável.
+- Remoção/perda de acesso impede uso imediato da origem e invalida dependentes. Síntese sem raízes permitidas fica fora das respostas atuais.
+- Exclusão alcança snapshots e derivados conforme a política de dados; histórico não justifica manter indefinidamente conteúdo que deveria ser apagado.
+- Mesclar conceitos, excluir notas pessoais ou substituir conhecimento consolidado exige política explícita de revisão, fora da autonomia inicial.
+
+## 10. Executar com durabilidade e orçamento
+
+### 10.1 Eventos e trabalhos
+
+A atualização integrada exige processamento fora da duração de uma conversa ou salvamento. Usar outbox transacional e trabalhos persistentes, deduplicados por dono, tarefa/alvo, geração e versão do pipeline.
+
+Reivindicar trabalhos com posse temporária e token de posse. Consumidor que perdeu a posse não publica após outro. Alteração nova avança a geração desejada; resultado antigo fica superado e o trabalho atual permanece elegível.
+
+Retentativas têm limite e espera. Falha de autenticação/configuração interrompe aquela integração até resolução, sem repetição contínua. Não depender de promessa abandonada, temporizador de requisição ou sessão do navegador. Escolher runner e hospedagem antes da ativação.
+
+Reconciliação paginada detecta eventos não consumidos, posse expirada, notas não processadas e dependências inválidas. Execução é pelo menos uma vez, com idempotência persistente na publicação.
+
+### 10.2 Consumo antes de automação
+
+Definir limites por usuário/período, trabalho, documento e onda. Reservar consumo atomicamente antes da chamada; reserva recusada impede execução. Distinguir consumo confirmado, reservado e incerto.
+
+Timeout pode ocorrer após o provedor executar. Não estornar toda a reserva como zero nem prometer uma única cobrança externa; registrar correlação e reconciliar incerteza.
+
+Separar orçamento de consulta e manutenção. Falta de crédito pausa manutenção e preserva salvamento/leitura. Um limitador de frequência em memória não é proteção financeira suficiente para automação.
+
+Começar com limites conservadores configurados e avaliados no piloto. Não promover automaticamente os limites arbitrários do protótipo manual a requisitos do fluxo integrado. Batch e cache são otimizações posteriores à medição.
+
+## 11. Dados e contratos
+
+O modelo físico será revisado antes da implementação. Esta lista define responsabilidades lógicas, sem fixar prematuramente o número de tabelas.
+
+| Responsabilidade | Dados e garantias |
+| --- | --- |
+| Identidade e gerenciamento | Nota derivada ligada à nota real, dono, gerenciamento e revisão publicada |
+| Snapshots e evidências | Texto imutável, origem, revisão/hash, localização, citação e suporte/contraponto |
+| Afirmações e relações | Conteúdo explícito/inferido, justificativa, evidências e situação editorial |
+| Dependências e índice | Entradas, raízes independentes, termos/aliases, ligações, cobertura e atualidade |
+| Eventos e trabalhos | Outbox, gerações, deduplicação, posse, tentativas e resultado |
+| Execução e consumo | Modelos, versões de prompt/schema/pipeline, correlação, tokens e reservas |
+
+Toda responsabilidade carrega o dono. Constraints e validações transacionais impedem associação indevida entre usuários. A conexão privilegiada exige filtros explícitos; RLS é defesa adicional.
+
+Portas funcionais: recuperação, geração de propostas, publicação atômica, fila e consumo. Compartilhar regras de RepositorioDeNotas, sem um segundo CRUD divergente. Testar o compilador com provedores simulados e repositório em memória.
+
+Resultados informam estado, documentos/revisões examinados, propostas aceitas/recusadas, notas afetadas, pendências e consumo. Não definem rota de página, layout, botão ou notificação.
+
+## 12. Papel da OpenAI
+
+As referências oficiais foram consultadas no planejamento/protótipo em 21–22/10/2026. Esta revisão de escopo não verifica novamente suporte, preços ou schemas. Revalidá-los antes da implementação correspondente.
+
+- [Responses e function calling](https://developers.openai.com/api/docs/guides/function-calling): operações controladas pelo servidor.
+- [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs): extração/propostas estruturadas, com validação adicional de domínio.
+- [Reasoning models](https://developers.openai.com/api/docs/guides/reasoning): continuação do laço de ferramentas quando aplicável.
+- [Data controls](https://developers.openai.com/api/docs/guides/your-data): retenção por endpoint; store false não é garantia geral de retenção zero.
+- [Evaluation best practices](https://developers.openai.com/api/docs/guides/evaluation-best-practices): avaliação por tarefa e julgamento humano.
+
+Reaproveitar o transporte da Responses API com configuração por tarefa. Notas e sínteses são dados não confiáveis, separados das instruções privilegiadas. IDs, revisões, permissões e gravação permanecem sob controle do Bimo.
+
+Chat e compilação podem ter configurações independentes de modelo. Manter a configuração existente como candidata inicial e avaliar antes de substituí-la. Nenhum modelo novo ou preço é fixado nesta revisão.
+
+[Embeddings](https://developers.openai.com/api/docs/guides/embeddings), [Retrieval](https://developers.openai.com/api/docs/guides/retrieval) e [File Search](https://developers.openai.com/api/docs/guides/tools-file-search) são referências de evolução, sem dependência na primeira entrega integrada. Background mode do provedor não substitui a fila e a publicação durável do Bimo.
+
+## 13. Segurança e privacidade
+
+- Conteúdo das notas/fontes/sínteses não habilita ferramentas, altera políticas ou autoriza acesso.
+- O compilador só lê entradas permitidas e propõe escrita gerenciada. Sem SQL livre, shell, credenciais ou acesso irrestrito a serviços.
+- Revalidar acesso ao recuperar, iniciar trabalho, montar contexto e publicar. Exclusão de conta ou mudança de acesso alcança trabalhos pendentes.
+- Isolar buscas, caches, aliases, snapshots, dependências, trabalhos, exportações e métricas por dono. Conteúdo igual não autoriza compartilhar memória privada.
+- Logs registram metadados, sem notas, citações, prompts, chave ou corpo de erro do provedor.
+- Schema válido não comprova verdade ou autorização. O publicador pode recusar a proposta.
+- Exportação preserva conhecimento e proveniência em formatos abertos, sem dependência exclusiva de IDs do provedor.
+
+## 14. Sequência de implementação
+
+| Etapa | Entrega funcional | Condição para avançar |
 | --- | --- | --- |
-| Chat | `src/lib/agente.ts`, `openai.ts`, `ferramentas-openai.ts` | Responses API por HTTP nativo; modelo padrão `gpt-6-luna`; cinco ferramentas existentes |
-| Limites do chat | Até cinco chamadas, 45 segundos, 4.096 tokens de saída por chamada, contexto serializado limitado | Compilação da wiki precisa de execução própria, separada do pedido interativo |
-| Armazenamento | `RepositorioDeNotas`, implementações banco e memória | Preservar a porta existente; acrescentar uma porta de conhecimento para recuperação e compilação |
-| Busca | `busca-textual.ts`, `repositorio-de-notas/banco.ts` | Full-text search em português; `ts_rank`, não BM25; ainda sem embeddings |
-| Revisões | `notas.revisao`, concorrência otimista, `versoes_nota.sessao_aberta` | Histórico do editor não deve ser presumido como snapshot imutável de cada revisão |
-| Conhecimento | Tabelas `nos`, `entidades`, `relacoes`, `fontes`, `proveniencia` | Reaproveitar identidades e fontes; acrescentar evidências por afirmação e dependências de revisão |
-| Relações | `indice-de-ligacoes.ts` e enum de relações | `[[links]]` continuam derivados do texto; não espelhá-los na tabela `relacoes` |
-| Proveniência | `proveniencia.locator` reservado para trechos | Vínculo fonte→nota já existe; citação precisa de granularidade e validação adicionais |
-| Extração | PDF usa texto mesclado das páginas conforme documentação da Fase 3 | Citar página de PDF exige preservar o mapeamento na extração; não inventar paginação |
-| Identidade | Convenções atuais ainda usam dono configurado e conexão privilegiada; há plano de login multiusuário | Projetar todo novo serviço com contexto explícito do dono, sem depender de RLS para proteger conexão proprietária |
+| P0 — Reconciliar o protótipo | Separar backend reaproveitável do fluxo manual não aprovado; fechar contratos e exemplos | Sem dependência de página separada, seleção manual ou embeddings |
+| P1 — Evidências e índice textual | Snapshots, gerenciamento, referências e recuperação textual/por ligações | Evidências localizáveis/autorizadas e identidade preservada |
+| P2 — Eventos, consumo e durabilidade | Outbox, agrupamento, fila, posse, orçamento e reconciliação | Alterações não se perdem; repetição não duplica; teto impede chamadas |
+| P3 — Descoberta e decisão editorial | Conceitos livres, recuperação relacionada e propostas | Conexões transversais úteis; nenhuma mudança sem ganho |
+| P4 — Publicação incremental | Atomicidade, proteção de edições, invalidação e propagação limitada | Nova anotação enriquece conhecimento; trabalho antigo não sobrescreve atual |
+| P5 — Conversa e base anterior | Agente consulta sínteses/originais; carga inicial paginada | Conversa usa memória acumulada; cobertura e retomada verificáveis |
+| P6 — Piloto e avaliação | Corpus aprovado, qualidade, custo, limites e reversão | Ganho demonstrado dentro do orçamento e lacunas documentadas |
 
-Antes de implementar, reconciliar [Architecture Audit](./Bimo%20-%20Architecture%20Audit.md), [Plano de Login Multiusuario](./Bimo%20-%20Plano%20de%20Login%20Multiusuario.md), `CLAUDE.md` e o código atual. `criadoPor = agente` identifica autoria; não identifica automaticamente uma página gerenciada da wiki.
+P1/P2 podem ser preparados independentemente em contratos; automação exige ambos. P3 começa com simuladores e propostas sem publicação automática. P4 só é ativada após limites e testes de persistência. P5 usa o mesmo ciclo para base existente e alterações novas.
 
-Há uma divergência histórica relevante: o Architecture Audit descreve wikilinks como relações persistidas, enquanto `CLAUDE.md` e a implementação atual determinam derivação do texto sem espelhamento. Este plano segue a regra atual; a reconciliação documental deve preservar essa distinção.
+Cada etapa começa com testes e termina com verificação focada. Migrações e integrações reais recebem validação própria antes de ativação. Interfaces podem ser definidas separadamente com o Claude a partir dos contratos funcionais.
 
-## 4. O que aproveitar da OpenAI
+## 15. Aceitação e avaliação
 
-Documentação oficial consultada em 21/10/2026. Revalidar schemas, suporte do modelo e preços antes de implementar ou executar experimentos pagos.
+1. Anotar não exige abrir outra área, escolher tema ou selecionar origens para compilação.
+2. Salvamento termina mesmo com modelo indisponível; trabalho posterior permanece recuperável.
+3. Autosaves próximos produzem processamento consolidado da revisão adequada.
+4. Registros heterogêneos originam conceitos e conexões sem taxonomia imposta.
+5. Novidade enriquece a nota adequada, preservando identidade e evidências válidas.
+6. Repetição produz nenhuma mudança ou resultado idempotente, sem duplicatas.
+7. Sínteses com a mesma raiz não contam como fontes independentes.
+8. Hipóteses, opiniões, divergências e contexto temporal são preservados.
+9. Edição manual e concorrência impedem substituição indevida.
+10. Remoção/perda de acesso retira evidências atuais e invalida derivados.
+11. O agente usa conhecimento acumulado e chega às origens pela conversa normal.
+12. A base anterior é processada gradualmente com cobertura e retomada.
+13. Orçamento, profundidade e ondas impedem trabalho/custo ilimitados.
+14. Esses comportamentos podem ser comprovados sem decisões de telas/design.
 
-| Recurso oficial | Aplicação proposta | Referência |
-| --- | --- | --- |
-| Responses API e function calling | O modelo pede buscas e leituras; o servidor valida e executa as operações | [Function calling](https://developers.openai.com/api/docs/guides/function-calling) |
-| Structured Outputs | Extrator e compilador produzem propostas com formato validável; verificação semântica continua necessária | [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) |
-| Embeddings | Vetorizar consultas e trechos, mantendo os vetores no Postgres | [Embeddings](https://developers.openai.com/api/docs/guides/embeddings) |
-| GPT-6 Luna | Manter o modelo atual como candidato inicial para consulta e compilação; suporte documentado a ferramentas e saída estruturada | [Modelo](https://developers.openai.com/api/docs/models/gpt-6-luna) |
-| Continuação de raciocínio | Conferir os itens devolvidos ao continuar um laço com ferramentas e armazenamento desativado | [Reasoning models](https://developers.openai.com/api/docs/guides/reasoning) |
-| Retrieval e vector stores | Alternativa hospedada de busca e indexação; inclui controles de ranking híbrido e filtros de atributos | [Retrieval](https://developers.openai.com/api/docs/guides/retrieval) |
-| File Search | Alternativa de ferramenta hospedada; os resultados podem ser incluídos com `file_search_call.results` | [File Search](https://developers.openai.com/api/docs/guides/tools-file-search) |
-| Batch API | Possível otimização posterior de carga inicial, com desconto documentado e janela de até 24 horas | [Batch](https://developers.openai.com/api/docs/guides/batch) |
-| Background mode | Execução assíncrona de uma resposta do provedor; não substitui a fila durável de domínio do Bimo | [Background mode](https://developers.openai.com/api/docs/guides/background) |
-| Prompt caching | Otimização posterior; verificar elegibilidade e fronteiras de cache do modelo usado | [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching) |
-| Evals | Avaliação por tarefa, comparação entre variantes e revisão humana das métricas | [Evaluation best practices](https://developers.openai.com/api/docs/guides/evaluation-best-practices) |
-| Segurança e dados | Tratar conteúdo recuperado como dado não confiável e documentar retenção por endpoint | [Agent safety](https://developers.openai.com/api/docs/guides/agent-builder-safety), [Data controls](https://developers.openai.com/api/docs/guides/your-data) |
+Testes determinísticos incluem dois usuários, snapshots imutáveis, Unicode/localização, schema inválido, recusa, citações fabricadas, concorrência, falha na publicação, posse expirada, idempotência e consumo incerto.
 
-A referência de segurança do Agent Builder é usada somente para os princípios de isolamento de dados e validação; este plano não depende daquele produto. As recomendações locais não exigem Agents SDK, Agent Builder, fine-tuning ou um novo framework de agentes.
+Comparar busca textual atual com busca textual + Wiki Viva usando as mesmas perguntas, entradas e orçamento de contexto. Incluir localização, explicação, conexão, divergência, panorama e perguntas sem resposta. Vetores entram em comparação futura somente se os erros de recuperação justificarem.
 
-## 5. Decisão principal: Postgres + embeddings + compilador próprio
+Medir síntese, recuperação de evidências, sustentação, atualidade, duplicação, cobertura, latência e custo por alteração/pergunta. Não atribuir à memória ganho causado apenas por mais tokens ou outro modelo. Calibrar avaliadores automáticos com revisão humana.
 
-### 5.1 Caminho recomendado
+Separar testes offline, integração SQL, provedor real controlado e avaliação funcional de ponta a ponta. Mocks não comprovam qualidade do modelo, locks, rollback ou políticas SQL. Os 168 testes do protótipo manual são evidência histórica daquele recorte, não aprovação nem validação deste fluxo integrado.
 
-Manter notas, fontes, revisões, evidências, relações, trabalhos e wiki no Postgres/Supabase. Usar embeddings da OpenAI para recuperação semântica e Responses API para interpretação e síntese. A wiki continua sendo um artefato do Bimo, exportável e reconstruível.
+## 16. Destino do código experimental
 
-Motivos locais: o banco já contém os objetos de domínio; a wiki precisa de publicação atômica com revisão, dependências, identidade do dono e distinção entre notas pessoais e gerenciadas. Isso permite controlar a validade de uma evidência antes de enviá-la ao modelo e evita sincronizar cada salvamento do editor com uma segunda cópia hospedada do acervo.
+O checkout contém página separada, componente de interface, API manual, metadados de publicação e testes. A migração 0007_wiki_viva foi preparada e não foi aplicada durante aquela implementação.
 
-### 5.2 Alternativa que o Claude deve avaliar
+O fluxo manual foi uma decisão do assistente e não corresponde ao caminho principal solicitado. Seleção de notas, pasta fixa, bloqueio editorial por qualquer revisão e limites por requisição não são requisitos aprovados do produto integrado.
 
-OpenAI vector stores + File Search reduzem o trabalho de indexação. A alternativa ainda exigiria associação entre arquivo remoto e revisão local, processamento assíncrono, exclusão, reconciliação e isolamento por usuário. A documentação informa que a remoção de arquivos do vector store é eventualmente consistente; uma busca pode retornar material removido por um intervalo. Referência: [operações de vector stores](https://developers.openai.com/api/docs/guides/retrieval).
+Backend potencialmente reaproveitável: saída estruturada, validação de citações, snapshots e proteção/publicação transacional. Faltam descoberta, eventos, processamento durável, consumo persistente e evolução integrada.
 
-Se adotada, usar o servidor para selecionar o armazenamento e os filtros do dono, conferir revisão e autorização de cada resultado e só então construir o contexto. Não aceitar `vector_store_id`, filtros de dono ou IDs de arquivo arbitrários do navegador/modelo. `store: false` nas Responses não apaga os arquivos e vector stores.
+**Atualização de 22/10/2026:** o protótipo manual (página `/wiki`, `WikiViva.tsx`, `POST /api/wiki`, `compilarWiki`, `gerarSinteseWiki`, escrita direta pelo repositório e o link no cabeçalho) foi removido. Ficam a leitura (`GET /api/wiki`), a fila, a validação de citações e a publicação transacional pela fila. Telas serão definidas com o usuário e o Claude.
 
-Decisão proposta para a primeira implementação: Postgres. Uma prova comparativa com a alternativa hospedada só ocorre com orçamento, corpus de teste e autorização de envio definidos.
+## 17. Briefing para o Claude
 
-## 6. Arquitetura de domínio
-
-```mermaid
-flowchart TD
-    N[Notas livres e fontes preservadas] --> S[Snapshots de entrada]
-    S --> T[Trechos com localização e revisão]
-    T --> B[Busca textual e vetorial]
-    S --> E[Extração estruturada]
-    E --> P[Proposta de conhecimento]
-    B --> P
-    P --> V[Validação e publicação atômica]
-    V --> W[Notas da Wiki Viva e relações justificadas]
-    W --> B
-    Q[Pergunta] --> R[Recuperação com contexto do dono]
-    B --> R
-    W --> R
-    R --> C[Contexto com evidências originais]
-    C --> A[Resposta com referências verificadas]
-```
-
-Separar três responsabilidades: **recuperador** encontra evidências; **compilador** propõe conhecimento persistente; **publicador** verifica invariantes e grava. O modelo não recebe credenciais de banco nem executa SQL ou grava propostas diretamente.
-
-Portas propostas: `RepositorioDeConhecimento`, `ProvedorDeEmbeddings`, `GeradorDeConhecimento`, `FilaDeConhecimento` e `ControladorDeConsumo`. Evitar duplicar CRUD de notas. A publicação usa a mesma lógica transacional de escrita/versionamento que as notas existentes, com extensão explícita para metadados e evidências.
-
-## 7. Notas pessoais e notas da wiki
-
-- Uma página da wiki é uma nota real: mesma identidade opaca, editor, histórico, busca, ligações e exportação. Metadados de gerenciamento ficam em uma tabela associada à nota, sem impor formato às notas pessoais.
-- Pasta e tags são organização; mover ou renomear uma página não altera sua identidade nem desativa o gerenciamento.
-- Notas pessoais permanecem livres. A compilação automática lê essas notas e escreve somente páginas gerenciadas. Edição de uma nota pessoal pelo chat continua dependente do pedido do usuário e da porta de escrita existente.
-- O usuário pode pausar uma página ou retirá-la do gerenciamento. Uma edição manual de conteúdo de página gerenciada a coloca em estado de revisão manual e impede substituição automática até escolha explícita de retomada. Mudança apenas de pasta/título pode preservar o gerenciamento, invalidando o contexto que inclua esses campos.
-- Antes de gerar nova página, procurar equivalência por identidade conceitual, aliases, texto e semântica. Mesma grafia não prova mesmo conceito; homônimos precisam de contexto. Casos ambíguos viram propostas de ligação ou revisão, sem mesclar automaticamente.
-- Não criar página para cada palavra. Preferir enriquecimento quando houver conhecimento novo útil para uma página existente; criar quando houver assunto distinto ou síntese com utilidade própria. Os critérios serão avaliados em corpus de formatos variados.
-- Uma nota curta ou isolada pode sustentar uma página útil. Quantidade mínima rígida de fontes não será pré-requisito; o número de fontes independentes aparece como metadado.
-
-## 8. Modelo de dados proposto
-
-Nomes e decomposição são uma proposta para revisão, não DDL final. Novas tabelas precisam de `user_id`, filtros no servidor, RLS de reforço, FKs e índices adequados. Vínculos entre objetos devem impedir referências cruzadas entre donos por constraints compostas ou validação transacional equivalente demonstrada em teste.
-
-| Estrutura proposta | Dados principais | Invariantes |
-| --- | --- | --- |
-| `documentos_de_conhecimento` | Dono; origem nota/fonte; identidade da origem; papel pessoal/wiki/fonte; ponteiro para snapshot atual | Exatamente uma origem; unicidade por dono e origem; estado atual controlado pelo servidor |
-| `snapshots_de_conhecimento` | Documento; revisão original quando aplicável; texto exato; título/contexto; hash; versão de extração; data | Imutável; referenciado por citação; não reutilizar uma linha mutável de autosave como snapshot |
-| `trechos_de_conhecimento` | Snapshot; seção; início/fim; texto; contagem de tokens; hash; versão de segmentação | Localização aponta para o texto do snapshot; citações continuam estáveis após renomeação |
-| `embeddings_de_conhecimento` | Trecho; provedor; modelo; dimensões; versão de preparação; vetor; consumo | Unicidade por trecho e versão do índice; não misturar espaços vetoriais |
-| `paginas_da_wiki` | Nota; chave conceitual; aliases; gerenciamento; estado; geração desejada/publicada; versão de política | Uma identidade gerenciada por nota; categoria temática livre; estados operacionais controlados |
-| `afirmacoes_da_wiki` | Página; revisão publicada; texto; natureza explícita/inferência; situação sustentada/divergente/superada | Cada afirmação substantiva tem evidências; não apresentar confiança declarada pelo modelo como probabilidade calibrada |
-| `evidencias_de_afirmacoes` | Afirmação; snapshot/trecho original; citação textual; localização; papel de suporte/contraponto | IDs e citação validados; usuário é o mesmo de ambos os lados |
-| `dependencias_da_wiki` | Página/revisão; snapshot de entrada; hash; raiz de evidência; versão de pipeline | Permite invalidação incremental, verificação de atualidade e detecção de ciclos |
-| `justificativas_de_relacoes` | Relação estruturada; evidências; extração/publicação de origem | Relação inferida tem justificativa; não duplicar `[[links]]` existentes |
-| `eventos_de_conhecimento` | Evento de alteração, dono, documento e revisão, tipo, sequência | Outbox gravada na mesma transação da mudança que a originou |
-| `trabalhos_de_conhecimento` | Tipo; alvo; geração; estado; tentativas; lease; token de posse; próximo horário; erro genérico | Deduplicação, retomada após falha e publicação condicionada à posse atual |
-| `execucoes_de_conhecimento` | Modelos; versões de prompt/schema; entradas por hash; resultado; consumo; correlação | Metadados para reprodução sem registrar o texto das notas nos logs |
-| `reservas_de_consumo` | Dono; execução; operação; limite reservado; consumo confirmado/incerto | Reserva atômica antes de chamadas; impedir ultrapassagem por concorrência |
-
-Antes da migração, avaliar se parte dessas estruturas pode ser combinada sem perder os invariantes. Evitar criar simultaneamente quinze abstrações vazias: cada fatia introduz somente as tabelas usadas por seu fluxo demonstrável.
-
-### 8.1 Proveniência e localização
-
-`proveniencia` continua representando fonte→nota/entidade. Dependência de uma síntese em notas editáveis requer o novo vínculo para snapshots; não colocar IDs de notas no campo `fonte_id`.
-
-Para notas Markdown, definir offsets sobre a string persistida com unidade documentada (recomendação inicial: índices UTF-16 do JavaScript), além do caminho da seção. Testar acentos, emojis, CRLF e caracteres combinantes. Para PDF, página só pode ser citada se a extração guardar o mapeamento. Texto extraído com páginas mescladas admite referência à fonte/seção disponível, sem fabricar página.
-
-O snapshot guarda exatamente o texto usado para os offsets. Normalização de busca e contexto acrescentado para embedding são campos separados. Excluir uma origem deve retirar imediatamente sua evidência do contexto; retenção ou expurgo dos snapshots segue a política de exclusão, inclusive cópias derivadas e exportações futuras.
-
-## 9. Recuperação: RAG híbrido e contexto
-
-### 9.1 Segmentação inicial
-
-Preservar notas curtas inteiras. Em textos longos, preferir seções e parágrafos, com tratamento de listas, tabelas e código. Ponto de partida experimental: 400–800 tokens por trecho e sobreposição de até 80 tokens quando necessária. Esses valores não são limites prescritos pela OpenAI e devem ser ajustados com avaliação.
-
-Uma seção muito grande precisa ser dividida; o sistema registra que o trecho é parcial e permite ler vizinhos. Nunca descartar silenciosamente uma cauda grande. Contagem de tokens usa tokenizer compatível verificado; não tratar quantidade de caracteres como quantidade de tokens. Prever implementação/dependência mínima desse contador na fatia de embeddings.
-
-Preparação do vetor: título + caminho de seção + corpo, sem acrescentar fatos não sustentados. Contextualização gerada por LLM é experimento posterior. Mudança de contexto ou título pode invalidar o vetor mesmo quando o corpo continua igual.
-
-### 9.2 Embeddings
-
-Começar avaliando `text-embedding-3-small` com 1.536 dimensões, padrão documentado. Comparar `text-embedding-3-large` somente se houver ganho suficiente para justificar custo e operação. O guia permite configurar dimensões nos modelos da família 3; qualquer mudança cria uma nova versão de índice. Referência: [embeddings](https://developers.openai.com/api/docs/guides/embeddings).
-
-Validar quantidade de vetores, índices da resposta, dimensão, números finitos e identidade do modelo esperado. Deduplicar conteúdo por hash dentro do dono; não usar um cache compartilhado que revele igualdade de textos entre usuários. Reaproveitar apenas entradas com texto preparado, modelo e dimensões iguais.
-
-A consulta usa o mesmo modelo/espaço do índice. Uma troca prepara o novo índice em paralelo e só muda o ponteiro ativo quando a cobertura mínima estiver atendida. Índice incompleto deve ser informado na telemetria e manter recuperação textual disponível.
-
-### 9.3 Ranking e relações
-
-1. Resolver intenção e referências da conversa sem alterar o sentido da pergunta. Reescrita de consulta, se usada, é limitada e observável.
-2. Aplicar contexto do dono e filtros válidos antes de selecionar candidatos.
-3. Buscar candidatos textuais e vetoriais; ponto de partida: 30 de cada modalidade.
-4. Fundir por RRF, por exemplo `soma(peso / (60 + posição))`; parâmetros são experimentais. Não somar diretamente cosine e `ts_rank`.
-5. Remover duplicatas e limitar a concentração de trechos de uma mesma nota. Preservar espaço para fontes com perspectivas divergentes.
-6. Expandir ligações resolvidas e relações estruturadas relevantes por um salto, com limite inicial de dez vizinhos. Não usar popularidade no grafo como prova de correção.
-7. Selecionar contexto por relevância, diversidade, atualidade e orçamento real de tokens. Ponto de partida: até 12 trechos/8 mil tokens de evidência, ajustado ao histórico e à saída reservada.
-8. Reranking por LLM é opcional após medir a versão sem ele; usar somente IDs de candidatos e ordem validada. A documentação consultada não estabelece um endpoint dedicado de reranking da OpenAI para assumir neste plano.
-9. Revalidar acesso, existência e validade das revisões imediatamente antes de enviar o contexto.
-
-Começar com busca vetorial exata filtrada para um corpus pequeno. Criar HNSW apenas quando medições justificarem, verificando versão instalada do pgvector, recall e filtros por dono; não assumir capacidade de extensão ou desempenho do banco remoto sem teste.
-
-### 9.4 Contrato de evidência e resposta
-
-Cada resultado contém ID opaco de evidência, tipo/origem, ID da nota/fonte, revisão/snapshot, seção, trecho, atualidade e natureza pessoal/derivada. O modelo recebe somente dados autorizados e os identificadores necessários para citar. IDs usados apenas para animação da interface continuam fora do prompt; não reutilizar silenciosamente o campo `ids` de `SaidaFerramenta` como contrato de citação.
-
-O contexto inclui wiki como orientação e evidências originais para fundamentação. O modelo devolve marcadores como `[E1]`; o servidor só transforma marcadores conhecidos em links internos e rejeita referências inexistentes. Validade do ID não demonstra que a afirmação é sustentada: cobertura semântica é avaliada separadamente.
-
-Formato proposto: texto final e lista de evidências utilizadas, sem pedir cadeia privada de raciocínio. A interface abre a nota/revisão e destaca a localização. Se o original mudou, exibe a revisão usada e permite comparar com a atual. Se não houver evidência suficiente, o agente explicita a lacuna; conhecimento geral adicional, quando pedido, é identificado como externo à base e não é publicado automaticamente na wiki.
-
-## 10. Compilação incremental da Wiki Viva
-
-### 10.1 Pipeline completo
-
-1. **Capturar:** gravação da nota/fonte produz evento na outbox na mesma transação. Se o usuário excluir uma origem, invalidar sua elegibilidade para contexto nessa transação.
-2. **Agrupar:** consumidor consolida autosaves por documento até a revisão mais recente. Ponto inicial: janela de 60 segundos, reduzível ao encerrar edição; nunca atrasar o salvamento do usuário.
-3. **Fotografar:** criar snapshot imutável da entrada e dos campos usados na preparação. Notas vazias podem produzir resultado sem mudança, sem chamada de modelo.
-4. **Indexar:** atualizar trechos e embeddings necessários. Se embeddings estiverem indisponíveis, manter busca textual e trabalho pendente.
-5. **Extrair:** Responses com Structured Outputs produz conceitos candidatos, aliases, afirmações, divergências e referências aos trechos da entrada.
-6. **Encontrar contexto:** buscar páginas existentes e evidências relacionadas. Começar pelas páginas dependentes do documento e por candidatos conceituais/textuais/semânticos; limitar expansão.
-7. **Propor:** decidir entre nenhuma mudança, criar página, atualizar página, sugerir relação ou sinalizar revisão humana. Criar sínteses transversais quando houver conexão útil sustentada.
-8. **Validar:** esquema, acesso, IDs, citações, ausência de ciclos, novidade, limite de crescimento e revisão-base da página. Verificação semântica por amostragem/avaliador complementa validações determinísticas.
-9. **Publicar:** em transação curta, conferir posse do trabalho e geração desejada, revisões de todas as entradas, estado de gerenciamento e revisão da página. Gravar nota, histórico, afirmações, evidências e dependências juntos.
-10. **Propagar:** nova página entra na busca. Dependentes ficam pendentes quando a mudança for relevante; usar hashes e limite de ondas para impedir ciclos de recompilação.
-
-Não executar rede dentro da transação. Publicação da nota e dos metadados deve ser uma operação de domínio atômica; chamar o CRUD atual e depois inserir evidências em outra transação não satisfaz esse requisito.
-
-### 10.2 Extração e síntese com saída estruturada
-
-Separar dois contratos pequenos: `ExtracaoDeConhecimento` identifica conteúdo da entrada; `PropostaDePagina` integra esse conteúdo ao conhecimento existente. Limitar candidatos e tamanhos para evitar saída excessiva. Campos opcionais são explicitamente anuláveis; objetos usam `additionalProperties: false` e campos declarados obrigatórios conforme o subconjunto de JSON Schema suportado.
-
-Esboço de proposta de aplicação, sujeito à definição do JSON Schema na implementação:
-
-```json
-{
-  "acao": "atualizar",
-  "paginaAlvo": "pagina-autorizada-7",
-  "titulo": "Consistência entre cópias",
-  "resumoDaMudanca": "Integra o cenário de sincronização offline.",
-  "afirmacoes": [
-    {
-      "texto": "O cenário registrado exige tratar alterações concorrentes.",
-      "natureza": "explicita",
-      "evidencias": ["E1", "E3"]
-    }
-  ],
-  "relacoesSugeridas": [],
-  "lacunas": []
-}
-```
-
-O servidor calcula dono, revisão-base, IDs persistentes, hashes, geração e permissões; nenhum desses valores é confiado ao modelo. IDs candidatos aparecem em uma lista autorizada. Uma ação `nenhuma` tem contrato próprio e não cria página vazia. JSON válido não autoriza publicação.
-
-O transporte atual `PedidoOpenAI` aceita instruções, entrada e ferramentas; a compilação exigirá um caminho explícito para `text.format` e configurações por tarefa. Implementar com tipos discriminados, testes de payload e validação Zod. Não usar conversões de tipo para esconder incompatibilidades nem enviar parâmetros de Chat Completions no corpo de Responses.
-
-Integração HTTP proposta, sem credenciais nos exemplos:
-
-- Embeddings: `POST /v1/embeddings`, com `model`, lista de textos em `input`, `encoding_format: "float"` e dimensão compatível com o índice. O texto de consulta recebe a mesma preparação definida para aquele índice.
-- Extração/compilação: `POST /v1/responses`, com `model`, `instructions` contendo apenas política estável, `input` contendo evidências como dados, `store: false`, limite de saída por tarefa e `text.format: { type: "json_schema", name: "proposta_de_conhecimento", strict: true, schema: ... }`. O schema real precisa representar variantes e nulidade e ser validado contra a documentação antes do primeiro envio.
-- Consulta: manter o protocolo de funções em `tools`, `parallel_tool_calls: false` para operações com efeitos e respostas de ferramenta como `function_call_output`. O serviço executa a busca/publicação; devolver JSON não executa operações por si só.
-- Credencial somente no cabeçalho de autorização do servidor. Modelo de embeddings, modelo de consulta e modelo de compilação são configurações independentes; começar com Luna no chat e como candidato de compilação, comparando qualidade antes de escolher outro modelo.
-
-Recusa, saída incompleta, timeout e schema inválido deixam a proposta sem publicação. O pedido de ferramentas correlaciona `function_call`/`function_call_output` por `call_id`. Preservar os itens de raciocínio necessários à continuação: a documentação atual informa que o modo sem estado (`store: false` ou ZDR) já retorna `encrypted_content` por padrão; `include: ["reasoning.encrypted_content"]` permanece aceito por compatibilidade e não é obrigatório. Os mocks atuais não comprovam esse comportamento em inferência real. Referência: [preservação do raciocínio sem respostas armazenadas](https://developers.openai.com/api/docs/guides/reasoning).
-
-### 10.3 Política de conhecimento
-
-- Separar conteúdo afirmado pela fonte de inferências e sugestões do Bimo. Preservar opinião pessoal, hipótese, data e contexto; não transformar uma preferência individual em regra universal.
-- Divergências mantêm os dois lados e suas evidências. Uma fonte mais recente não é automaticamente mais correta; distinguir mudança temporal de contradição.
-- Páginas derivadas podem ajudar a encontrar e combinar conceitos. Toda afirmação publicada deve alcançar raízes pessoais ou fontes originais por uma cadeia acíclica e verificável.
-- Uma página gerada não conta como nova fonte independente de sua própria evidência. Não aumentar confiança ou criar trabalho apenas porque outra síntese repetiu a mesma informação.
-- Conteúdo sem ganho útil gera `nenhuma`. Igualdade de hash não é o único critério de novidade; complementar com deduplicação de afirmações e avaliação editorial.
-- O primeiro ciclo permite criação e atualização de páginas gerenciadas. Mescla, exclusão, substituição de notas pessoais e alterações em páginas protegidas ficam como propostas revisáveis.
-- Perguntas e respostas do chat não entram como fatos automaticamente. Nova informação fornecida pelo usuário pode ser salva por pedido explícito; síntese útil só é persistida se passar pelo mesmo pipeline de evidências.
-
-## 11. Fila durável, concorrência e invalidação
-
-Usar uma fila persistida no Postgres com consumidor executado fora do ciclo de vida de uma requisição do Next. Definir runner, hospedagem, frequência de disparo e credenciais antes da ativação. Não executar compilação com `void promessa`, temporizador solto ou trabalho dependente da aba permanecer aberta.
-
-### 11.1 Estados e posse
-
-`pendente → processando → concluido`; falhas recuperáveis retornam a `pendente` com espera; alternativas terminais: `sem_mudanca`, `cancelado`, `superado`, `falha_final`. Separar estado da página (`atualizada`, `pendente`, `revisao_manual`, `pausada`, `sem_evidencia`) do estado do trabalho.
-
-- Reivindicar com transação curta, `FOR UPDATE SKIP LOCKED`, lease e token de posse crescente.
-- Renovar posse para operações longas. Um consumidor com lease vencido não publica mesmo se terminar depois de outro.
-- Deduplicar pela combinação dono + tarefa + alvo + geração/versão do pipeline.
-- Alteração durante a compilação avança a geração desejada; o resultado antigo fica superado e um novo trabalho atende a versão atual.
-- Retentativa tem limite, espera exponencial e jitter; respeita `Retry-After` quando disponível. Erro de autenticação/configuração bloqueia aquela integração sem laço de tentativas.
-- Identidade e permissões do dono são revalidadas ao iniciar e publicar um trabalho, inclusive após expiração de sessão ou exclusão de usuário.
-- Processamento é pelo menos uma vez; idempotência da publicação é persistente. Não prometer exatamente uma cobrança externa, pois uma resposta pode ser perdida após o provedor executar.
-
-### 11.2 Invalidação
-
-Mudança de nota, título usado no embedding, fonte, localização, modelo, prompt ou segmentador invalida somente derivados dependentes. Nota modificada deve tornar evidências antigas inelegíveis para uma resposta apresentada como atual antes de a recompilação terminar. Uso histórico explícito pode citar snapshots anteriores ainda permitidos.
-
-Exclusão impede recuperação imediatamente; o expurgo de índices e derivados ocorre pelo trabalho correspondente. Se uma página perder todas as raízes permitidas, fica fora das respostas atuais e é marcada sem evidência. Exclusão de dados deve atingir snapshots e textos derivados quando necessário; não preservar conteúdo removido sob o rótulo de histórico sem uma política explícita.
-
-Acrescentar varredura de reconciliação paginada: detecta documento sem índice, outbox não consumida, lease expirado, dependência inválida e página sem raiz. Não carregar todo o conteúdo da base em cada turno para descobrir mudanças.
-
-### 11.3 Background e Batch
-
-A fila do Bimo controla trabalhos, orçamento e publicação. Background mode apenas altera a execução de uma chamada da OpenAI. A documentação atual descreve armazenamento temporário para polling e condições de retenção por configuração; confirmar os controles aplicáveis antes de usar. Não assumir incompatibilidade ou compatibilidade universal com uma política de retenção a partir de `store: false`. Referências: [Background](https://developers.openai.com/api/docs/guides/background), [Data controls](https://developers.openai.com/api/docs/guides/your-data).
-
-Primeira fatia usa chamadas comuns curtas no consumidor. Batch é otimização posterior para indexação/compilação inicial sem urgência: registrar `custom_id`, reconciliar cada resultado pela identidade e conferir a revisão ao recebê-lo. Resultado atrasado nunca substitui conhecimento mais recente. Não usar Batch para responder ao chat interativo.
-
-## 12. Integração com o agente e a interface
-
-Ferramentas propostas para introdução gradual:
-
-| Ferramenta | Papel | Limite |
-| --- | --- | --- |
-| `buscar_conhecimento` | Busca híbrida em notas, fontes e wiki | Retorna evidências autorizadas e cobertura, sem consulta SQL livre |
-| `ler_evidencia` | Expande seção, snapshot ou original | Somente referências emitidas/autorizadas pelo servidor |
-| `explorar_relacoes` | Explora conexões e justificativas | Um salto inicialmente, com limites de candidatos e tokens |
-| `consultar_panorama` | Responde consultas amplas usando índice temático e cobertura | Explicita o subconjunto examinado e a situação da compilação |
-
-Preservar `buscar_notas`, `listar_notas`, `ler_nota`, `criar_nota` e `editar_nota` durante a transição. O compilador usa um serviço interno de publicação, sem entregar uma ferramenta irrestrita `reescrever_wiki` ao chat. Toda consulta recebe contexto de acesso explícito do servidor; o modelo/navegador não escolhe `user_id`.
-
-Não consumir cinco voltas apenas para buscar dez notas: `buscar_conhecimento` já deve montar um pacote útil com trechos e evidências. Investigações que ultrapassem os limites interativos podem futuramente ser trabalhos persistentes com progresso, sem aumentar silenciosamente o teto do chat.
-
-Na interface: identificar página da wiki, fontes, última compilação e estado de atualização; oferecer pausar, revisar alteração, abrir evidência e retomar gerenciamento. Estados não devem depender apenas de cor. Preservar o design system, acessibilidade, árvore React estável e eventos do grafo; não usar `router.refresh()` para atualizar o conteúdo.
-
-A wiki aparece como novas notas e conexões no grafo existente. Não criar uma cópia de cada wikilink na tabela de relações. Exportação inclui Markdown das páginas e manifesto de evidências/dependências em formato aberto; referências não devem depender exclusivamente de IDs da OpenAI.
-
-### 12.1 Consultas globais
-
-Para “quais temas existem na minha base?”, o top-k semântico não comprova cobertura do acervo. Manter um catálogo temático derivado e revisável, com os documentos cobertos e a revisão da base examinada. A geração inicial percorre documentos com cursor e trabalhos paginados; sínteses de sínteses preservam raízes e cobertura.
-
-Respostas mostram escopo: documentos elegíveis, documentos processados e pendentes, sempre no mesmo recorte de dono/filtros. Temas são sugestões emergentes e podem mudar. Contagens e agregações exatas são calculadas em consulta estruturada, não inferidas pelo modelo a partir de amostras.
-
-## 13. Segurança, privacidade e consumo
-
-### 13.1 Fronteiras de confiança
-
-- Texto de notas, fontes e wiki é dado, inclusive quando contém frases imperativas. Nunca interpolá-lo como instrução privilegiada do sistema/desenvolvedor. Separar política, consulta e evidências.
-- O compilador só acessa leitura autorizada e publicação de páginas gerenciadas. Nenhuma ferramenta de shell, rede arbitrária, e-mail, SQL livre ou administração de credenciais.
-- Schema estrito reduz canais de erro; não garante verdade, autorização ou imunidade a prompt injection. Validar semanticamente IDs, estados, relações e permissões no servidor.
-- Isolar por dono busca, expansão, caches, snapshots, fila, arquivos, referências e métricas. Filtrar somente depois de um `LIMIT` global pode perder recall e não é a arquitetura proposta.
-- A conexão de proprietário do banco requer filtros explícitos. Reaproveitar `exigirSessao`, `exigirMesmaOrigem`, limites de JSON e portas existentes; no futuro multiusuário, identidade vem da sessão validada e segue até o repositório.
-- Logs contêm IDs técnicos/correlação, duração, estado e tokens; omitir prompts, notas, citações e corpos de erros do provedor. Exposição de dados para avaliações é uma operação separada.
-- `store: false` é mantido nas chamadas síncronas; não equivale a retenção zero. Files, vector stores, Batch e outros endpoints têm políticas próprias. Documentar a política escolhida antes de ativar cada um.
-
-### 13.2 Orçamento antes de autonomia
-
-O chat migrado ainda não possui teto financeiro persistente. A wiki automática só pode ser ativada depois do controlador de consumo, pois uma edição pode disparar vários trabalhos dependentes.
-
-Implementar limite por usuário/período, por execução, por documento e por onda de propagação. Reservar custo conservador de entrada/saída antes de cada chamada; falha ao reservar impede a chamada. Concorrência de consumidores não pode ultrapassar o limite. Resultado com consumo desconhecido mantém reserva conservadora até reconciliação; não estornar como zero só porque houve timeout.
-
-Guardar modelo e versão da tabela de preços. Fórmula de estimativa: tokens de embedding + entrada/saída de extração/síntese + custo de busca hospedada/armazenamento se usado. A ausência de tarifa cadastrada bloqueia automação paga ou exige limite conservador explícito. Exibir estimativa da carga inicial antes de processar a base; usar preços oficiais vigentes, sem congelar valores neste plano.
-
-Separar orçamento do chat e da manutenção da wiki. Ao atingir limite, manter edição de notas e busca textual; trabalhos permanecem pendentes com motivo compreensível. Prompt caching e Batch são otimizações medidas posteriormente, sem servirem de premissa para o teto de custo.
-
-## 14. Plano de implementação por fatias
-
-Cada fatia começa com testes RED de comportamento, segue com implementação GREEN e termina com diff revisado. Testes locais usam repositório em memória e provedores simulados. Integração real, migrações, envio de notas e inferência paga são execuções explícitas, realizadas somente quando autorizadas.
-
-| Fatia | Entrega e arquivos prováveis | Evidência exigida para concluir |
-| --- | --- | --- |
-| F0 — Contratos e avaliação | Tipos em `src/lib/conhecimento/`; fixtures de notas heterogêneas; especificação de citação, snapshot, gerenciamento e acesso | Casos de produto e invariantes aprovados; matriz de avaliação versionada; decisões abertas resolvidas |
-| F1 — Snapshots e evidências | Serviço de snapshots/segmentação; adaptador em memória; schema Drizzle mínimo; localização de texto | Snapshot não muda com autosave; Unicode/CRLF corretos; citação atravessa rename; acesso cruzado recusado |
-| F2 — Recuperação híbrida | Provedor de embeddings; adaptador Postgres; versionamento de índice; RRF; pacote de contexto | Texto+semântica recuperam evidências esperadas; limites e diversidade; fallback textual; dimensão/modelo incompatíveis recusados |
-| F3 — Consulta fundamentada | Ferramentas novas; adaptação do laço; referências no contrato de chat/NDJSON; exibição de fontes | Pergunta→ferramenta→evidência→resposta→link testado; referência inventada recusada; regressões de escrita e eventos preservadas |
-| F4 — Consumo e execução durável | Reservas persistentes; outbox transacional; fila; runner e credenciais de disparo definidos | Falha/retomada, deduplicação, lease vencido, concorrência e teto comprovados; nenhuma execução sem reserva |
-| F5 — Compilador em modo de proposta | Extração/síntese estruturadas; busca de páginas; política editorial; lista de propostas sem publicar automaticamente | Notas livres produzem conceitos e sínteses úteis; nenhum acesso/gravação fora do alvo; recusas/incompletude não publicam |
-| F6 — Publicação automática controlada | Metadados de wiki, afirmações/evidências, dependências e publicação atômica | Criação/enriquecimento de notas gerenciadas; edição concorrente preservada; rollback total; repetição não duplica página |
-| F7 — Evolução e panorama | Invalidação em cadeia limitada; catálogo temático; reconciliação; revisão/pausa na UI; exportação | Nova nota amplia síntese; contradição preservada; exclusão retira derivados; cobertura global honesta; usuário controla gerenciamento |
-| F8 — Piloto e otimização | Carga paginada, métricas, avaliação humana, custos; experimentos opcionais de reranking/Batch | Ganho medido contra baseline; gasto dentro do teto; rollback demonstrado; limitações documentadas |
-
-Dependências: F0→F1→F2→F3 entrega RAG utilizável; F4 é pré-requisito para qualquer automação paga contínua; F5 pode ser desenvolvido com simuladores enquanto F4 é preparado; F6 exige F1/F4/F5; F7 exige F6. Começar com um documento de cada vez e depois ampliar o lote.
-
-Ao tocar rotas, servidor ou outras APIs do Next, ler os guias correspondentes em `node_modules/next/dist/docs/`, conforme `AGENTS.md`. Novos esquemas, migrações e vetores precisam respeitar o workflow Drizzle existente, com SQL revisado e integração no banco de teste; não aplicar DDL automaticamente em produção.
-
-## 15. Matriz de testes e avaliações
-
-### 15.1 Testes determinísticos obrigatórios
-
-1. Anotação solta, diário, receita, código e texto técnico entram sem classificação obrigatória.
-2. Nota curta permanece inteira; seção grande é dividida sem perda; lista/tabela/código preservam contexto.
-3. Busca lexical encontra nome/sigla; busca semântica encontra paráfrase; nenhum pressuposto de BM25 no `ts_rank` atual.
-4. IDs e revisões corretos chegam às citações; referências inexistentes, de outro dono ou fora do conjunto recuperado são recusadas.
-5. Atualização/exclusão entre busca e montagem de contexto impede uso indevido da evidência antiga.
-6. Dois usuários com títulos e textos iguais não compartilham resultados, aliases privados, cache, páginas ou trabalhos.
-7. Modelo devolve recusa, JSON inválido, schema incompatível, saída incompleta ou IDs fabricados: nenhuma publicação.
-8. Duas execuções iguais não duplicam página, afirmação ou relação; lease antigo não publica; falha após commit reconcilia sem regravar.
-9. Usuário edita ou pausa página enquanto o compilador trabalha: seu conteúdo é preservado e a proposta fica superada/revisável.
-10. Falha ao gravar evidência/dependência desfaz a nota publicada na mesma transação.
-11. Compilação de uma síntese não cria novas fontes independentes por repetição; ciclos e ondas ilimitadas são impedidos.
-12. Opinião, hipótese, divergência e mudança temporal mantêm contexto; alta confiança declarada não promove afirmação sozinha.
-13. Mudar modelo/dimensão/segmentador não mistura índices; backfill interrompido retoma com cobertura conhecida.
-14. Orçamento esgotado ou reserva concorrente negada impede chamada; timeout de consumo incerto não libera toda a reserva.
-15. Requisição cancelada não desfaz escrita já concluída; cancelamento da consulta não mata um trabalho durável previamente autorizado.
-16. Texto com instrução maliciosa nas notas não habilita ferramenta, altera dono ou escreve em nota pessoal.
-17. UI abre referência com teclado, indica atualização pendente e permite pausar/retomar sem desmontar chat/grafo.
-
-### 15.2 Avaliação de qualidade
-
-Criar inicialmente 50 perguntas com distribuição registrada: dez localizações exatas, dez paráfrases, dez conexões entre notas, cinco divergências/tempo, cinco panoramas, cinco sem resposta e cinco casos de ambiguidade/instrução maliciosa. Incluir material heterogêneo e pt-BR com termos técnicos em outros idiomas. Separar exemplos de desenvolvimento e avaliação reservada; dados reais só entram após autorização e seleção do usuário.
-
-Comparar A: busca textual atual; B: híbrida sem wiki; C: híbrida+wiki. Variante D, com expansão/reranking, só depois. Usar os mesmos dados, perguntas e orçamento de contexto para evitar atribuir ao método um ganho causado apenas por mais tokens.
-
-Medir recall das evidências esperadas no top-k, precisão/relevância, correção e cobertura das citações, respostas sem sustentação, qualidade de síntese, duplicação de páginas, atualidade, latência p50/p95 e custo por pergunta/documento. Rastrear a etapa do erro: recuperação, montagem, geração, validação ou publicação. Avaliador LLM é auxiliar e precisa de calibração humana.
-
-Metas iniciais propostas para revisão: zero acesso cruzado e zero sobrescrita indevida nos testes; 100% das referências renderizadas resolvíveis/autorizadas; recall@10 de pelo menos 90% no conjunto curado; pelo menos 95% das afirmações amostradas corretamente sustentadas ou identificadas como inferência. Não confundir metas com resultados obtidos nem com garantias para toda pergunta. Estabelecer limites de latência e custo após o baseline, antes do piloto.
-
-### 15.3 Camadas de evidência
-
-- Offline: testes de contrato, simuladores, concorrência e payloads. Não prova qualidade do modelo nem execução de pgvector.
-- Banco de teste: SQL real, filtros, vetores, locks, rollback, índices e isolamento, com usuários efêmeros. Nunca usar `USER_ID_PADRAO` em testes que removem dados.
-- Provedor real: experimento pequeno com limite financeiro e corpus aprovado; verificar payload Responses, embeddings, recusa, uso e protocolo de continuação.
-- Produto: percurso completo no navegador com citações, publicação, pausa e revisão manual.
-
-O relatório de cada fatia separa GREEN focado, baseline legado, integração não executada e comportamento real ainda não verificado. Comandos locais usam `npx.cmd`; testes que exigem rede não entram silenciosamente no conjunto offline.
-
-## 16. Ativação, operação e rollback
-
-Flags propostas, configuradas no servidor: recuperação híbrida, consulta à wiki, geração de propostas e publicação automática. São independentes; defaults desligados para trabalho pago automático. Não expor chaves ou habilitar publicação por parâmetro do navegador.
-
-Sequência: migrar/testar em ambiente próprio → indexar corpus de teste → comparar recuperação → gerar propostas sem publicar → revisar amostra → autorizar piloto com teto → habilitar publicação gerenciada → ampliar lote gradualmente. Carga inicial informa número de documentos elegíveis e estimativa antes de chamar o provedor; o tamanho da base não foi medido nesta entrega.
-
-Operação observa atraso da fila, cobertura do índice, páginas pendentes, falhas, consumo reservado/incerto/confirmado, taxa de nenhuma mudança e crescimento de páginas. Auditoria editorial procura duplicatas, conceitos desconectados, divergências não tratadas e ausência de evidências; reparos passam pelo pipeline normal.
-
-Rollback: desligar publicação, parar novos trabalhos e invalidar a posse dos em execução; manter notas pessoais, busca textual e histórico. Desativar consulta à wiki se houver problema de fundamentação. Restaurar páginas usa novas revisões e recria dependências coerentes; não apagar histórico nem usar migração destrutiva como primeiro recurso. Índices derivados podem ser reconstruídos a partir de entradas ainda autorizadas.
-
-## 17. Pontos que o Claude deve revisar antes da implementação
-
-1. **Fidelidade ao produto:** a estrutura emerge das notas? O fluxo cria e enriquece conhecimento persistente sem impor categorias ao usuário?
-2. **Fronteira editorial:** tabela associada à nota é suficiente para gerenciamento? A edição manual pausar a página é o comportamento adequado? Como o usuário incorpora correções ao ciclo automático?
-3. **Snapshots:** a separação do histórico mutável do autosave é necessária e suficiente? A política de exclusão cobre derivados, snapshots e citações?
-4. **Esquema:** reduzir tabelas onde possível, preservando FK por dono, publicação atômica, evidências por afirmação e geração monotônica.
-5. **Portas existentes:** como compartilhar a transação da nota com outbox e publicação sem duplicar regras de `RepositorioDeNotas` ou abrir escrita irrestrita?
-6. **Identidade:** compatibilidade entre o dono configurado atual e o plano de login multiusuário; nenhuma identidade escolhida pelo modelo.
-7. **Operação:** escolher runner durável e forma de disparo compatível com hospedagem/limites reais. A frequência e o orçamento precisam ser fechados antes da ativação.
-8. **OpenAI:** validar transporte sem SDK, `text.format`, schemas estritos, suporte do Luna, raciocínio sem armazenamento e configuração por tarefa. Não tratar mocks como prova de inferência real.
-9. **Retrieval:** confirmar pgvector disponível, escolha de dimensão, tokenizer, filtros, paginação e plano de índice; revisar Postgres versus File Search com os custos operacionais reais.
-10. **Qualidade:** os critérios de criação/enriquecimento, novidade, independência de fontes e cobertura global conseguem ser avaliados de forma útil?
-11. **Custo:** limites por usuário, execução e ondas, reserva atômica e tratamento de cobrança incerta são suficientes para automação contínua?
-12. **Entrega:** F1–F3 já fornecem valor enquanto a wiki é preparada? Cada fatia tem escopo pequeno, RED/GREEN e condição objetiva de conclusão?
-
-## 18. Briefing pronto para revisão pelo Claude
-
-> Revise criticamente este plano e o código atual do Bimo antes de implementar. O objetivo aprovado é uma Wiki Viva que cria e amplia notas derivadas, conecta conhecimento e adapta sua organização ao que cada usuário anota livremente. Leia `AGENTS.md`, `CLAUDE.md`, os documentos relacionados e os arquivos citados. Confira as afirmações sobre OpenAI nos links oficiais e distinga fatos documentados de escolhas locais. Procure lacunas de concorrência, snapshots, proveniência, isolamento por usuário, crescimento recursivo, publicação, custo e operação. Avalie a alternativa Postgres versus File Search. Entregue achados com gravidade, cenário concreto, impacto, correção sugerida e referência ao trecho do plano/código; proponha uma sequência ajustada de fatias. Não execute migrações, serviços externos, ingestão de notas ou implementação nesta revisão. O plano ainda não representa funcionalidade entregue.
+> Revise o planejamento funcional da Wiki Viva integrada ao agente Bimo. O usuário anota livremente; o sistema descobre conexões, cria e enriquece notas derivadas na mesma base e usa esse conhecimento nas conversas. A wiki não depende de área separada nem seleção manual de origens. A primeira entrega usa índice, busca textual e ligações; embeddings são posteriores e opcionais. Leia contratos e código, distinguindo protótipo de requisito aprovado. Avalie evidências, raízes independentes, descoberta, atualização, concorrência, fila, custo e base anterior. Entregue achados com cenário, impacto, correção e ajustes de sequência. Nesta revisão funcional, não implemente, aplique migrações ou chame serviços externos. Telas e design serão tratados diretamente com o usuário em trabalho separado.

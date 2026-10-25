@@ -325,6 +325,32 @@ export function executarContratoDoRepositorio(nome: string, fabrica: Fabrica): v
       });
     });
 
+    describe("buscarIdsPorConteudo", () => {
+      it("devolve os mesmos acertos de buscarPorConteudo, só os ids e na mesma ordem", async () => {
+        const repo = await fabrica();
+        await criarOk(repo, { titulo: "Café", conteudo: "variáveis do preparo" });
+        await criarOk(repo, { titulo: "Preparo", conteudo: "o café depende de variáveis" });
+        await criarOk(repo, { titulo: "Outra", conteudo: "nada a ver" });
+
+        const completos = await repo.buscarPorConteudo("VARIAVEIS", 10);
+        const ids = await repo.buscarIdsPorConteudo("VARIAVEIS", 10);
+
+        expect(ids).toEqual(completos.map((r) => r.id));
+        expect(ids).toHaveLength(2);
+      });
+
+      it("respeita o limite e devolve vazio quando nada casa ou a consulta não tem letras", async () => {
+        const repo = await fabrica();
+        await criarOk(repo, { titulo: "Nota 1", conteudo: "assunto comum" });
+        await criarOk(repo, { titulo: "Nota 2", conteudo: "assunto comum" });
+
+        expect(await repo.buscarIdsPorConteudo("assunto", 1)).toHaveLength(1);
+        expect(await repo.buscarIdsPorConteudo("inexistente", 5)).toEqual([]);
+        expect(await repo.buscarIdsPorConteudo("!!!", 5)).toEqual([]);
+        expect(await repo.buscarIdsPorConteudo("assunto", 0)).toEqual([]);
+      });
+    });
+
     it("usa a configuração padrão do grafo", async () => {
       const repo = await fabrica();
 

@@ -21,6 +21,8 @@ import { obterRepositorio } from "./repositorio-de-notas";
 import type { RepositorioDeNotas } from "./repositorio-de-notas/tipos";
 import { caminhoDaNota, resolverNotaDoAgente } from "./resolver-nota-do-agente";
 import { escolherPortaDeEscrita } from "./porta-de-escrita-do-agente";
+import { consultarConhecimentoWiki, evidenciasDaWiki } from "./wiki/consulta";
+import { descreverErro } from "./registro-de-erros";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
@@ -183,7 +185,8 @@ export async function executarFerramenta(
     }
   } catch (error) {
     const esperado = error instanceof ErroDeFerramenta || error instanceof ErroDeConfiguracao;
-    if (!esperado) console.error(`[ferramenta:${nome}]`, error);
+    // A mensagem do erro pode trazer SQL ou texto das notas: o log leva só a categoria (nome, status, SQLSTATE).
+    if (!esperado) console.error(`[ferramenta:${nome}] Falha interna ao acessar as notas.`, { erro: descreverErro(error) });
     const mensagem = esperado ? error.message : "Falha interna ao acessar as notas. Tente novamente.";
     return {
       resposta: { erro: mensagem },
@@ -193,16 +196,25 @@ export async function executarFerramenta(
   }
 }
 
+/** A Wiki Viva só acrescenta contexto: uma falha dela (tabela ausente, timeout) não pode derrubar a leitura das notas. */
+async function tentarWiki<T>(consultar: () => Promise<T>): Promise<T | undefined> {
+  try { return await consultar(); }
+  catch (erro) { console.error("[wiki] Contexto da wiki indisponível; seguindo só com as notas.", { erro: descreverErro(erro) }); return undefined; }
+}
+
 async function execBuscar(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
   const consulta = texto(args.consulta, "consulta");
   const limite = Math.min(Math.max(Math.floor(numero(args.limite) ?? 8), 1), 20);
 
   const resultados = await repositorio.buscarPorConteudo(consulta, limite);
   const aviso = await repositorio.obterAviso();
+  // Sem pedir o processamento de cada resultado: a reconciliação da fila já alcança toda nota sem trabalho.
+  const conhecimento = await tentarWiki(() => consultarConhecimentoWiki(repositorio, consulta, resultados.map((r) => r.id)));
 
   return {
     resposta: {
       encontradas: resultados.length,
+      ...(conhecimento ? { conhecimento } : {}),
       ...(aviso ? { aviso } : {}),
       notas: resultados.map((r) => ({
         caminho: caminhoDaNota(r),
@@ -255,12 +267,30 @@ async function execLer(args: Args, repositorio: RepositorioDeNotas, leituras?: L
   const resultado = await repositorio.obterNota(resumo.id);
   if (!resultado) throw new ErroDeFerramenta(`A nota "${caminhoDaNota(resumo)}" sumiu entre a listagem e a leitura. Use listar_notas novamente.`);
   leituras?.set(resultado.id, resultado.revisao);
+  // Pedir o processamento é uma cortesia: uma falha da fila não pode impedir a leitura da nota.
+  await repositorio.wiki?.automacao?.solicitar(resultado.id).catch((erro: unknown) => {
+    console.error("[wiki] Não foi possível registrar a leitura.", { erro: descreverErro(erro) });
+  });
+
+  const wiki = await tentarWiki(async () => {
+    const pagina = await repositorio.wiki?.obter(resultado.id);
+    if (!pagina) return undefined;
+    const { estadoDaPagina } = await import("./wiki/servico");
+    const estado = await estadoDaPagina(repositorio, pagina);
+    return {
+      aviso: estado === "atualizada"
+        ? "Síntese derivada pelo Bimo. As notas de origem são as evidências independentes."
+        : "Esta síntese foi editada ou suas fontes mudaram. Leia as notas de origem antes de usá-la como informação atual.",
+      evidencias: await evidenciasDaWiki(repositorio, resultado.id),
+    };
+  });
 
   return {
     resposta: {
       caminho: caminhoDaNota(resultado),
       titulo: resultado.titulo,
       conteudo: resultado.conteudo,
+      ...(wiki ? { avisoWiki: wiki.aviso, evidenciasWiki: wiki.evidencias } : {}),
     },
     resumo: `Leu "${caminhoDaNota(resultado)}"`,
     ids: [resultado.id],

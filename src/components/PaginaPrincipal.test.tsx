@@ -99,6 +99,18 @@ it("falha na atualização por API conserva conversa e grafo montados", async ()
 });
 
 const abaNotas = () => screen.getByRole("button", { name: "Notas" });
+it("Cérebro e Diário preservam os mesmos elementos do Chat e do Grafo", async () => {
+  const usuario = renderizar();
+  const campo = campoDoChat(); const grafo = screen.getByTestId("grafo");
+  await usuario.type(campo, "Meu rascunho continua aqui");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(Response.json(url.includes("diario") ? { eventos: [], proximo: null } : { resumo: { neuronios: 0, sinapses: 0, notasLidas: 0, totalDeNotas: 2, emConsolidacao: 2, impedidas: 0 }, energia: null, neuronios: [] }))));
+  await usuario.click(screen.getByRole("button", { name: /^Cérebro$/ }));
+  expect(await screen.findByText("Ainda não nasceu nenhum neurônio.", { exact: false })).toBeInTheDocument();
+  await usuario.click(screen.getByRole("button", { name: /^Diário$/ }));
+  expect(await screen.findByText(/Nenhuma atividade neste período/)).toBeInTheDocument();
+  await usuario.click(abaBimo());
+  expect(campoDoChat()).toBe(campo); expect(campo).toHaveValue("Meu rascunho continua aqui"); expect(screen.getByTestId("grafo")).toBe(grafo);
+});
 const abaBimo = () => screen.getByRole("button", { name: "Bimo" });
 const campoDoChat = () => screen.getByPlaceholderText("Pergunte, peça uma nota nova ou uma edição…");
 const menuDeNotas = () => screen.getByRole("navigation", { name: "Pastas e notas" });

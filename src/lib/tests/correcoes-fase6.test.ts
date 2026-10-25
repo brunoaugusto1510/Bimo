@@ -43,11 +43,13 @@ it("concatena aviso do repositório e limite da listagem", async () => {
   expect(saida.resposta.aviso).toContain("primeiros 200");
 });
 it("não expõe SQL nem parâmetros de falha interna, mas registra no servidor", async () => {
-  const erro = new Error("SQL INSERT INTO notas PARAMS conteúdo confidencial");
+  const erro = Object.assign(new Error("SQL INSERT INTO notas PARAMS conteúdo confidencial"), { code: "57014" });
   const registrar = vi.spyOn(console, "error").mockImplementation(() => {});
   const saida = await executarFerramenta("listar_notas", {}, { repositorio: { ...semear(), listarResumos: async () => { throw erro; } } });
   expect(saida).toEqual({ erro: true, resumo: "Falha interna ao acessar as notas. Tente novamente.", resposta: { erro: "Falha interna ao acessar as notas. Tente novamente." } });
-  expect(registrar).toHaveBeenCalledWith(expect.stringContaining("listar_notas"), erro);
+  // O log leva só a categoria (nome do erro e SQLSTATE), o bastante para diagnosticar sem vazar a mensagem.
+  expect(registrar).toHaveBeenCalledWith(expect.stringContaining("listar_notas"), { erro: "Error:57014" });
+  expect(JSON.stringify(registrar.mock.calls)).not.toMatch(/INSERT INTO|PARAMS|confidencial/);
 });
 it("preserva mensagem esperada sem log interno", async () => {
   const registrar = vi.spyOn(console, "error").mockImplementation(() => {});

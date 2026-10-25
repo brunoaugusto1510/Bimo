@@ -1,0 +1,1 @@
+ALTER TABLE "trabalhos_wiki" ADD COLUMN "ultimo_erro" text;

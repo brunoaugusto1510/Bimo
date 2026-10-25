@@ -50,6 +50,41 @@
       "when": 1792177298398,
       "tag": "0006_nostalgic_stepford_cuckoos",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792677266966,
+      "tag": "0007_wiki_viva",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792682413725,
+      "tag": "0008_wiki_automatica",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792696771997,
+      "tag": "0009_wiki_ultimo_erro",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792761307774,
+      "tag": "0010_wiki_estrutura",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792774952809,
+      "tag": "0011_wiki_observabilidade",
+      "breakpoints": true
     }
   ]
 }

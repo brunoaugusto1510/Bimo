@@ -1,4 +1,5 @@
 import { exigirSessao } from "@/lib/autenticacao";
+import { agendarManutencaoWiki } from "@/lib/wiki/agendar";
 import {
   exigirMesmaOrigem,
   lerJsonComLimite,
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
   try {
     const repositorio = await obterRepositorio();
     const resultado = await repositorio.criarNota(validado.data, { criadoPor: "usuario" });
+    if (resultado.tipo === "ok") agendarManutencaoWiki();
     return respostaDeEscrita(resultado, 201);
   } catch (erro) {
     return tratarErroDeRepositorio(erro, "POST /api/notas");

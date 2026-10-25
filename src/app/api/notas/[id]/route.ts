@@ -1,4 +1,5 @@
 import { exigirSessao } from "@/lib/autenticacao";
+import { agendarManutencaoWiki } from "@/lib/wiki/agendar";
 import {
   exigirMesmaOrigem,
   lerJsonComLimite,
@@ -60,6 +61,7 @@ export async function PATCH(request: Request, { params }: Contexto) {
       checkpoint,
       autor: { criadoPor: "usuario" },
     });
+    if (resultado.tipo === "ok") agendarManutencaoWiki();
     return respostaDeEscrita(resultado);
   } catch (erro) {
     return tratarErroDeRepositorio(erro, "PATCH /api/notas/[id]");

@@ -54,6 +54,18 @@ it("encaminha cancelamento ao transporte", async () => {
   expect(buscar.mock.calls[0][1].signal).toBe(controlador.signal);
 });
 
+it("preserva a causa do prazo esgotado durante a leitura do corpo sem repetir a chamada", async () => {
+  const controlador = new AbortController();
+  const prazo = new DOMException("O prazo do agente esgotou.", "TimeoutError");
+  buscar.mockResolvedValue({ ok: true, json: async () => {
+    controlador.abort(prazo);
+    throw new DOMException("corpo interrompido", "AbortError");
+  } });
+
+  await expect(criarRespostaOpenAI(pedido, controlador.signal)).rejects.toBe(prazo);
+  expect(buscar).toHaveBeenCalledTimes(1);
+});
+
 it("registra somente consumo, sem chave nem conteúdo das notas", async () => {
   const registrar = vi.spyOn(console, "info").mockImplementation(() => {});
   buscar.mockResolvedValue(Response.json({ status: "completed", output: [], usage: {

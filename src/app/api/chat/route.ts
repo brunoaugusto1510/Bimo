@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { responder, type PassoDoServidor } from "@/lib/agente";
 import { exigirSessao } from "@/lib/autenticacao";
+import { agendarManutencaoWiki } from "@/lib/wiki/agendar";
 import { exigirMesmaOrigem, lerJsonComLimite, respostaDeErro, tratarErroDeRepositorio } from "@/lib/http-de-notas";
 import { ErroDeConfiguracao } from "@/lib/repositorio-de-notas/config";
+import { descreverErro } from "@/lib/registro-de-erros";
 import type { Mensagem } from "@/lib/types";
+
+// O agente tem 150 s; a plataforma precisa de margem para finalizar o fluxo.
+export const maxDuration = 180;
 
 /**
  * Rota do chat de verdade: recebe o histórico da conversa, chama o agente
@@ -37,6 +42,7 @@ export async function POST(request: Request) {
   }
 
   if (!process.env.OPENAI_API_KEY?.trim()) return respostaDeErro(503, "O Bimo está indisponível no momento. Tente mais tarde.");
+  agendarManutencaoWiki();
   if (aceitaNdjson(request)) return respostaEmFluxo(mensagens, request.signal);
 
   try {
@@ -45,12 +51,15 @@ export async function POST(request: Request) {
   } catch (erro) {
     // Configuração das notas faltando continua sendo explicada (503 com as variáveis); o resto é genérico e só vai ao log.
     if (erro instanceof ErroDeConfiguracao) return tratarErroDeRepositorio(erro, "POST /api/chat");
-    console.error("[POST /api/chat] Falha ao responder à conversa.");
-    return respostaDeErro(500, MENSAGEM_DE_FALHA);
+    return respostaDeErro(prazoEsgotado(erro) ? 504 : 500, mensagemDoErro(erro));
   }
 }
 
 const MENSAGEM_DE_FALHA = "Não consegui responder agora. Tente de novo.";
+
+function prazoEsgotado(erro: unknown): boolean {
+  return erro instanceof DOMException && erro.name === "TimeoutError";
+}
 
 function aceitaNdjson(request: Request): boolean {
   return (request.headers.get("accept") ?? "").toLowerCase().includes("application/x-ndjson");
@@ -59,7 +68,8 @@ function aceitaNdjson(request: Request): boolean {
 /** O texto que o modo JSON mostraria para este erro, sem detalhes internos. */
 function mensagemDoErro(erro: unknown): string {
   if (erro instanceof ErroDeConfiguracao) return erro.message;
-  console.error("[POST /api/chat] Falha ao responder à conversa.");
+  console.error("[POST /api/chat] Falha ao responder à conversa.", prazoEsgotado(erro) ? "TimeoutError" : descreverErro(erro));
+  if (prazoEsgotado(erro)) return "O prazo para concluir o pedido esgotou. Confira as ações concluídas antes de tentar novamente com menos notas.";
   return MENSAGEM_DE_FALHA;
 }
 

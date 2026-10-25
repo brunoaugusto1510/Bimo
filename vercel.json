@@ -1,0 +1,3 @@
+{
+  "crons": [{ "path": "/api/wiki/processar", "schedule": "0 5 * * *" }]
+}

@@ -112,15 +112,31 @@ describe("responder", () => {
     expect(resultado.resposta).toBe("Não encontrei essa nota.");
   });
 
-  it("para depois de MAX_VOLTAS (5) chamadas seguidas e devolve uma mensagem de desistência", async () => {
+  it("reserva a 12ª chamada para concluir e não executa ferramentas além do limite", async () => {
     criarRespostaMock.mockImplementation(async () => turnoComChamada("buscar_notas", { consulta: "x" }));
     vi.mocked(executarFerramenta).mockResolvedValue({ resposta: {}, resumo: "ok" });
 
     const resultado = await responder([{ papel: "usuario", conteudo: "pergunta difícil" }]);
 
-    expect(criarRespostaMock).toHaveBeenCalledTimes(5);
-    expect(resultado.resposta).toMatch(/não cheguei a uma resposta final/);
-    expect(resultado.ferramentas).toHaveLength(5);
+    expect(criarRespostaMock).toHaveBeenCalledTimes(12);
+    expect(criarRespostaMock.mock.calls.at(-1)?.[0].tool_choice).toBe("none");
+    expect(resultado.resposta).toMatch(/limite de etapas/);
+    expect(resultado.ferramentas).toHaveLength(11);
+  });
+
+  it("confirma uma escrita na última etapa disponível sem repetir a ferramenta", async () => {
+    for (let numero = 0; numero < 10; numero++) {
+      criarRespostaMock.mockResolvedValueOnce(turnoComChamada("ler_nota", { caminho: `${numero}.md` }));
+    }
+    criarRespostaMock.mockResolvedValueOnce(turnoComChamada("criar_nota", { caminho: "Resumo.md", conteudo: "síntese" }))
+      .mockResolvedValueOnce(turnoDeTexto("Criei Resumo.md."));
+    vi.mocked(executarFerramenta).mockResolvedValue({ resposta: { sucesso: true }, resumo: "Concluiu" });
+
+    const resultado = await responder([{ papel: "usuario", conteudo: "Leia as notas e crie um resumo." }]);
+
+    expect(resultado.resposta).toBe("Criei Resumo.md.");
+    expect(criarRespostaMock.mock.calls.at(-1)?.[0].tool_choice).toBe("none");
+    expect(vi.mocked(executarFerramenta).mock.calls.filter(([nome]) => nome === "criar_nota")).toHaveLength(1);
   });
 });
 
@@ -279,15 +295,32 @@ describe("contrato Responses do Luna", () => {
 });
 
 
-it("interrompe a chamada pendente após 45 segundos sem executar ferramentas tardias", async () => {
+it("permite concluir uma leitura e resposta que ultrapassam 45 segundos", async () => {
+  vi.useFakeTimers();
+  try {
+    criarRespostaMock.mockImplementationOnce((_pedido, sinal: AbortSignal) => new Promise((resolve, reject) => {
+      sinal.addEventListener("abort", () => reject(sinal.reason), { once: true });
+      setTimeout(() => resolve(turnoComChamada("ler_nota", { caminho: "TCP" })), 50_000);
+    })).mockResolvedValueOnce(turnoDeTexto("Pronto."));
+    vi.mocked(executarFerramenta).mockResolvedValue({ resposta: { conteudo: "TCP" }, resumo: "Leu" });
+    const resultado = responder([{ papel: "usuario", conteudo: "leia TCP" }]);
+    const verificacao = expect(resultado).resolves.toMatchObject({ resposta: "Pronto." });
+    await vi.advanceTimersByTimeAsync(50_000);
+    await verificacao;
+  } finally { vi.useRealTimers(); }
+});
+
+it("interrompe a chamada pendente após 150 segundos sem executar ferramentas tardias", async () => {
   vi.useFakeTimers();
   try {
     criarRespostaMock.mockImplementation((_pedido, sinal: AbortSignal) => new Promise((_resolve, reject) => {
-      sinal.addEventListener("abort", () => reject(new Error("cancelado")), { once: true });
+      sinal.addEventListener("abort", () => reject(sinal.reason), { once: true });
     }));
     const resultado = responder([{ papel: "usuario", conteudo: "oi" }]);
-    const verificacao = expect(resultado).rejects.toThrow("cancelado");
-    await vi.advanceTimersByTimeAsync(45_000);
+    const verificacao = expect(resultado).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.advanceTimersByTimeAsync(149_999);
+    expect(criarRespostaMock.mock.calls[0][1].aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await verificacao;
     expect(executarFerramenta).not.toHaveBeenCalled();
     expect(criarRespostaMock).toHaveBeenCalledTimes(1);

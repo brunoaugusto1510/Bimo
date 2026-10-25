@@ -15,6 +15,32 @@ const final = () => Response.json({ status: "completed", output: [
 ] });
 const repositorio = () => criarRepositorioEmMemoria([{ titulo: "TCP", pasta: "Redes", conteudo: "original" }]);
 
+it("busca, lê três fontes, cria o resumo uma vez e confirma na sexta chamada", async () => {
+  const notas = criarRepositorioEmMemoria([1, 2, 3].map((numero) => ({
+    titulo: `Projeto ${numero}`, pasta: "Fontes", conteudo: `Informação ${numero}`,
+  })));
+  vi.mocked(obterRepositorio).mockResolvedValue(notas);
+  const criar = vi.spyOn(notas, "criarNota");
+  buscar.mockResolvedValueOnce(chamada("buscar_notas", { consulta: "Projeto" }, "busca"));
+  for (const numero of [1, 2, 3]) {
+    buscar.mockResolvedValueOnce(chamada("ler_nota", { caminho: `Fontes/Projeto ${numero}.md` }, `ler-${numero}`));
+  }
+  buscar.mockResolvedValueOnce(chamada("criar_nota", {
+    caminho: "Resumos/Projeto.md", conteudo: "Síntese de [[Fontes/Projeto 1]], [[Fontes/Projeto 2]] e [[Fontes/Projeto 3]].",
+  }, "criar")).mockResolvedValueOnce(final());
+
+  const aoPasso = vi.fn();
+  const resultado = await responder([{ papel: "usuario", conteudo: "Leia as três notas do Projeto e crie uma nota de resumo." }], { aoPasso });
+
+  expect(resultado.resposta).toBe("Pronto.");
+  expect(buscar).toHaveBeenCalledTimes(6);
+  expect(resultado.ferramentas.map((f) => f.nome)).toEqual(["buscar_notas", "ler_nota", "ler_nota", "ler_nota", "criar_nota"]);
+  expect(criar).toHaveBeenCalledTimes(1);
+  const resumo = (await notas.listarResumos()).find((nota) => nota.pasta === "Resumos");
+  expect((await notas.obterNota(resumo!.id))?.conteudo).toContain("[[Fontes/Projeto 3]]");
+  expect(aoPasso.mock.calls.at(-1)?.[0].ids).toEqual([resumo!.id]);
+});
+
 beforeEach(() => {
   vi.stubEnv("OPENAI_API_KEY", "falsa");
   vi.stubGlobal("fetch", buscar);

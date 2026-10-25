@@ -10,7 +10,7 @@
  * ligação ganha o caminho completo da nota certa.
  */
 
-import { juntarCaminho } from "../caminho-da-nota";
+import { caminhoParaLigacao } from "../caminho-da-nota";
 import type { NotaComConteudo } from "../indice-de-ligacoes";
 import { criarResolvedor, reescreverLigacoes, trocarTituloNoAlvo } from "../ligacoes";
 import type { IdDeNota } from "../types";
@@ -65,7 +65,7 @@ export function planejarMudanca(
 
       // Não serve mais, ou desviaria para outra nota: o caminho completo da nota certa.
       const destino = notaDepoisPorId.get(alvoId)!;
-      return juntarCaminho(destino.pasta, destino.titulo);
+      return caminhoParaLigacao(destino.pasta, destino.titulo);
     });
 
     if (conteudo !== origem.conteudo) reescritas.push({ id: origem.id, conteudo });

@@ -59,6 +59,16 @@ um novo deploy. Sem a chave OpenAI, o chat responde 503; não há troca automát
 para Gemini. Se uma escrita terminar antes de uma falha/cancelamento, a escrita
 permanece salva: cancelar a resposta não desfaz operações já concluídas.
 
+## Wiki Viva
+
+A Wiki Viva integrada descobre conexões nas notas salvas, cria ou enriquece sínteses na mesma base e disponibiliza evidências nas ferramentas do agente. Usa busca textual, aliases e origens pessoais, sem exigir embeddings ou seleção de notas. As telas Cérebro, Diário e neurônio e a apresentação no grafo estão integradas à página principal.
+
+Em um ambiente novo, revise e aplique as migrações `0007`–`0011`, configure `WIKI_VIVA_ATIVA=1`, `WIKI_AUTOMATICA_ATIVA=1`, `WIKI_TETO_TOKENS_DIA`, `WIKI_EXECUTOR_SEGREDO` e `CRON_SECRET`. Reinicie a aplicação. O Cron diário da Vercel processa a fila; `npm run wiki:executar`, apontando `BIMO_URL` para o servidor, permite acelerá-la em um processo independente. A geração usa a configuração OpenAI existente. Os padrões permanecem desligados; gerar os arquivos de migração não altera o banco. A produção do Bimo já foi ativada; não reaplique migrações fora do histórico do Drizzle.
+
+Salvar não espera pelo modelo. A fila persistente agrupa autosaves, recupera a base anterior em lotes e publica nota, histórico, evidências e progresso atomicamente. Edições manuais ficam protegidas. Orçamento é reservado antes de cada chamada; consumo incerto continua comprometido. O teto é em tokens por usuário/dia UTC, sem equivalência fixa em dinheiro.
+
+Não há página nem rota para compilar à mão: a manutenção é só pela fila. `GET /api/wiki` expõe o índice e as evidências das sínteses para as telas e o agente. Em memória, os dados são descartáveis e não servem para produção. Citação literal verificada não comprova uma inferência: a qualidade semântica exige avaliação com notas aprovadas. Veja [operação, ativação, limites e testes](./docs/Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
+
 ## Rodar
 
 ```bash

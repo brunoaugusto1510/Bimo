@@ -7,7 +7,7 @@
  * servidor e no cliente.
  */
 
-import { REGEX_DE_ANEXO, juntarCaminho, normalizarTexto, profundidadeDaPasta } from "./caminho-da-nota";
+import { REGEX_DE_ANEXO, escaparCaminhoDaLigacao, juntarCaminho, normalizarTexto, profundidadeDaPasta } from "./caminho-da-nota";
 import { mascararCodigo } from "./markdown-da-nota";
 
 /** `[[...]]` sem colchetes nem quebra de linha lá dentro. */
@@ -83,7 +83,8 @@ export function formatarLigacao({ alvo, secao, bloco, apelido, barraEscapada }: 
 /** `Pasta/Antigo` + "Novo" -> `Pasta/Novo`: a ligação mantém o caminho de pasta que já tinha. */
 export function trocarTituloNoAlvo(alvo: string, novoTitulo: string): string {
   const ultimaBarra = alvo.lastIndexOf("/");
-  return ultimaBarra === -1 ? novoTitulo : `${alvo.slice(0, ultimaBarra + 1)}${novoTitulo}`;
+  const titulo = alvo.startsWith("/") ? escaparCaminhoDaLigacao(novoTitulo) : novoTitulo;
+  return ultimaBarra === -1 ? titulo : `${alvo.slice(0, ultimaBarra + 1)}${titulo}`;
 }
 
 /**
@@ -173,10 +174,13 @@ export function criarResolvedor(notas: readonly NotaParaResolver[]): Resolvedor 
   };
 
   return (alvo, pastaDeOrigem) => {
-    const procurado = normalizarTexto(alvo.replace(/\.md$/i, "").replace(/^\/+/, "").trim());
+    const absoluta = alvo.startsWith("/");
+    let caminho = alvo;
+    if (absoluta) { try { caminho = decodeURIComponent(alvo); } catch { caminho = alvo; } }
+    const procurado = normalizarTexto(caminho.replace(/\.md$/i, "").replace(/^\/+/, "").trim());
     if (procurado === "") return { tipo: "nao-resolvida" };
 
-    const candidatas = procurado.includes("/")
+    const candidatas = absoluta ? porCaminho.get(procurado) ?? [] : procurado.includes("/")
       ? (porCaminho.get(procurado) ?? buscarPeloFinal(procurado))
       : (porTitulo.get(procurado) ?? []);
 

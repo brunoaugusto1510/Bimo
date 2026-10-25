@@ -96,6 +96,8 @@ export type CapacidadesDoRepositorio = {
 };
 
 export interface RepositorioDeNotas {
+  /** Ausente enquanto a Wiki Viva não estiver habilitada no ambiente. */
+  readonly wiki?: import("../wiki/tipos").RepositorioDaWiki;
   readonly capacidades: CapacidadesDoRepositorio;
 
   /**
@@ -115,6 +117,8 @@ export interface RepositorioDeNotas {
   listarComConteudo(): Promise<NotaCompleta[]>;
   obterNota(id: IdDeNota): Promise<NotaCompleta | null>;
   buscarPorConteudo(consulta: string, limite: number): Promise<ResultadoDeBusca[]>;
+  /** Os mesmos acertos, só os ids e na mesma ordem, sem montar trechos (que é a parte cara da busca). */
+  buscarIdsPorConteudo(consulta: string, limite: number): Promise<IdDeNota[]>;
 
   criarNota(entrada: EntradaDeNota, autor: AutorDaEscrita): Promise<ResultadoDeEscrita>;
   atualizarNota(id: IdDeNota, mudancas: MudancasDeNota, opcoes: OpcoesDeAtualizacao): Promise<ResultadoDeEscrita>;

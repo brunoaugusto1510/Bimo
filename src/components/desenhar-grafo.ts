@@ -14,6 +14,7 @@ import { misturar } from "@/lib/cores-do-canvas";
 import type { ArestaDoCerebro, TipoDeArestaDoCerebro } from "@/lib/forma-do-cerebro";
 import { quadroDoRastro, type QuadroDoRastro } from "@/lib/rastro-do-agente";
 import type { LinkSimulado, NoSimulado } from "@/lib/simulacao-do-grafo";
+import type { EstadoDoNeuronio } from "@/lib/wiki/observabilidade-tipos";
 import {
   abreviar,
   desenharAneis,
@@ -90,6 +91,8 @@ export type Cores = {
 };
 
 export type Quadro = {
+  somenteNeuronios?: boolean;
+  estadosWiki?: ReadonlyMap<string, EstadoDoNeuronio>;
   largura: number;
   altura: number;
   camera: Camera;
@@ -199,7 +202,7 @@ export function desenharQuadro(contexto: CanvasRenderingContext2D, quadro: Quadr
   const algumCerebro = posicionarNos(quadro, !quadro.interativo && !reduzido);
   const posicao = (no: NoVisual): Ponto => ({ x: no.tx, y: no.ty });
 
-  const rastro = quadro.rastro ?? RASTRO_VAZIO;
+  const rastro = quadro.somenteNeuronios ? RASTRO_VAZIO : quadro.rastro ?? RASTRO_VAZIO;
   const nosPorId = quadro.nosPorId ?? new Map(quadro.nos.map((no) => [no.id, no]));
   const ctxRastro: ContextoDoRastro = {
     contexto,
@@ -218,7 +221,7 @@ export function desenharQuadro(contexto: CanvasRenderingContext2D, quadro: Quadr
     raioNaTela: quadro.raioNaTela,
   };
 
-  if (algumCerebro) desenharArestasDoCerebro(contexto, quadro, rastro.foco);
+  if (algumCerebro && !quadro.somenteNeuronios) desenharArestasDoCerebro(contexto, quadro, rastro.foco);
   desenharLinhas(contexto, quadro, rastro.foco);
   desenharLigacoesDasNovas(ctxRastro);
   const ponta = desenharCaminho(ctxRastro);
@@ -317,6 +320,7 @@ function tracarLinks(
   contexto: CanvasRenderingContext2D,
   links: readonly LinkSimulado[],
   incluir: (link: LinkSimulado, indice: number) => boolean,
+  quadro?: Quadro,
 ): void {
   // Um caminho só para todas as linhas do mesmo estilo: com centenas de
   // arestas, um `stroke()` por linha pesa bem mais.
@@ -325,14 +329,25 @@ function tracarLinks(
     if (!incluir(links[i], i)) continue;
     const de = links[i].source as NoVisual;
     const para = links[i].target as NoVisual;
-    contexto.moveTo(de.tx, de.ty);
-    contexto.lineTo(para.tx, para.ty);
+    if (quadro?.somenteNeuronios && !(de.tipo === "nota" && de.neuronio && para.tipo === "nota" && para.neuronio)) continue;
+    const neuronio = de.tipo === "nota" && de.neuronio ? de : para.tipo === "nota" && para.neuronio ? para : null;
+    const nasceu = neuronio && quadro?.nascimentos?.get(neuronio.id);
+    if (links[i].tipo === "sinapse" && neuronio && typeof nasceu === "number" && quadro && !quadro.movimentoReduzido) {
+      const irmas = quadro.ligacoesPorNo?.get(neuronio.id)?.filter((l) => l.tipo === "sinapse") ?? [];
+      const ordem = Math.max(0, irmas.indexOf(links[i]));
+      const progresso = Math.min(1, Math.max(0, (quadro.tempo * 1000 - nasceu - ordem * 600) / 600));
+      const suave = 1 - (1 - progresso) ** 3;
+      const origem = neuronio === de ? para : de;
+      contexto.moveTo(origem.tx, origem.ty);
+      contexto.lineTo(origem.tx + (neuronio.tx - origem.tx) * suave, origem.ty + (neuronio.ty - origem.ty) * suave);
+    } else { contexto.moveTo(de.tx, de.ty); contexto.lineTo(para.tx, para.ty); }
   }
   contexto.stroke();
 }
 
 function desenharLinhas(contexto: CanvasRenderingContext2D, quadro: Quadro, escurecimento: number): void {
   const { foco, links, cores } = quadro;
+  const tiposPresentes = new Set(links.map((link) => link.tipo ?? "notas"));
   const opacidadeBase = (foco ? OPACIDADE_DAS_LINHAS_FORA_DO_FOCO : OPACIDADE_DAS_LINHAS) * escurecimento;
 
   // Degrau de "quanto já é cérebro" de cada ligação: o menor entre as duas pontas.
@@ -352,7 +367,11 @@ function desenharLinhas(contexto: CanvasRenderingContext2D, quadro: Quadro, escu
     if (contagemDeDegraus[nivel] === 0) continue;
     const e = nivel / DEGRAUS_DE_FADE;
     contexto.globalAlpha = opacidadeBase * (1 - (1 - RESTO_DAS_LINHAS_NO_CEREBRO) * e * e);
-    tracarLinks(contexto, links, (link, i) => degraus[i] === nivel && !ligadoAoFoco(link, foco));
+    for (const tipo of tiposPresentes) {
+      contexto.strokeStyle = tipo === "notas" ? cores.linha : cores.destaque;
+      contexto.lineWidth = tipo === "neuronios" ? 2.5 : tipo === "sinapse" ? 1.2 : 1;
+      tracarLinks(contexto, links, (link, i) => (link.tipo ?? "notas") === tipo && degraus[i] === nivel && !ligadoAoFoco(link, foco), quadro);
+    }
   }
 
   if (!foco) return;
@@ -360,7 +379,7 @@ function desenharLinhas(contexto: CanvasRenderingContext2D, quadro: Quadro, escu
   contexto.strokeStyle = cores.destaque;
   contexto.lineWidth = LARGURA_DAS_LINHAS_DO_FOCO;
   contexto.globalAlpha = OPACIDADE_DAS_LINHAS_DO_FOCO;
-  tracarLinks(contexto, links, (link) => ligadoAoFoco(link, foco));
+  tracarLinks(contexto, links, (link) => ligadoAoFoco(link, foco), quadro);
 }
 
 // --- Nós --------------------------------------------------------------------
@@ -381,6 +400,7 @@ function desenharNos(
 ): void {
   const { rastro } = ctxRastro;
   for (const no of quadro.nos) {
+    if (quadro.somenteNeuronios && !(no.tipo === "nota" && no.neuronio)) continue;
     const { tx: x, ty: y } = no;
     const raio = quadro.raioNaTela(no);
     const selecionado = quadro.foco?.id === no.id;
@@ -390,7 +410,9 @@ function desenharNos(
     const crescimento = selecionado ? CRESCIMENTO_DO_SELECIONADO : aberta ? CRESCIMENTO_DA_ABERTA : 0;
 
     // A cor da pasta vira o neutro do cérebro conforme o nó assume a forma.
-    const corBase = misturar(quadro.corDoNo(no), quadro.cores.noNeutro, no.progresso);
+    const neuronio = no.tipo === "nota" && no.neuronio;
+    const estado = quadro.estadosWiki?.get(no.id) ?? "vivo";
+    const corBase = neuronio ? estado === "seu" ? quadro.cores.noNeutro : quadro.cores.destaque : misturar(quadro.corDoNo(no), quadro.cores.noNeutro, no.progresso);
     const notaDoRastro = rastro.notas.get(no.id);
     const doRastro = notaDoRastro
       ? estiloDoNoNoRastro(no, notaDoRastro, corBase, raio, ctxRastro)
@@ -407,11 +429,32 @@ function desenharNos(
           alfa: opacidadeDoNo(no, quadro, destacado) * rastro.foco,
         };
 
+    const nasceu = quadro.nascimentos?.get(no.id);
+    if (neuronio && typeof nasceu === "number" && !quadro.movimentoReduzido) {
+      const sinapses = quadro.ligacoesPorNo?.get(no.id)?.filter((l) => l.tipo === "sinapse").length ?? 0;
+      const progresso = Math.min(1, Math.max(0, (quadro.tempo * 1000 - nasceu - sinapses * 600) / 200));
+      estilo.raio *= .2 + .8 * progresso;
+    }
+
     contexto.beginPath();
     contexto.arc(x, y, estilo.raio, 0, Math.PI * 2);
     contexto.fillStyle = estilo.cor;
     contexto.globalAlpha = estilo.alfa;
     contexto.fill();
+
+    if (neuronio && estado !== "seu") {
+      if (no.tipo === "nota" && no.nascidoEm && Date.now() - Date.parse(no.nascidoEm) < 86_400_000) {
+        contexto.beginPath(); contexto.arc(x, y, estilo.raio + 9, 0, Math.PI * 2);
+        contexto.strokeStyle = quadro.cores.destaque; contexto.lineWidth = 4;
+        contexto.globalAlpha = estilo.alfa * .18; contexto.stroke(); contexto.globalAlpha = estilo.alfa;
+      }
+      contexto.beginPath(); contexto.arc(x, y, estilo.raio + 3, 0, Math.PI * 2);
+      contexto.strokeStyle = quadro.cores.destaque; contexto.lineWidth = 2;
+      contexto.setLineDash(estado === "reconsolidando" ? [4, 3] : estado === "sem_raizes" ? [1, 4] : estado === "em_pausa" ? [2, 4] : []);
+      contexto.stroke(); contexto.setLineDash([]);
+      contexto.beginPath(); contexto.arc(x, y, Math.max(1, estilo.raio * .55), 0, estado === "em_tensao" ? Math.PI : Math.PI * 2);
+      contexto.fillStyle = quadro.cores.painel; contexto.fill();
+    }
 
     if (selecionado) {
       contexto.beginPath();
@@ -453,6 +496,7 @@ function desenharRotulos(contexto: CanvasRenderingContext2D, quadro: Quadro): vo
   let vizinhosRotulados = 0;
 
   for (const no of nos) {
+    if (quadro.somenteNeuronios && !(no.tipo === "nota" && no.neuronio)) continue;
     if (foco?.id === no.id) {
       desenharRotulo(contexto, quadro, no, true);
     } else if (foco?.vizinhos.has(no.id) && vizinhosRotulados < MAXIMO_DE_ROTULOS_DE_VIZINHOS) {

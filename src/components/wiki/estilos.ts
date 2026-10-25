@@ -1,0 +1,1 @@
+export const acaoWiki = "inline-flex min-h-10 items-center justify-center rounded-full border border-borda px-4 text-controle font-semibold text-destaque-texto hover:bg-destaque-suave focus-visible:outline-2 focus-visible:outline-destaque disabled:cursor-wait disabled:opacity-50";

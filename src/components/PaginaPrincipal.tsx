@@ -28,6 +28,12 @@ import { encerrarRastro, iniciarRastro, registrarPasso, type PassoDoAgente, type
 import { marcasDoRastro, resumoDoRastro } from "@/lib/rastro-na-interface";
 import type { RealceNoGrafo } from "@/lib/realce-no-grafo";
 import type { IdDeNota, ItemDeNotas } from "@/lib/types";
+import PainelDaWiki from "./wiki/PainelDaWiki";
+import NeuronioAberto from "./wiki/NeuronioAberto";
+import { acaoWiki } from "./wiki/estilos";
+import { useConsultaWiki } from "./wiki/usar-consulta-wiki";
+import type { ResumoDoCerebro } from "@/lib/wiki/cliente";
+import { useFocoDoPainel } from "./wiki/usar-foco-do-painel";
 
 type Props = {
   /** Já vem pronto do servidor — este componente só cuida da interatividade. */
@@ -58,6 +64,13 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const [atualizacao, definirAtualizacao] = useState<{ origem: Props["itens"]; dados: import("@/lib/servico-de-notas").DadosDaPagina } | null>(null);
   const { itens, grafo, aviso, capacidades } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais };
   const [modo, setModo] = useState<Modo>("bimo");
+  const [painelWiki, definirPainelWiki] = useState<"cerebro" | "diario" | null>(null);
+  const [neuronioAberto, abrirNeuronioId] = useState<string | null>(null);
+  const focoNeuronio = useFocoDoPainel(neuronioAberto);
+  const [somenteNeuronios, filtrarNeuronios] = useState(false);
+  const neuronios = useMemo(() => new Set(grafo.nos.flatMap((n) => n.tipo === "nota" && n.neuronio ? [n.id] : [])), [grafo.nos]);
+  const cerebroWiki = useConsultaWiki<ResumoDoCerebro>(neuronios.size ? "/api/wiki/cerebro" : null);
+  const estadosWiki = useMemo(() => new Map(cerebroWiki?.dados?.neuronios?.map((n) => [n.id, n.estado]) ?? []), [cerebroWiki?.dados]);
   // Nota selecionada no grafo da aba Gráfico — a que ganha o cartão de foco. É
   // separada da aberta: selecionar é "olhar", abrir é "ler".
   const [notaFocada, setNotaFocada] = useState<IdDeNota | null>(null);
@@ -114,6 +127,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const resumoDoUltimoRastro = useMemo(() => resumoDoRastro(rastro, tituloDaNota), [rastro, tituloDaNota]);
 
   function mudarModo(novo: Modo) {
+    definirPainelWiki(null); abrirNeuronioId(null);
     setModo(novo);
     setMenuAberto(false);
   }
@@ -125,6 +139,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
    */
   const abrirNota = useCallback(
     (id: IdDeNota, opcoes: { novaAba: boolean } = { novaAba: false }) => {
+      definirPainelWiki(null); abrirNeuronioId(null);
       despachar({ tipo: "abrir-nota", id, novaAba: opcoes.novaAba });
       definirFocoPedido({ id, alvo: "nota" });
       setModo("notas");
@@ -133,6 +148,14 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
     },
     [despachar],
   );
+  const abrirNeuronio = useCallback((id: string) => {
+    abrirNeuronioId(id); definirPainelWiki(null); setModo("notas"); setMenuAberto(false); setPaletaAberta(false);
+    despachar({ tipo: "ativar-aba", chave: ABA_DO_GRAFICO });
+  }, [despachar]);
+  function mostrarWiki(tela: "cerebro" | "diario") {
+    definirPainelWiki(tela); abrirNeuronioId(null); setModo("notas"); setMenuAberto(false); setPaletaAberta(false);
+    despachar({ tipo: "ativar-aba", chave: ABA_DO_GRAFICO });
+  }
 
   /** Protege escritas recentes até uma listagem posterior confirmá-las. */
   const registrarNota = useCallback((resumo: NotaParaArvore) => {
@@ -209,12 +232,14 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
         if (/Mac|iPhone|iPad/.test(navigator.platform) && alvo instanceof Element && alvo.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return;
         evento.preventDefault(); if (!evento.repeat) void criarNovaAtual.current();
       } else if (combinaAtalho(evento, "mod+g")) {
+        definirPainelWiki(null); abrirNeuronioId(null);
         evento.preventDefault();
         despachar({ tipo: "ativar-aba", chave: ABA_DO_GRAFICO });
         setModo("notas");
         // No celular o menu de notas cobre o conteúdo: sem fechá-lo o destino ficaria escondido.
         setMenuAberto(false);
       } else if (combinaAtalho(evento, "mod+j")) {
+        definirPainelWiki(null); abrirNeuronioId(null);
         evento.preventDefault();
         setModo("bimo");
         setMenuAberto(false);
@@ -266,6 +291,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
         />
 
         <div className="flex items-center gap-2 justify-self-end">
+          <button aria-label="Abrir cérebro" className="hidden min-h-10 rounded-full border border-destaque-suave-borda bg-destaque-suave px-3 text-meta text-destaque-texto md:block" onClick={() => mostrarWiki("cerebro")}>◉ {neuronios.size} neurônios</button>
           <AlternadorDeTema />
           <button
             type="button"
@@ -309,6 +335,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
 
         {/* min-w-0 impede que uma mensagem longa estique este painel e quebre o layout. */}
         <main className={`${menuAberto ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
+          <nav aria-label="Conhecimento do Bimo" className="flex shrink-0 gap-2 border-b border-borda bg-painel px-3 py-1"><button className={acaoWiki} onClick={() => mostrarWiki("cerebro")}>Cérebro</button><button className={acaoWiki} onClick={() => mostrarWiki("diario")}>Diário</button></nav>
           <EspacoDeTrabalho
             ativo={emNotas}
             estado={estado}
@@ -332,6 +359,9 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             aoIrParaNota={() => setPaletaAberta(true)}
           >
             <GrafoDeFundo
+              comPainelWiki={painelWiki === "cerebro"}
+              somenteNeuronios={painelWiki === "cerebro" && somenteNeuronios}
+              estadosWiki={estadosWiki}
               nos={grafo.nos}
               arestas={grafo.arestas}
               configuracao={grafo.configuracao}
@@ -340,11 +370,16 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
               rastro={rastro}
               realce={realce}
               reservaInferior={RESERVA_DA_CONVERSA}
-              onAbrirNota={abrirNota}
+              onAbrirNota={(id) => neuronios.has(id) ? abrirNeuronio(id) : abrirNota(id)}
               interativo={emNotas}
-              pausado={emNotas && !noGrafico}
+              pausado={emNotas && (!noGrafico || Boolean(neuronioAberto) || painelWiki === "diario")}
               selecionado={notaFocada}
-              onSelecionar={setNotaFocada}
+              onSelecionar={(id) => {
+                setNotaFocada(id);
+                if (painelWiki === "cerebro" && id) {
+                  if (neuronios.has(id)) abrirNeuronio(id); else definirPainelWiki(null);
+                }
+              }}
               focoPedido={pedidoDeFoco}
               controleRef={controleDoGrafo}
             />
@@ -353,7 +388,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             <div className="relative h-full" hidden={emNotas}>
               <Chat
                 ativo={!emNotas}
-                aoAbrirNota={(id, resumo) => { if (resumo && !notasPorId.has(id)) registrarNota({ id, ...resumo }); abrirNota(id); }}
+                aoAbrirNota={(id, resumo) => { if (resumo && !notasPorId.has(id)) registrarNota({ id, ...resumo }); if (neuronios.has(id)) abrirNeuronio(id); else abrirNota(id); }}
                 aoNotaDoAgente={registrarNota}
                 rascunho={rascunho}
                 onRascunhoChange={setRascunho}
@@ -366,7 +401,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
               />
             </div>
 
-            {emNotas && noGrafico && (
+            {emNotas && noGrafico && !painelWiki && !neuronioAberto && (
               // O contêiner não recebe toque (`pointer-events-none`): só a barra e o cartão
               // recebem — o resto é grafo, que precisa de todo o arrasto.
               <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between">
@@ -384,7 +419,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                       titulo={dadosDaNotaFocada.titulo}
                       pasta={grupoDaPasta(dadosDaNotaFocada.pasta)}
                       conexoes={graus.get(notaFocada) ?? 0}
-                      onAbrir={() => abrirNota(notaFocada)}
+                      onAbrir={() => neuronios.has(notaFocada) ? abrirNeuronio(notaFocada) : abrirNota(notaFocada)}
                       onVizinhos={() => controleDoGrafo.current?.enquadrarVizinhos()}
                       onPerguntar={() => perguntarAoBimo(notaFocada)}
                       onFechar={() => setNotaFocada(null)}
@@ -403,6 +438,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                 )}
               </div>
             )}
+            {painelWiki && <PainelDaWiki tela={painelWiki} somenteNeuronios={somenteNeuronios} aoFiltrarNeuronios={filtrarNeuronios} aoFechar={() => definirPainelWiki(null)} aoAbrirNeuronio={abrirNeuronio} aoVerCerebro={() => mostrarWiki("cerebro")} />}
+            {neuronioAberto && <section ref={focoNeuronio} tabIndex={-1} aria-label="Neurônio aberto" className="outline-none absolute inset-0 z-30 overflow-y-auto bg-painel"><header className="sticky top-0 z-10 flex justify-between border-b border-borda bg-painel p-2"><button className={acaoWiki} onClick={() => mostrarWiki("cerebro")}>← Cérebro</button><button className={acaoWiki} onClick={() => abrirNeuronioId(null)}>Fechar neurônio</button></header><NeuronioAberto key={neuronioAberto} id={neuronioAberto} tituloDaNota={tituloDaNota} aoAbrirNota={(id) => neuronios.has(id) ? abrirNeuronio(id) : abrirNota(id)} aoEditar={(id) => { abrirNota(id); despachar({ tipo: "abrir-nota", id, novaAba: false, modo: "edicao" }); }} aoPerguntar={perguntarAoBimo} /></section>}
           </EspacoDeTrabalho>
         </main>
       </div>

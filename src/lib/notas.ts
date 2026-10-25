@@ -16,6 +16,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { db } from "./db/cliente";
 import { nos, notas, versoesNota } from "./db/schema";
+import { registrarAlteracaoWiki } from "./wiki/eventos-banco";
 
 /**
  * `vetorBusca` (coluna gerada para full-text search, ver `db/schema/notas.ts`)
@@ -94,6 +95,7 @@ export async function criarNota(nova: NovaNota): Promise<Nota> {
       criadoPorFerramenta: linha.criadoPorFerramenta,
     });
 
+    await registrarAlteracaoWiki(tx, linha.userId, String(linha.id), linha.revisao);
     return linha;
   }).catch((erro: unknown) => {
     if (eColisaoDeTitulo(erro)) {
@@ -153,6 +155,7 @@ export async function atualizarNota(
       criadoPorFerramenta: mudancas.editadoPorFerramenta,
     });
 
+    await registrarAlteracaoWiki(tx, linha.userId, String(linha.id), linha.revisao);
     return linha;
   });
 }

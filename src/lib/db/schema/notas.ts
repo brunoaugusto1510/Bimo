@@ -52,6 +52,7 @@ export const notas = pgTable(
   },
   (tabela) => [
     index("notas_user_id_idx").on(tabela.userId),
+    uniqueIndex("notas_id_dono_unico").on(tabela.id, tabela.userId),
     uniqueIndex("notas_usuario_pasta_titulo_unico").on(tabela.userId, sql`coalesce(${tabela.pasta}, '')`, sql`lower(${tabela.titulo})`),
     index("notas_vetor_busca_idx").using("gin", tabela.vetorBusca),
     pgPolicy("notas_dono_policy", {

@@ -82,6 +82,23 @@ function desenhar(extra: Partial<Quadro> = {}) {
 }
 
 describe("desenharQuadro", () => {
+  it("só neurônios oculta notas e seus rótulos sem alterar suas posições", () => {
+    const n = no("neuronio", 150, 150, { tipo: "nota", neuronio: true });
+    const antes = { x: A.x, y: A.y };
+    const chamadas = desenhar({ nos: [A, n], links: [], somenteNeuronios: true, hover: A.id });
+    expect(preenchimentos(chamadas).some((c) => c.x === A.tx && c.y === A.ty)).toBe(false);
+    expect(textos(chamadas).some((c) => c.texto === A.titulo)).toBe(false);
+    expect({ x: A.x, y: A.y }).toEqual(antes);
+  });
+  it("agrupa sinapses e ligações entre neurônios e distingue a reconsolidação pela forma", () => {
+    const n = no("neuronio", 150, 150, { tipo: "nota", neuronio: true });
+    const outro = no("outro-neuronio", 200, 150, { tipo: "nota", neuronio: true });
+    const chamadas = desenhar({ nos: [A, B, n, outro], links: [{ source: A, target: B, tipo: "notas" }, { source: A, target: n, tipo: "sinapse" }, { source: n, target: outro, tipo: "neuronios" }], estadosWiki: new Map([[n.id, "reconsolidando"]]), movimentoReduzido: true });
+    const linhas = tracos(chamadas).filter((c) => c.segmentos > 0);
+    expect(linhas.map((c) => c.largura)).toEqual([1, 1.2, 2.5]);
+    expect(linhas.map((c) => c.cor)).toEqual([CORES.linha, CORES.destaque, CORES.destaque]);
+    expect(tracos(chamadas).some((c) => c.tracejado.join(",") === "4,3")).toBe(true);
+  });
   it("desenha uma bolinha por nó, na posição que a câmera manda", () => {
     const bolinhas = preenchimentos(desenhar({ camera: { x: 10, y: 20, k: 2 } }));
 

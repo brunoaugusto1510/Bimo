@@ -20,14 +20,16 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
-    exclude: [...defaultExclude, "mobile/**"],
+    // Skills e worktrees instaladas no repositório têm suítes próprias; esta configuração testa o Bimo.
+    include: ["src/**/*.{test,spec}.{js,jsx,ts,tsx,mjs,mts,cjs,cts}", "scripts/**/*.{test,spec}.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"],
+    exclude: [...defaultExclude, "mobile/**", ".claude/**"],
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      exclude: ["node_modules/**", ".next/**"],
+      exclude: ["node_modules/**", ".next/**", ".claude/**"],
     },
   },
 });
