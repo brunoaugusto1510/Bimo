@@ -2,9 +2,9 @@
 
 Plano original: 21/10/2026. Revisão de escopo: 22/10/2026.
 
-Estado: **planejamento para revisão pelo Claude**. Este documento substitui as decisões anteriores que tornavam uma tela separada e a seleção manual de notas o caminho principal da wiki. O código experimental permanece no checkout; sua existência não representa aprovação desse fluxo.
+Estado: **planejamento histórico, implementado e em operação**. A revisão funcional abaixo registra as decisões de 21–22/10/2026, anteriores à implementação autorizada. O fluxo manual experimental foi removido.
 
-**Implementação posterior, autorizada em 22/10/2026:** backend e agente integrados foram implementados na mesma branch, com fila, descoberta, evidências, orçamento e executor independente. Consulte [funcionamento, operação e limites](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md). Os parágrafos sobre entrega apenas documental abaixo registram a etapa de planejamento que antecedeu essa autorização; não descrevem o estado atual do código. Ativação no banco e piloto com modelo real continuam separados.
+**Implementação posterior, autorizada em 22/10/2026:** backend, agente, telas e grafo foram implementados, com fila, descoberta, evidências, orçamento e executor independente. Migrações, ativação em produção e piloto de duas notas foram concluídos em 23/10. Consulte [funcionamento, operação e limites](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md). Restam processamento inicial do acervo e avaliação ampliada de qualidade/custo. Os parágrafos sobre entrega apenas documental abaixo são históricos; não descrevem o estado atual do código.
 
 Branch de trabalho: feat/estrutura-llmwiki.
 

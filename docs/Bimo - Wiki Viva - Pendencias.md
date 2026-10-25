@@ -30,7 +30,8 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 - [x] GET do cérebro com contagens, cobertura e energia/renovação.
 - [x] Dados do grafo identificam neurônios, sinapses e ligações entre neurônios, sempre derivados do texto.
 - [x] Cérebro, Diário, neurônio aberto e aparência do grafo, conforme o arquivo visual recebido.
-- [ ] Aplicar migrações e configurar/ativar no ambiente escolhido; executar piloto com o modelo real.
+- [x] Aplicar migrações 0007–0011, configurar e publicar na Vercel, confirmar o Cron e executar piloto real (duas notas, um neurônio).
+- [ ] Completar o processamento inicial das 383 notas e avaliar qualidade/custo em uma amostra maior. Ao final do piloto: duas notas lidas, 381 aguardando processamento; nenhum impedimento registrado.
 
 ## Plano do que falta (ordem sugerida)
 
@@ -50,7 +51,7 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 - Novos snapshots guardam id, título, pasta, revisão, hashes e só os trechos citados. O conteúdo completo não é replicado.
 - `conferirFontes` compara hash integral e revisão/organização; leitura tolera reescrita de destinos dos wikilinks.
 - Migração `0011_wiki_observabilidade` preparada e testada em PGlite, incluindo backfill Unicode e compatibilidade com o legado.
-  Ainda não aplicada no Supabase.
+  Aplicada no Supabase em 23/10/2026, após backup criptografado das notas e versões.
 
 ### 4. Estados do neurônio e divergências estruturadas — concluído no backend
 - Estados disponíveis: vivo, reconsolidando, seu, em tensão, sem raízes e em pausa; alertas podem coexistir com o estado.
@@ -70,7 +71,7 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 - Neurônio aberto (afirmações, painel de sinapses, "Onde suas notas divergem", "Perguntas em aberto"), Cérebro, Diário,
   abertura de neurônios pelas referências do chat e nascimento no grafo. Tokens em `globals.css`, sem cores literais.
 - Edição pelo editor existente; pausa/retomada e devolução ao Bimo usam revisão-base, com conflito explícito.
-- Validação visual local em desktop/celular e temas claro/escuro com dados simulados. A integração autenticada e o piloto no ambiente real continuam pendentes.
+- Validação visual local em desktop/celular e temas claro/escuro com dados simulados. APIs autenticadas e piloto com modelo real conferidos em produção em 23/10; a avaliação visual com o acervo real e a amostra ampliada de qualidade continuam pendentes.
 
 ## Pontos menores tratados
 
@@ -80,5 +81,5 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 - **Sondagem em cache:** resultados negativos expiram em 30 segundos; a automação espera as colunas/tabelas da 0011 antes de gastar.
 - **Teste instável:** a suíte de título verifica os resultados corretos e o limite em cinco mil notas, sem depender de 500 ms de relógio.
 - **Vitest e worktrees:** a configuração coleta somente testes de `src`/`scripts`, excluindo `.claude/**`; skills e worktrees não entram na suíte do Bimo.
-- **Ativação pendente:** as migrações 0007–0011 só foram aplicadas em PGlite. Antes de ligar `WIKI_VIVA_ATIVA`, seguir a ordem do
-  documento de operação (migrar, subir o código, reiniciar).
+- **Ativação concluída:** migrações 0007–0011 aplicadas no Supabase, configuração habilitada e produção publicada em 23/10/2026.
+  O piloto confirmou criação, evidências, grafo e Diário. A comparação com o backup confirmou as 383 notas originais intactas.

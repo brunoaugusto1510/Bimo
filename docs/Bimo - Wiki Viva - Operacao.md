@@ -1,6 +1,27 @@
 # Bimo — Wiki Viva integrada: funcionamento e operação
 
-Implementação em feat/estrutura-llmwiki, atualizada em 23/10/2026. Backend e dados das telas estão implementados; o usuário autorizou incluir as telas e enviará a referência visual antes dessa etapa. Este documento descreve o código; não confirma ativação no banco ou avaliação com modelos reais.
+Implementação em feat/estrutura-llmwiki, atualizada em 23/10/2026. Backend, telas e grafo estão implementados. A ativação em produção e um piloto com o modelo real foram concluídos em 23/10/2026, conforme o registro abaixo; os relatos anteriores de validação exclusivamente local são históricos.
+
+## Ativação realizada em 23/10/2026
+
+- Projeto Supabase Bimo: migrações **0007–0011 aplicadas pelo Drizzle**, mantendo seu histórico. As cinco tabelas da Wiki Viva estão com RLS ativa.
+- Antes da migração, foi criada e conferida uma cópia criptografada de 383 notas e 383 versões em `.vercel/wiki-ativacao/backup-1792788194334.json`, fora do Git e do deploy. A recuperação usa AES-256-GCM e uma chave derivada do `SEGREDO_SESSAO` local; preserve esse segredo para recuperar o backup. Nenhum segredo ou conteúdo das notas foi exibido.
+- Produção publicada em [bimo-omega.vercel.app](https://bimo-omega.vercel.app), deployment `dpl_B6g2Pve7Bh1zXyAwBsFms7HAVsVS`. Conexão, dono, provedor e configuração da wiki foram armazenados como segredos na Vercel, após autorização explícita. A configuração local também foi habilitada.
+- Cron confirmado como **habilitado**, GET `/api/wiki/processar`, `0 5 * * *` (05:00 UTC / 02:00 de Brasília). Uma execução manual do Cron iniciou a reconciliação das notas antigas.
+- Piloto real: **duas notas processadas**, uma sem novidade e uma com **um neurônio publicado**, sem proposta descartada nessa publicação. Consumo confirmado de **15.767 tokens**, modelo `gpt-6-luna`, dentro do teto de **200.000 tokens/dia UTC**. Os valores são a medição do piloto, não uma previsão do custo de todo o acervo.
+- Conferência autenticada em produção: resumo, detalhe, fontes compactas, neurônio e sinapse no grafo e nascimento no Diário. Acesso anônimo a Cérebro e processamento respondeu 401. O detalhe retornou uma afirmação, duas evidências e uma nota de origem; o grafo representa uma ligação para essa origem.
+- Comparação com o backup: **383 notas originais preservadas**, sem mudança de título, pasta, conteúdo ou revisão. O total passou a 384 por causa do neurônio novo. A cobertura ao final do piloto era **2 de 383 notas**, com 381 ainda aguardando processamento, incluindo as que a reconciliação ainda não registrou. Não foi executado processamento integral da base nesta ativação.
+- Build da Vercel concluído. Build local com Webpack e TypeScript concluído; Turbopack local falhou por acesso às fontes/rede e, depois, por erro interno de processo no Windows. Sete testes focados de executor/proxy, sintaxe do executor e ESLint passaram. O import de `@next/env` no executor foi corrigido para compatibilidade com Node 24.
+- `.vercelignore` exclui ambiente, worktrees, memória de agentes, mobile e temporários. A lista conferida para o deploy continha 418 arquivos, sem esses diretórios ou credenciais. Não houve push nem novo commit nesta ativação.
+
+Para rodar o executor contínuo deste computador contra a produção, passe o destino explicitamente; ele usa o segredo já configurado localmente:
+
+```powershell
+$env:BIMO_URL = 'https://bimo-omega.vercel.app'
+npm.cmd run wiki:executar
+```
+
+O processo precisa permanecer em execução para acelerar a fila. O Cron diário continua funcionando sem esse computador ligado. Como cada rodada processa um trabalho/trecho, o Cron diário sozinho avança lentamente pela base inicial.
 
 ## Comportamento
 
@@ -45,7 +66,7 @@ As ferramentas normais de escrita continuam exigindo pedido do usuário. A manut
 3. Reinicie a aplicação ao alterar as variáveis: as capacidades do repositório ficam em cache. A sondagem espera também a tabela `eventos_wiki` e as colunas `pausada`/`diagnostico` da 0011 antes de permitir trabalho pago. Resultados negativos expiram em 30 segundos: uma instância quente reconhece migrações posteriores sem precisar reiniciar só por isso. A primeira sonda ocorre fora da transação de escrita das notas.
 
    Ordem do deploy: migre primeiro e suba o código depois. Durante uma migração parcial, as notas continuam funcionando e a automação fica desligada. Mover/renomear sínteses nesse intervalo pode deixá-las protegidas por revisão divergente; a retomada exige a decisão explícita de devolver ao Bimo.
-4. Na Vercel, `vercel.json` prepara GET `/api/wiki/processar` às **05:00 UTC diariamente**. Configure `CRON_SECRET` no servidor: a Vercel envia o bearer automaticamente. Só esse segredo autoriza GET, inclusive quando há sessão válida no navegador; GET não aceita `acao=retomar`. O segredo não abre outras rotas. A frequência diária é compatível com Hobby e processa somente um trabalho por execução: para uma base grande, use maior frequência num plano que a suporte ou o executor contínuo. A configuração não foi publicada nem ativada por esta entrega. Referências: [autenticação do Cron](https://vercel.com/docs/cron-jobs/manage-cron-jobs) e [limites por plano](https://vercel.com/docs/cron-jobs/usage-and-pricing), consultadas em 23/10/2026.
+4. Na Vercel, `vercel.json` prepara GET `/api/wiki/processar` às **05:00 UTC diariamente**. Configure `CRON_SECRET` no servidor: a Vercel envia o bearer automaticamente. Só esse segredo autoriza GET, inclusive quando há sessão válida no navegador; GET não aceita `acao=retomar`. O segredo não abre outras rotas. A frequência diária é compatível com Hobby e processa somente um trabalho por execução: para uma base grande, use maior frequência num plano que a suporte ou o executor contínuo. Na produção do Bimo, essa configuração foi publicada e ativada em 23/10/2026. Referências: [autenticação do Cron](https://vercel.com/docs/cron-jobs/manage-cron-jobs) e [limites por plano](https://vercel.com/docs/cron-jobs/usage-and-pricing), consultadas em 23/10/2026.
 5. Alternativamente, em outro processo, com a aplicação acessível, execute:
 
    ```powershell
@@ -57,7 +78,7 @@ As ferramentas normais de escrita continuam exigindo pedido do usuário. A manut
 
 Há aceleração oportunista com after() após gravações e conversas. Ela não substitui o executor independente: uma função encerrada pela plataforma deixa o trabalho para retomada posterior.
 
-Os valores do exemplo são limites conservadores para um piloto, sem evidência de ajuste ótimo. Ativação pode iniciar processamento das notas anteriores e chamadas pagas à OpenAI. Os arquivos foram preparados sem executar essa ativação.
+Os valores do exemplo são limites conservadores para um piloto, sem evidência de ajuste ótimo. Ativação pode iniciar processamento das notas anteriores e chamadas pagas à OpenAI. A ativação da produção do Bimo ocorreu em 23/10/2026; em um ambiente novo, siga a sequência acima antes de habilitar a geração.
 
 ## Persistência e concorrência
 
@@ -121,7 +142,7 @@ Na página principal, **Cérebro** mostra o grafo, os filtros por nascimento/ate
 - Até dez raízes, 72 afirmações acumuladas e três propostas por rodada limitam crescimento. Excesso pede revisão/divisão. Dependentes que o modelo viu e não alterou ficam avaliadas para a revisão da origem (as marcadas `desatualizadaPelaOrigem` no payload); uma atualização proposta e descartada não conta como avaliada. Só ondas sem progresso (nenhuma atualização de dependente, avaliação ou avanço do cursor) contam como tentativa, com espera entre elas; publicar conceitos novos não conta como progresso.
 - Citações literais validam localização, não sustentação lógica. Hipóteses/opiniões/divergências dependem também de boa geração e avaliação humana.
 - A implementação não acrescenta exclusão de notas. Se uma origem for removida ou deixar de ser acessível, suas citações não são devolvidas como evidências atuais. Uma futura operação de exclusão precisa definir o expurgo dos snapshots/históricos derivados conforme a política de retenção.
-- O piloto com corpus aprovado e modelo real, a medição de qualidade/custo e a validação na infraestrutura Supabase hospedada permanecem etapas de ativação. Testes locais não as substituem.
+- O piloto de duas notas e a validação no Supabase hospedado foram concluídos em 23/10/2026. Ainda falta avaliar qualidade/custo em uma amostra maior e completar o processamento inicial; o piloto não comprova a qualidade de todo o acervo.
 
 A geração segue [Structured Outputs na Responses API](https://developers.openai.com/api/docs/guides/structured-outputs), consultado em 22/10/2026, com schema estrito e validações adicionais do Bimo. store=false é reaproveitado do transporte existente e não garante retenção geral zero pelo provedor.
 

@@ -343,11 +343,37 @@ Validação: **778 testes em 78 arquivos** no recorte ampliado e **88 testes em 
 
 Por solicitação do usuário, a entrega foi separada em commits de testes, correção de wikilinks, backend da Wiki Viva, Cron autenticado, grafo, telas do Cérebro/Diário, detalhe do neurônio, integração com notas/chat e documentação. Os testes acompanham as respectivas alterações. O código validado na etapa anterior foi mantido; os relatos de ausência de commit acima descrevem aquele momento da implementação. Não houve push, migração ou ativação nesta etapa de versionamento.
 
+## Wiki Viva — ativação e piloto em produção — 23/10/2026
+
+Após autorização do usuário para migração, envio protegido da configuração à Vercel e publicação, as migrações 0007–0011 foram aplicadas no Supabase pelo histórico do Drizzle. Backup criptografado das 383 notas e 383 versões foi criado e conferido em `.vercel/wiki-ativacao/backup-1792788194334.json`. A comparação posterior confirmou zero mudanças nas notas originais; o total chegou a 384 pela criação de um neurônio.
+
+Produção em https://bimo-omega.vercel.app, deployment `dpl_B6g2Pve7Bh1zXyAwBsFms7HAVsVS`. Cron habilitado diariamente às 05:00 UTC, flags ligadas e teto de 200.000 tokens/dia. O piloto processou duas notas com `gpt-6-luna`: uma sem novidade e uma com neurônio publicado, consumindo 15.767 tokens confirmados. Resumo, detalhe, fontes compactas, grafo e Diário foram conferidos pela API autenticada; leituras/processamento anônimos recusados com 401. Ao final, 381 notas ainda aguardavam processamento, incluindo as ainda não reconciliadas.
+
+O executor precisou de import compatível com CommonJS de `@next/env` no Node 24. `.vercelignore` passou a excluir credenciais, worktrees, memória de agentes, mobile e temporários do deploy. Build da Vercel e build local com Webpack/TypeScript passaram; Turbopack local encontrou falha de rede/fontes e erro interno de processo no Windows. Sete testes focados de executor/proxy, sintaxe e ESLint passaram. Uma revisão automática inicialmente exigiu autorização explícita para os segredos de produção, posteriormente fornecida; outra consulta foi interrompida por limite da revisão e passou ao ser retomada pelo mesmo fluxo. Não houve push ou novo commit nesta ativação. Detalhes e limites operacionais estão em [Wiki Viva — Operação](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
+
+## Chat — leitura de várias notas e criação de resumo — 24/10/2026
+
+Reproduzida uma interrupção com o agente e `gpt-6-luna` reais, usando três notas fictícias em memória: busca, três leituras e criação consomem cinco chamadas, e o limite anterior de cinco impedia a sexta chamada de confirmar a gravação. A nota era criada, mas a conversa terminava com desistência. O prompt e erro originais do usuário não estavam disponíveis; essa reprodução confirma o defeito do fluxo, sem provar que explica todos os erros observados.
+
+O chat agora admite até 12 chamadas, com a última reservada à resposta final (`tool_choice: none`) e sem executar ferramentas nessa etapa. Prazo do agente ampliado de 45 para 150 segundos, com margem de 180 segundos na rota da Vercel. Cancelamento, revisão-base e deduplicação de escritas foram preservados. Prazo esgotado tem mensagem própria e HTTP 504 no modo JSON; NDJSON conserva os passos já entregues. Logs registram apenas categoria/status da falha. O transporte preserva a causa do cancelamento também durante a leitura do corpo da resposta.
+
+Verificação autenticada posterior no domínio de produção: POST `/api/chat` respondeu HTTP 200 em NDJSON, com resposta final e zero ferramentas, usando pedido curto de conectividade. Essa verificação confirma autenticação/transporte do chat publicado; a criação completa foi validada separadamente com as fontes fictícias, sem criar resumo de teste na base real.
+
+TDD: reproduções offline falharam antes da correção; 137 testes passaram no recorte de nove arquivos de agente, transporte, ferramentas, resolução, API, fluxo e Chat. Após o ajuste final do timeout, 75 testes de quatro arquivos passaram novamente. TypeScript, ESLint dos arquivos alterados e `git diff --check` passaram; revisão independente sem achados pendentes. Repetição com modelo real e repositório fictício concluiu busca, três leituras, uma criação e confirmação em seis chamadas, sem alterar notas reais. Publicação `dpl_9oDxV9AaTukv8gbFfphDGgSUFMn6` pronta na Vercel, com build de 32 segundos e alias `bimo-omega.vercel.app` conferido. Não houve migração, commit ou push nesta correção.
+
+## Integração da Wiki Viva à main — 25/10/2026
+
+Por solicitação do usuário, a revisão de conclusão identificou `feat/estrutura-llmwiki` como pronta para integração: fila, evidências, recuperação, orçamento, diário, diagnósticos, estados, Cron, grafo, telas e correção do chat estão implementados. Os commits separados de funcionalidades e telas são preservados. A correção do chat, a compatibilidade do executor com Node 24 e as exclusões do deploy recebem commits próprios antes do merge.
+
+Validação para integração: **1.969 testes em 165 arquivos** passaram, incluindo persistência SQL em PGlite descartável; TypeScript, ESLint de `src`/`scripts`, sintaxe do executor e `git diff --check` passaram. Foram excluídos os dois testes de integração com banco remoto (`repositorio-de-notas/banco.test.ts` e `tests/busca-textual.integration.test.ts`); não houve nova migração nem chamada paga nesta revisão. A revisão independente não encontrou bloqueadores. README e registros foram alinhados ao estado implementado/ativado, preservando os relatos históricos.
+
+O processamento inicial do acervo, a avaliação ampliada de qualidade/custo e a conferência visual com notas reais permanecem acompanhamentos operacionais, sem serem apresentados como concluídos. `feat/login-multiusuario` continua em desenvolvimento em sua worktree, com alterações não commitadas; não faz parte desta integração. Memória de agentes, worktrees, backup e o documento de pesquisa Obsidian não são adicionados ao versionamento nesta entrega.
+
 ## Continuar em outro computador
 
-1. `git fetch && git checkout main && git pull`, depois `npm install` (a Fase 10 está na `feat/corte-para-o-banco` até ser mergeada).
+1. `git fetch && git checkout main && git pull`, depois `npm install`. A integração da Wiki Viva e da correção do chat é registrada acima; o login multiusuário continua em desenvolvimento separado.
 2. Crie o `.env` a partir de `.env.example`. Valores que faltam num computador novo: `DATABASE_URL` (transaction pooler, porta 6543), `DATABASE_URL_MIGRATIONS` (session pooler, 5432), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (a chave secreta, não a publicável), `USER_ID_PADRAO`, `SENHA_HASH` e `SEGREDO_SESSAO` (`npm run gerar-senha`, `npm run gerar-segredo`), `OPENAI_API_KEY` para o chat e `GEMINI_API_KEY` para rascunho/ingestão. `OPENAI_MODEL` é opcional (padrão `gpt-6-luna`). Nada disso vai para o Git.
-3. Os dados já estão no Supabase: as migrações `0000` a `0006` estão aplicadas e as 383 notas foram importadas.
+3. Os dados já estão no Supabase: as migrações `0000` a `0011` estão aplicadas. As 383 notas pessoais foram preservadas na ativação; novos neurônios são acrescentados pela Wiki Viva.
 4. Para ver as notas do banco: `npm run dev` (o banco é o padrão; `NOTAS_FONTE=memoria` usa notas de exemplo).
 5. Conferir que está tudo certo: `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`. Os testes de `banco.test.ts` rodam contra o Postgres real: criam e apagam um usuário efêmero pela Admin API do Supabase.
 
