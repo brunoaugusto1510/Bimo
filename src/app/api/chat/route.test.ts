@@ -105,6 +105,7 @@ describe("POST /api/chat", () => {
     await expect(res.json()).resolves.toEqual({
       erro: "Não consegui responder agora. Tente de novo.",
     });
+    expect(console.error).toHaveBeenCalledWith("[POST /api/chat] Falha ao responder à conversa.", "Error");
   });
 
   it("recusa outra origem antes de chamar o agente", async () => {
@@ -263,7 +264,8 @@ describe("POST /api/chat em NDJSON", () => {
       { tipo: "erro", erro: "Não consegui responder agora. Tente de novo." },
     ]);
     expect(texto).not.toMatch(/select|SQL|user_id/i);
-    expect(console.error).toHaveBeenCalledWith("[POST /api/chat] Falha ao responder à conversa.");
+    expect(console.error).toHaveBeenCalledWith("[POST /api/chat] Falha ao responder à conversa.", "Error");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toMatch(/select|SQL|user_id/i);
     expect(console.error).toHaveBeenCalledTimes(1);
   });
 
@@ -391,4 +393,33 @@ it("recusa corpo acima de 1 MB", async () => {
   pedido.headers.set("content-length", "1048577");
   expect((await POST(pedido)).status).toBe(413);
   expect(responder).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("explica o prazo esgotado preservando o passo de criação (NDJSON: %s)", async (fluxo) => {
+  vi.mocked(responder).mockImplementation(async (_mensagens, opcoes) => {
+    opcoes?.aoPasso?.({ ferramenta: {
+      nome: "criar_nota", argumentos: { caminho: "Resumo.md" }, resumo: "Criou Resumo.md", notaId: "resumo",
+    }, ids: ["resumo"] });
+    throw new DOMException("texto interno confidencial", "TimeoutError");
+  });
+  const pedido = requisicao({ mensagens: [{ papel: "usuario", conteudo: "resuma as notas" }] });
+  if (fluxo) pedido.headers.set("accept", "application/x-ndjson");
+  const resposta = await POST(pedido);
+  const texto = await resposta.text();
+  expect(resposta.status).toBe(fluxo ? 200 : 504);
+  const eventos = texto.trim().split("\n").map((linha) => JSON.parse(linha));
+  expect(eventos.at(-1)).toMatchObject({ erro: expect.stringMatching(/prazo.*ações concluídas/i) });
+  if (fluxo) expect(eventos[0]).toMatchObject({ tipo: "passo", nome: "criar_nota", notaId: "resumo" });
+  expect(texto).not.toContain("confidencial");
+  expect(console.error).toHaveBeenCalledWith("[POST /api/chat] Falha ao responder à conversa.", "TimeoutError");
+});
+
+it.each([false, true])("registra a categoria HTTP da falha sem dados privados (NDJSON: %s)", async (fluxo) => {
+  const erro = Object.assign(new Error("chave e nota confidencial"), { name: "ErroOpenAI", status: 429 });
+  vi.mocked(responder).mockRejectedValue(erro);
+  const pedido = requisicao({ mensagens: [{ papel: "usuario", conteudo: "oi" }] });
+  if (fluxo) pedido.headers.set("accept", "application/x-ndjson");
+  const texto = await (await POST(pedido)).text();
+  expect(texto).not.toMatch(/confidencial|429|ErroOpenAI/);
+  expect(console.error).toHaveBeenCalledWith("[POST /api/chat] Falha ao responder à conversa.", "ErroOpenAI:429");
 });

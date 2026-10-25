@@ -6,6 +6,7 @@ export type PedidoOpenAI = {
   instructions: string;
   input: Record<string, unknown>[];
   tools: Record<string, unknown>[];
+  tool_choice?: "none";
   text?: { format: { type: "json_schema"; name: string; strict: true; schema: Record<string, unknown> } };
 };
 
@@ -56,7 +57,15 @@ export async function criarRespostaOpenAI(pedido: PedidoOpenAI, sinal: AbortSign
     await resposta.body?.cancel();
     throw new ErroOpenAI(resposta.status);
   }
-  const dados = esquemaDaResposta.safeParse(await resposta.json());
+  let corpo: unknown;
+  try {
+    corpo = await resposta.json();
+  } catch {
+    // O corpo também pode ser interrompido depois de os cabeçalhos chegarem.
+    sinal.throwIfAborted();
+    throw new Error("Resposta inválida da API OpenAI.");
+  }
+  const dados = esquemaDaResposta.safeParse(corpo);
   if (!dados.success) throw new Error("Resposta inválida da API OpenAI.");
   if (dados.data.usage) {
     const uso = dados.data.usage;

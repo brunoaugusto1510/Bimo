@@ -6,8 +6,9 @@ import { criarRespostaOpenAI, type ItemDaResposta } from "./openai";
 import { gerarInstrucaoDoSistema } from "./instrucao-do-agente";
 import type { IdDeNota, Mensagem, UsoDeFerramenta } from "./types";
 
-const MAX_VOLTAS = 5;
-const TEMPO_MAXIMO_MS = 45_000;
+// Busca + leituras + escrita precisam de várias voltas; a última é só para concluir.
+const MAX_VOLTAS = 12;
+const TEMPO_MAXIMO_MS = 150_000;
 const MAX_CARACTERES_DE_CONTEXTO = 200_000;
 const esquemaDaChamada = z.object({
   type: z.literal("function_call"), call_id: z.string().min(1),
@@ -76,7 +77,7 @@ export async function responder(
   const cancelar = () => controle.abort();
   opcoes.signal?.addEventListener("abort", cancelar, { once: true });
   if (opcoes.signal?.aborted) cancelar();
-  const temporizador = setTimeout(cancelar, TEMPO_MAXIMO_MS);
+  const temporizador = setTimeout(() => controle.abort(new DOMException("O prazo do agente esgotou.", "TimeoutError")), TEMPO_MAXIMO_MS);
   const input: Record<string, unknown>[] = mensagens.map((m) => ({
     role: m.papel === "agente" ? "assistant" : "user", content: m.conteudo,
   }));
@@ -86,12 +87,14 @@ export async function responder(
   const escritas = new Map<string, SaidaFerramenta>();
   try {
     for (let volta = 0; volta < MAX_VOLTAS; volta++) {
+      const ultimaVolta = volta === MAX_VOLTAS - 1;
       controle.signal.throwIfAborted();
       if (JSON.stringify(input).length > MAX_CARACTERES_DE_CONTEXTO) {
         throw new Error("O contexto ultrapassou o limite. Faça uma consulta mais específica.");
       }
       const resposta = await criarRespostaOpenAI({
         instructions: gerarInstrucaoDoSistema(), input: [...input], tools: ferramentasOpenAI,
+        ...(ultimaVolta ? { tool_choice: "none" as const } : {}),
       }, controle.signal);
       controle.signal.throwIfAborted();
       // Não executar chamadas parciais, mesmo se a resposta incluir texto ou argumentos válidos.
@@ -102,6 +105,8 @@ export async function responder(
         if (!texto) throw new Error("O modelo não devolveu texto.");
         return { resposta: texto, ferramentas: ferramentasUsadas };
       }
+      // Mesmo se o provedor ignorar tool_choice, nenhuma nova ação cabe nesta volta.
+      if (ultimaVolta) break;
       // Reenviar todos os itens, inclusive raciocínio criptografado, durante esta execução.
       input.push(...resposta.output);
       for (const chamada of chamadas) {
@@ -127,7 +132,7 @@ export async function responder(
       }
     }
     return {
-      resposta: "Consultei as notas várias vezes seguidas e não cheguei a uma resposta final. Tente reformular a pergunta de forma mais específica.",
+      resposta: "Atingi o limite de etapas deste pedido. Confira as ações concluídas acima e divida o restante em um pedido menor.",
       ferramentas: ferramentasUsadas,
     };
   } finally {
