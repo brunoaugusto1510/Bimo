@@ -1,7 +1,7 @@
-import { loadEnvConfig } from "@next/env";
+import ambienteNext from "@next/env";
 import { setTimeout as esperar } from "node:timers/promises";
 
-loadEnvConfig(process.cwd());
+ambienteNext.loadEnvConfig(process.cwd());
 const segredo = process.env.WIKI_EXECUTOR_SEGREDO?.trim();
 const endereco = new URL(process.env.BIMO_URL || "http://localhost:3000");
 if (!segredo || segredo.length < 32) throw new Error("Configure WIKI_EXECUTOR_SEGREDO com ao menos 32 caracteres.");
