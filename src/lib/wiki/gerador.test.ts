@@ -11,9 +11,9 @@ const usage = { input_tokens: 100, output_tokens: 50 };
 const resposta = (status: string, content: unknown[]) => ({ status, output: [{ type: "message", content }], usage });
 
 it("descoberta usa schema estrito, envia somente o trecho atual e devolve consumo real", async () => {
-  vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta("completed", [{ type: "output_text", text: '{"propostas":[]}' }]));
+  vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta("completed", [{ type: "output_text", text: '{"politica":"sintetica-v4","propostas":[],"semPublicacao":{"decisao":"conservar_origem","motivo":"Não há novidade útil nesta leitura.","condicao":null}}' }]));
   const r = await gerarConhecimentoWiki(contexto, new AbortController().signal);
-  expect(r).toEqual({ proposta: { propostas: [] }, uso: { entrada: 100, saida: 50 } });
+  expect(r).toEqual({ proposta: { politica: "sintetica-v4", propostas: [], semPublicacao: { decisao: "conservar_origem", motivo: "Não há novidade útil nesta leitura.", condicao: null } }, uso: { entrada: 100, saida: 50 } });
   const enviado = vi.mocked(criarRespostaOpenAI).mock.calls[0][0];
   expect(enviado).toMatchObject({ tools: [], text: { format: { type: "json_schema", strict: true } } });
   expect(JSON.stringify(enviado)).not.toContain("segredo fora do trecho");
@@ -25,13 +25,13 @@ it("descoberta usa schema estrito, envia somente o trecho atual e devolve consum
 });
 
 it("o schema enviado ao modelo é estrito e exige as operações de manter, substituir e retirar", async () => {
-  vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta("completed", [{ type: "output_text", text: '{"propostas":[]}' }]));
+  vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta("completed", [{ type: "output_text", text: '{"politica":"sintetica-v4","propostas":[],"semPublicacao":{"decisao":"conservar_origem","motivo":"Não há novidade útil nesta leitura.","condicao":null}}' }]));
   await gerarConhecimentoWiki(contexto, new AbortController().signal);
   const schema = (vi.mocked(criarRespostaOpenAI).mock.calls[0][0].text as unknown as { format: { schema: { properties: { propostas: { items: { required: string[]; additionalProperties: boolean; properties: Record<string, unknown> } } } } } }).format.schema;
   const proposta = schema.properties.propostas.items;
   expect(proposta.additionalProperties).toBe(false);
   // Em modo estrito todo campo é obrigatório; os que têm padrão no servidor também precisam estar no schema.
-  expect(proposta.required).toEqual(expect.arrayContaining(["afirmacoes", "substituicoes", "retiradas", "ligacoes", "lacunas"]));
+  expect(proposta.required).toEqual(expect.arrayContaining(["afirmacoes", "substituicoes", "retiradas", "ligacoes", "lacunas", "reforcos", "limparLacunas", "editorial"]));
   expect(Object.keys(proposta.properties)).toEqual(expect.arrayContaining(["substituicoes", "retiradas"]));
   // `default` é do zod, não do contrato com o modelo, e o modo estrito não o garante: nada dele no schema enviado.
   expect(JSON.stringify(schema)).not.toContain('"default"');
@@ -42,6 +42,13 @@ it("o schema enviado ao modelo é estrito e exige as operações de manter, subs
   expect(aninhada.properties.afirmacao.required).toEqual(expect.arrayContaining(["texto", "natureza", "evidencias"]));
   const instrucoes = vi.mocked(criarRespostaOpenAI).mock.calls[0][0].instructions;
   for (const palavra of ["substituicoes", "retiradas", "limiteDeAfirmacoes", "ligacoes", "lacunas"]) expect(instrucoes).toContain(palavra);
+});
+
+it("recusa resposta sem política editorial, preservando o consumo cobrado", async () => {
+  vi.mocked(criarRespostaOpenAI).mockResolvedValue(resposta("completed", [{ type: "output_text", text: '{"propostas":[]}' }]));
+  const erro = await gerarConhecimentoWiki(contexto, new AbortController().signal).catch((e: unknown) => e);
+  expect(erro).toBeInstanceOf(ErroDaGeracaoWiki);
+  expect((erro as ErroDaGeracaoWiki).uso).toEqual({ entrada: 100, saida: 50 });
 });
 
 it.each(["incomplete", "failed"])("resposta %s vira erro que carrega o uso já cobrado", async (status) => {
@@ -61,12 +68,12 @@ it("recusa explícita e JSON inválido também carregam o uso", async () => {
 });
 
 it("sem medição na resposta, o uso é desconhecido e a reserva inteira permanece comprometida", async () => {
-  vi.mocked(criarRespostaOpenAI).mockResolvedValue({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: '{"propostas":[]}' }] }] });
+  vi.mocked(criarRespostaOpenAI).mockResolvedValue({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: '{"politica":"sintetica-v4","propostas":[],"semPublicacao":{"decisao":"conservar_origem","motivo":"Não há novidade útil nesta leitura.","condicao":null}}' }] }] });
   expect((await gerarConhecimentoWiki(contexto, new AbortController().signal)).uso).toBeNull();
 });
 
 it("o resultado já cobrado não é descartado por um cancelamento tardio", async () => {
   const controle = new AbortController();
-  vi.mocked(criarRespostaOpenAI).mockImplementation(async () => { controle.abort(); return resposta("completed", [{ type: "output_text", text: '{"propostas":[]}' }]); });
-  await expect(gerarConhecimentoWiki(contexto, controle.signal)).resolves.toMatchObject({ proposta: { propostas: [] } });
+  vi.mocked(criarRespostaOpenAI).mockImplementation(async () => { controle.abort(); return resposta("completed", [{ type: "output_text", text: '{"politica":"sintetica-v4","propostas":[],"semPublicacao":{"decisao":"conservar_origem","motivo":"Não há novidade útil nesta leitura.","condicao":null}}' }]); });
+  await expect(gerarConhecimentoWiki(contexto, controle.signal)).resolves.toMatchObject({ proposta: { politica: "sintetica-v4", propostas: [], semPublicacao: { decisao: "conservar_origem", motivo: "Não há novidade útil nesta leitura.", condicao: null } } });
 });

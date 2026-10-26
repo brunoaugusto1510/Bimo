@@ -5,6 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { criarRepositorioDoBanco } from "../repositorio-de-notas/banco";
 import { processarWiki } from "./automacao";
+import { processarLoteWiki } from "./lote";
 import type { ContextoWiki } from "./automacao-tipos";
 import { evidenciasDaWiki } from "./consulta";
 import { estadoDaPagina } from "./servico";
@@ -50,6 +51,113 @@ afterEach(() => vi.unstubAllEnvs());
 afterAll(async () => { await pg?.close(); });
 
 describe("persistência local da Wiki Viva", () => {
+  it("reprocessa somente a origem pedida sem alterar sua revisão e recusa posse, revisão e dono diferentes", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    const outraConta = criarRepositorioDoBanco(donoB);
+    await repo.criarNota({ titulo: "Primeira", conteudo: "Anotação anterior na fila." }, autor);
+    const nova = await repo.criarNota({ titulo: "Alvo", conteudo: "Anotação escolhida para releitura." }, autor);
+    if (nova.tipo !== "ok") throw new Error("Preparação inválida.");
+    const id = nova.nota.id, fila = repo.wiki!.automacao!;
+    expect(await outraConta.wiki!.automacao!.reprocessar(id, 1)).toBe("nao-encontrada");
+    expect(await fila.reprocessar(id, 99)).toBe("conflito");
+    expect(await fila.reprocessar(id, 1)).toBe("ok");
+    const trabalho = (await fila.reivindicar(id))!;
+    expect(trabalho.notaId).toBe(id);
+    expect(trabalho.geracao).toBe(2);
+    expect(await fila.reprocessar(id, 1)).toBe("ocupado");
+    await fila.concluir(trabalho, [], null);
+    expect(await fila.reprocessar(id, 1)).toBe("ok");
+    const segundo = (await fila.reivindicar(id))!;
+    expect(segundo.geracao).toBe(3);
+    await expect(fila.concluir(trabalho, [], null)).rejects.toThrow();
+    await fila.concluir(segundo, [], null);
+    expect((await repo.obterNota(id))!.revisao).toBe(1);
+    expect((await repo.obterNota(id))!.conteudo).toBe(nova.nota.conteudo);
+    // Duas versões iniciais da criação; reprocessar não acrescenta versão de conteúdo.
+    expect((await pg.query("select count(*)::int as quantidade from versoes_nota")).rows).toEqual([{ quantidade: 2 }]);
+  });
+
+  const editorial = (acao: string, candidatas: string[] = []) => ({ acao, candidatas,
+    utilidade: { avaliacao: "suficiente", justificativa: "Como manter as cópias atuais?" },
+    ganho: { avaliacao: "suficiente", justificativa: "Organiza a atualização das cópias do cache." },
+    destino: { avaliacao: "suficiente", justificativa: "O mesmo assunto está neste destino." } });
+  const novaResposta = (c: ContextoWiki, extras: Record<string, unknown> = {}) => ({ proposta: { politica: "sintetica-v4", semPublicacao: null,
+    propostas: [{ ...resposta(c).proposta.propostas[0], editorial: editorial("criar"), ...extras }] }, uso: { entrada: 100, saida: 100 } });
+
+  it("divergência inválida bloqueia no SQL sem publicar versão, preservando consumo e origem", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Cache", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
+    expect(await processarWiki(repo, async (c) => novaResposta(c, { divergencias: [
+      { a: { afirmacaoId: "nova:1", contexto: "Manual" }, b: { afirmacaoId: "nova:1", contexto: "Código" } },
+    ] }), { tetoDiario: 200_000 })).toMatchObject({ tipo: "adiado", motivo: "revisar" });
+    expect(await repo.wiki!.listar()).toHaveLength(0);
+    expect((await pg.query("select estado, ultimo_erro from trabalhos_wiki")).rows).toEqual([{ estado: "revisar", ultimo_erro: "PropostaEditorialRecusada:422" }]);
+    expect((await pg.query("select count(*)::int as quantidade from versoes_nota")).rows).toEqual([{ quantidade: 1 }]);
+    expect((await repo.wiki!.automacao!.energia(200_000)).utilizada).toBe(200);
+    expect((await repo.obterNota("1"))!).toMatchObject({ revisao: 1, conteudo: "As cópias precisam ser atualizadas." });
+    expect((await repo.wiki!.automacao!.diario({ inicio: "2000-01-01T00:00:00Z", fim: "2100-01-01T00:00:00Z" }))[0]).toMatchObject({ tipo: "precisa_de_voce", origemId: "1" });
+  });
+
+  it("preserva ID e procedência editorial no jsonb ao reforçar e limpar perguntas", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Cache", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
+    await processarWiki(repo, async (c) => novaResposta(c, { lacunas: ["Quando atualizar?"] }), { tetoDiario: 200_000 });
+    const [pagina] = await repo.wiki!.listar();
+    expect(pagina.estrutura.editorial).toMatchObject({ politica: "sintetica-v4", origem: { id: "1", revisao: 1 } });
+    await repo.criarNota({ titulo: "Cache confirmação", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
+    expect(await processarWiki(repo, async (c) => novaResposta(c, { alvoId: pagina.notaId, afirmacoes: [],
+      editorial: editorial("enriquecer", [pagina.notaId]), limparLacunas: true,
+      reforcos: [{ id: pagina.afirmacoes[0].id, evidencias: [{ fonteId: c.origem.id, citacao: c.trecho.texto }] }],
+    }), { tetoDiario: 200_000 })).toMatchObject({ publicadas: 1 });
+    const depois = (await repo.wiki!.obter(pagina.notaId))!;
+    expect(depois.afirmacoes).toHaveLength(1);
+    expect(depois.afirmacoes[0]).toMatchObject({ id: pagina.afirmacoes[0].id, natureza: "inferencia" });
+    expect(depois.afirmacoes[0].evidencias).toHaveLength(2);
+    expect(depois.estrutura.lacunas).toEqual([]);
+    expect(depois.estrutura.editorial).toMatchObject({ acao: "enriquecer" });
+  });
+
+  it("publicação parcial e bloqueio editorial são atômicos; adiamento guarda condição no diário do dono", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Cache", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
+    expect(await processarWiki(repo, async (c) => {
+      const r = novaResposta(c);
+      r.proposta.propostas.push({ ...r.proposta.propostas[0], titulo: "Sem suporte", afirmacoes: [] });
+      return r;
+    }, { tetoDiario: 200_000 })).toMatchObject({ publicadas: 1, descartadas: 1 });
+    expect(await repo.wiki!.automacao!.cobertura()).toMatchObject({ concluidos: 0, impedidos: 1 });
+    expect((await pg.query("select estado, ultimo_erro from trabalhos_wiki")).rows).toEqual([{ estado: "revisar", ultimo_erro: "PropostaEditorialRecusada:422" }]);
+    await repo.criarNota({ titulo: "Dúvida", conteudo: "Identificar o projeto anterior." }, autor); await liberar();
+    await processarWiki(repo, async () => ({ proposta: { politica: "sintetica-v4", propostas: [], semPublicacao: {
+      decisao: "adiar", motivo: "Falta identificar o projeto anterior.", condicao: "Informar o nome do projeto na origem.", tipoDePendencia: "contexto_da_origem",
+    } }, uso: { entrada: 100, saida: 100 } }), { tetoDiario: 200_000 });
+    expect((await pg.query("select texto from eventos_wiki where texto like 'Decisão adiada:%'")).rows)
+      .toEqual([{ texto: "Decisão adiada: Falta identificar o projeto anterior. Para reavaliar: Informar o nome do projeto na origem." }]);
+    expect(await criarRepositorioDoBanco(donoB).wiki!.automacao!.diario({ inicio: "2000-01-01T00:00:00Z", fim: "2100-01-01T00:00:00Z" })).toEqual([]);
+  });
+
+  it("um lote conclui várias origens no SQL e retoma sem repetir chamadas pagas", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    for (const titulo of ["Cache principal", "Cache offline", "Cache remoto"]) {
+      await repo.criarNota({ titulo, conteudo: "As cópias precisam ser atualizadas." }, autor);
+    }
+    await liberar();
+    const gerar = vi.fn(async (c: ContextoWiki) => resposta(c, (await repo.wiki!.listar())[0]?.notaId ?? null));
+    const primeira = await processarLoteWiki(repo, gerar, { tetoDiario: 200_000, maxRodadas: 2 });
+    expect(primeira.lote).toMatchObject({ processados: 2, parada: "rodadas" });
+    expect(await repo.wiki!.automacao!.cobertura()).toMatchObject({ concluidos: 2, pendentes: 1 });
+    const segunda = await processarLoteWiki(repo, gerar, { tetoDiario: 200_000 });
+    expect(segunda.lote).toMatchObject({ processados: 1, parada: "ocioso" });
+    expect(gerar).toHaveBeenCalledTimes(3);
+    expect(await repo.wiki!.automacao!.cobertura()).toMatchObject({ concluidos: 3, pendentes: 0 });
+    expect((await pg.query("select count(*)::int as quantidade, sum(utilizado)::int as utilizado from consumos_wiki")).rows)
+      .toEqual([{ quantidade: 3, utilizado: 600 }]);
+    const [pagina] = await repo.wiki!.listar();
+    expect(pagina.fontes).toHaveLength(3);
+    expect(await repo.wiki!.listar()).toHaveLength(1);
+    expect(await repo.listarResumos()).toHaveLength(4);
+  });
+
   it("salva evento e nota juntos e publica nota, evidências, conceito e conclusão atomicamente", async () => {
     const repo = criarRepositorioDoBanco(donoA);
     await repo.criarNota({ titulo: "Cache", conteudo: "O cache contém cópias." }, autor);

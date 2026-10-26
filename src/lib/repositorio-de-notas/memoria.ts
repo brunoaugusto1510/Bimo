@@ -104,7 +104,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       const nova = { ...nota, conteudo: entrada.conteudo, revisao: nota.revisao + 1, atualizadoEm: agora() };
       notas.set(nova.id, nova); versao++; resultado = { tipo: "ok", nota: copiar(nova) };
     } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta, conteudo: entrada.conteudo });
-    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: compactarFontes(entrada.fontes, entrada.afirmacoes), afirmacoes: entrada.afirmacoes, estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [] } }));
+    if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: compactarFontes(entrada.fontes, entrada.afirmacoes), afirmacoes: entrada.afirmacoes, estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [], ...(entrada.editorial ? { editorial: entrada.editorial } : {}) } }));
     return resultado;
   }
   const automacao = criarFilaWikiEmMemoria({ notas, paginas, publicarAtomico(publicacoes) {

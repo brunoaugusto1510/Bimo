@@ -1,4 +1,16 @@
 import type { AlertaWiki, TipoDeEventoWiki } from "./observabilidade-tipos";
+import type { DecisaoSemPublicacao } from "./editorial";
+
+/** Dados editoriais privados do dono, exibidos como texto; nunca interpolados em logs ou erros HTTP. */
+export function textoDoAdiamento(decisao?: DecisaoSemPublicacao) {
+  return decisao?.decisao === "adiar"
+    ? `Decisão adiada: ${decisao.motivo} Para reavaliar: ${decisao.condicao}`
+    : "Uma leitura precisa de atenção antes de continuar. As anotações foram preservadas.";
+}
+export function textoDaConservacao(decisao?: DecisaoSemPublicacao) {
+  return decisao?.decisao === "conservar_origem" ? `Conservei o conhecimento na anotação de origem: ${decisao.motivo}`
+    : "Li esta anotação e não encontrei novidade sustentada para os neurônios.";
+}
 
 export function textoDaPublicacao(titulo: string, nova: boolean) {
   return `${nova ? "Nasceu o neurônio" : "Cresceu o neurônio"} “${titulo.slice(0, 200)}”.`;

@@ -3,7 +3,7 @@ import type { NotaCompleta } from "../repositorio-de-notas/tipos";
 import type { AutomacaoWiki, ConceitoWiki, TrabalhoWiki } from "./automacao-tipos";
 import { ESTABILIDADE_DA_WIKI_SEGUNDOS } from "./configuracao";
 import { renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
-import { eventoDoDiagnostico, textoDaPublicacao } from "./diario";
+import { eventoDoDiagnostico, textoDaPublicacao, textoDoAdiamento, textoDaConservacao } from "./diario";
 
 type Registro = Omit<TrabalhoWiki, "posse"> & { posse: string | null; ate: number; disponivel: number; estado: string; ultimoErro?: string };
 /** Conteúdo novo pede processamento; renomear, mover, etiquetar ou reescrever ligações só acompanha a revisão. */
@@ -47,6 +47,18 @@ export function criarFilaWikiEmMemoria(acesso: {
   }
   const fila: AutomacaoWiki = {
     async solicitar(id) { const nota = acesso.notas.get(id); if (nota) registrar(nota); },
+    async reprocessar(id, revisao) {
+      const nota = acesso.notas.get(id);
+      if (!nota) return "nao-encontrada";
+      if (nota.revisao !== revisao) return "conflito";
+      if (acesso.paginas.has(id)) return "derivada";
+      const anterior = trabalhos.get(id);
+      if (anterior && anterior.ate > Date.now()) return "ocupado";
+      if (anterior?.estado === "configuracao") return "configuracao";
+      trabalhos.set(id, { notaId: id, revisao, geracao: (anterior?.geracao ?? 0) + 1, cursor: 0, posse: null,
+        ate: 0, disponivel: Date.now(), tentativas: 0, estado: "pendente" });
+      return "ok";
+    },
     async reconciliar(limite) {
       let registradas = 0;
       for (const nota of acesso.notas.values()) {
@@ -55,11 +67,11 @@ export function criarFilaWikiEmMemoria(acesso: {
       }
       return registradas;
     },
-    async reivindicar() {
+    async reivindicar(notaId) {
       const valores = [...trabalhos.values()];
       if (valores.some((t) => t.estado === "configuracao" || t.ate > Date.now())) return null;
       for (const t of valores) if (t.estado === "pendente" && t.tentativas >= 3) t.estado = "temporario";
-      const trabalho = valores.find((t) => t.estado === "pendente" && t.disponivel <= Date.now() && !acesso.paginas.has(t.notaId));
+      const trabalho = valores.find((t) => (notaId === undefined || t.notaId === notaId) && t.estado === "pendente" && t.disponivel <= Date.now() && !acesso.paginas.has(t.notaId));
       if (!trabalho) return null;
       trabalho.posse = crypto.randomUUID(); trabalho.ate = Date.now() + 120_000; trabalho.tentativas++;
       return { notaId: trabalho.notaId, revisao: trabalho.revisao, geracao: trabalho.geracao,
@@ -86,7 +98,7 @@ export function criarFilaWikiEmMemoria(acesso: {
       const reserva = consumo.get(id); if (!reserva || reserva.confirmado) return;
       if (uso) { reserva.reservado = uso.entrada + uso.saida; reserva.confirmado = true; }
     },
-    async concluir(trabalho, publicacoes, cursor, avaliadas = []) {
+    async concluir(trabalho, publicacoes, cursor, avaliadas = [], revisar = false, decisao) {
       const atual = exigir(trabalho);
       if (acesso.notas.get(trabalho.notaId)?.revisao !== trabalho.revisao) throw new ErroWiki("Origem superada.", 409);
       const chaves = new Set<string>(); const alvos = new Set<string>();
@@ -111,13 +123,14 @@ export function criarFilaWikiEmMemoria(acesso: {
         if (conceito && !conceito.protegida && !conceito.pausada && conceito.origens[trabalho.notaId] !== undefined) conceito.origens[trabalho.notaId] = trabalho.revisao;
       }
       const progresso = publicacoes.some((p) => p.alvo) || avaliadas.length > 0 || cursor !== trabalho.cursor;
-      atual.cursor = cursor ?? atual.cursor; atual.estado = cursor === null ? "concluido" : "pendente";
-      atual.posse = null; atual.ate = 0; atual.ultimoErro = undefined;
+      atual.cursor = cursor ?? atual.cursor; atual.estado = revisar ? "revisar" : cursor === null ? "concluido" : "pendente";
+      atual.posse = null; atual.ate = 0; atual.ultimoErro = revisar ? "PropostaEditorialRecusada:422" : undefined;
       atual.disponivel = progresso || cursor === null ? Date.now() : Date.now() + 30_000 * atual.tentativas;
       if (progresso) atual.tentativas = 0;
-      if (!publicacoes.length && cursor === null) evento(`leitura:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "sem_novidade", sinteseId: null, origemId: trabalho.notaId, texto: "Li esta anotação e não encontrei novidade sustentada para os neurônios." });
+      if (revisar) evento(`falha:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "precisa_de_voce", sinteseId: null, origemId: trabalho.notaId, texto: textoDoAdiamento() });
+      else if (!publicacoes.length && cursor === null) evento(`leitura:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "sem_novidade", sinteseId: null, origemId: trabalho.notaId, texto: textoDaConservacao(decisao) });
     },
-    async falhar(trabalho, motivo, erro) {
+    async falhar(trabalho, motivo, erro, decisao) {
       let atual: Registro; try { atual = exigir(trabalho); } catch { return; }
       atual.posse = null; atual.ate = 0; atual.ultimoErro = motivo === "orcamento" ? "orcamento" : erro;
       // Faltar orçamento não é falha do trabalho: a tentativa da reivindicação é devolvida.
@@ -125,7 +138,7 @@ export function criarFilaWikiEmMemoria(acesso: {
       atual.estado = motivo === "temporario" && atual.tentativas < 3 || motivo === "orcamento" ? "pendente" : motivo;
       atual.disponivel = motivo === "orcamento" ? Date.parse(`${dia()}T00:00:00Z`) + 86_400_000 : Date.now() + 30_000 * atual.tentativas;
       if (motivo === "orcamento") evento(`energia:${dia()}`, { tipo: "energia", sinteseId: null, origemId: null, texto: "A energia disponível não comporta outra leitura. A fila retoma após a renovação diária." });
-      else if (atual.estado !== "pendente") evento(`falha:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "precisa_de_voce", sinteseId: null, origemId: trabalho.notaId, texto: "Uma leitura precisa de atenção antes de continuar. As anotações foram preservadas." });
+      else if (atual.estado !== "pendente") evento(`falha:${trabalho.notaId}:${trabalho.geracao}`, { tipo: "precisa_de_voce", sinteseId: null, origemId: trabalho.notaId, texto: textoDoAdiamento(decisao) });
     },
     async retomar() {
       for (const t of trabalhos.values()) if (["configuracao", "temporario"].includes(t.estado) || t.estado === "revisar" && t.ultimoErro?.startsWith("ErroOpenAI:")) {
