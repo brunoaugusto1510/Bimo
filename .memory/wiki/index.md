@@ -55,6 +55,7 @@ Os 25 documentos de `docs/` foram incorporados integralmente a `documentacao/`, 
 - [Segunda passagem — 26/10/2026](documentacao/Bimo%20-%20Segunda%20Passagem%20dos%20Neuronios%20-%202026-10-26.md): ajustes e resultados posteriores.
 - [Correções e terceira passagem — 26/10/2026](documentacao/Bimo%20-%20Correcoes%20e%20Terceira%20Passagem%20-%202026-10-26.md): correções editoriais e novo ensaio.
 - [Revisão geral da Wiki Viva — 26/10/2026](documentacao/Bimo%20-%20Revisao%20Geral%20da%20Wiki%20Viva%20-%202026-10-26.md): quatro revisões, teste de jornada, correções do commit `87b6da8`, ordem de deploy da migração 0011 e achados abertos.
+- [Auditoria da estrutura vs LLM Wiki — 26/10/2026](documentacao/Bimo%20-%20Auditoria%20da%20Estrutura%20da%20Wiki%20Viva%20vs%20LLM%20Wiki%20-%202026-10-26.md): checklist do padrão comparado com a Wiki Viva do app e com esta MemWiki, status e evidência por item, lacunas priorizadas e recomendações não implementadas.
 
 ### Interface e aplicativo móvel — planos e especificações
 

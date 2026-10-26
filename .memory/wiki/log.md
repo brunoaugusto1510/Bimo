@@ -29,3 +29,23 @@
 - Removido o modo `comPainelWiki` do grafo; a câmera enquadra o resultado de cada filtro do cérebro.
 - Verificação: suíte offline com 172 arquivos e 2.079 testes passando, `tsc --noEmit` e `eslint src` sem erros, conferência visual no navegador embutido com dados reais (claro, escuro, 375 px). Sem commit.
 - Revisão independente (ECC react-reviewer) e correções: seleção escondida pelo filtro deixa de focar o grafo (teste `cerebro-na-pagina.test.tsx`), primeiro neurônio descoberto com o cérebro aberto, "Ver origens" só sem filtro, pílula da fila estática no lugar de `BimoPensando`, folhas do celular com altura máxima e rolagem, foco devolvido à citação e região `aria-live` na folha da sinapse, foco correto ao trocar Cérebro/Diário, chips Cérebro/Diário alternam, aviso para filtro sem resultado, câmera sem reenquadrar na consulta de 30 s, página anterior do diário mantida ao paginar. Suíte offline: 173 arquivos, 2.081 testes passando; `tsc` e `eslint src` limpos.
+
+## 2026-10-26T17:37:18-03:00 — Auditoria da estrutura da Wiki Viva vs LLM Wiki (lint)
+
+- **Escopo:** auditoria somente de leitura, na branch `fix/revisao-geral-wiki-viva`, HEAD `e90ee94`.
+- **Checklist:** C1–C16, extraído da referência LLM Wiki. O gist do Karpathy foi conferido para fontes imutáveis, retorno de respostas, itens do lint, índice e prefixo do log.
+- **Camada A** (funcionalidade do app):
+  - `code-explorer` mapeou a feature e `database-reviewer` revisou o esquema.
+  - As linhas centrais foram relidas no código.
+- **Camada B** (MemWiki):
+  - Lint por script: 39 páginas, 256 links locais, 0 quebrados, 0 órfãs, todas com link direto no índice.
+  - `git log` e `git show` apontaram hot desatualizado e o commit `623f121` sem hot e log.
+- **Julgamento** (`architect`): nenhum CRITICAL; um HIGH na camada A, nota do chat como raiz sem autoria; contradição sobre a 0011 entre o Plano de Notas no Banco e a revisão geral.
+- **Gravado:**
+  - Relatório em `documentacao/Bimo - Auditoria da Estrutura da Wiki Viva vs LLM Wiki - 2026-10-26.md`.
+  - Link no índice.
+  - Hot com o estado atual acrescentado e as linhas antigas anotadas, sem apagar conteúdo.
+- **Não houve:**
+  - alteração em `src/`, testes, migrações ou configuração;
+  - leitura de `.env`, execução de testes, acesso a produção ou implementação das recomendações.
+- **Pendente:** um `bash.exe.stackdump` criado por esta sessão em `.memory/`, ignorado pelo git. A remoção não foi autorizada.
