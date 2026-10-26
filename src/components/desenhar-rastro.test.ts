@@ -18,6 +18,9 @@ const CORES: Cores = {
   sobreDestaque: "#ffffff",
   painel: "#fffffe",
   bordaSuave: "#cfe0f8",
+  destaqueSuave: "#e8f1fc",
+  textoSuave: "#8b8f94",
+  tensao: "#eb6834",
   paleta: ["#6b6b73"],
 };
 

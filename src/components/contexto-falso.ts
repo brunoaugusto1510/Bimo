@@ -34,6 +34,7 @@ export function criarContextoFalso() {
   let arco = { x: 0, y: 0, raio: 0 };
   let segmentos = 0;
   let tracejado: number[] = [];
+  let retangulos: { x0: number; y0: number; x1: number; y1: number } | null = null;
   const pilha = { profundidade: 0, maxima: 0 };
 
   const contexto = {
@@ -57,6 +58,7 @@ export function criarContextoFalso() {
     },
     beginPath: () => {
       segmentos = 0;
+      retangulos = null;
     },
     closePath: () => {},
     moveTo: () => {
@@ -66,6 +68,17 @@ export function criarContextoFalso() {
     arcTo: () => {},
     arc: (x: number, y: number, raio: number) => {
       arco = { x, y, raio };
+    },
+    // Retângulos ficam anotados pelo centro do conjunto do caminho, com raio 0 (as barras de pausa).
+    rect: (x: number, y: number, largura: number, altura: number) => {
+      const r = retangulos ?? { x0: x, y0: y, x1: x + largura, y1: y + altura };
+      retangulos = {
+        x0: Math.min(r.x0, x),
+        y0: Math.min(r.y0, y),
+        x1: Math.max(r.x1, x + largura),
+        y1: Math.max(r.y1, y + altura),
+      };
+      arco = { x: (retangulos.x0 + retangulos.x1) / 2, y: (retangulos.y0 + retangulos.y1) / 2, raio: 0 };
     },
     setLineDash: (valores: number[]) => {
       tracejado = [...valores];
