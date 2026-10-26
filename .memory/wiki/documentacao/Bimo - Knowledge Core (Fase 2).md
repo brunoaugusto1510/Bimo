@@ -71,7 +71,7 @@ Pergunta em aberto ao implementar: a estrutura de pastas do vault atual (`ItemVa
 
 ## Decisão 5 — Implementar Fontes
 
-[src/lib/supabase-storage.ts](../src/lib/supabase-storage.ts) (cliente fino do Storage) + [src/lib/fontes.ts](../src/lib/fontes.ts) (domínio: `criarFonte`/`obterFonte`/`listarFontes`, sem `atualizarFonte` — imutabilidade deliberada). `criarFonte` sobe o blob antes de inserir a linha; se o insert falhar, remove o blob (compensação — Storage não participa de transação do Postgres).
+[src/lib/supabase-storage.ts](../../../src/lib/supabase-storage.ts) (cliente fino do Storage) + [src/lib/fontes.ts](../../../src/lib/fontes.ts) (domínio: `criarFonte`/`obterFonte`/`listarFontes`, sem `atualizarFonte` — imutabilidade deliberada). `criarFonte` sobe o blob antes de inserir a linha; se o insert falhar, remove o blob (compensação — Storage não participa de transação do Postgres).
 
 Descobertas ao verificar de ponta a ponta:
 
@@ -82,7 +82,7 @@ Descobertas ao verificar de ponta a ponta:
 
 ## Decisão 6 — Implementar Entidades
 
-[src/lib/entidades.ts](../src/lib/entidades.ts): `criarEntidade`, `atualizarEntidade`, `obterEntidade`, `listarEntidades`. Sem `removerEntidade` — a seção 14 do doc de visão não lista ferramenta de exclusão de entidade; o modelo favorece merge/substituição (`substitui`) sobre apagar conhecimento.
+[src/lib/entidades.ts](../../../src/lib/entidades.ts): `criarEntidade`, `atualizarEntidade`, `obterEntidade`, `listarEntidades`. Sem `removerEntidade` — a seção 14 do doc de visão não lista ferramenta de exclusão de entidade; o modelo favorece merge/substituição (`substitui`) sobre apagar conhecimento.
 
 - `criarEntidade`/`atualizarEntidade` usam `db.transaction`: gravam `nos` + `entidades` (+ `versoes_entidade`) atomicamente — diferente de Fonte, tudo aqui é Postgres, então dá pra usar transação de verdade em vez de compensação manual.
 - Cada edição grava o estado novo inteiro em `versoes_entidade` (Decisão 4), com a autoria de quem editou — sem sobrescrever o `criadoPor` original da entidade.
@@ -93,7 +93,7 @@ Toda a suíte de `src/lib` (129 testes) segue passando.
 
 ## Decisão 7 — Implementar Notas
 
-[src/lib/notas.ts](../src/lib/notas.ts): `criarNota`/`atualizarNota`/`obterNota`/`listarNotas`, mesmo padrão de `entidades.ts` (transação `nos`+`notas`+`versoes_nota`), sem `confianca`/`status` e com `pasta`.
+[src/lib/notas.ts](../../../src/lib/notas.ts): `criarNota`/`atualizarNota`/`obterNota`/`listarNotas`, mesmo padrão de `entidades.ts` (transação `nos`+`notas`+`versoes_nota`), sem `confianca`/`status` e com `pasta`.
 
 Correção feita antes de escrever este módulo: `versoes_nota` não tinha coluna `pasta` (esquecida quando a Decisão 4 da Fase 2 adicionou `pasta` só em `notas`) — snapshot de versão ficaria incompleto. Adicionada via migration incremental (`0002_noisy_zaladane.sql`).
 
@@ -101,13 +101,13 @@ Testado com dado real: criar, atualizar conteúdo, buscar, listar, limpar via ca
 
 ## Decisão 8 — Implementar Relações
 
-[src/lib/relacoes.ts](../src/lib/relacoes.ts): `criarRelacao`/`removerRelacao`/`listarRelacoesDoNo`. `criarRelacao` confirma que origem e destino pertencem ao mesmo usuário antes de inserir (Decisão 7 do Architecture Audit) — isso ainda não é um constraint de banco (exigiria trigger, não desenhado nesta fase), então a checagem vive na camada de domínio. `removerRelacao` só marca `removidoEm`/`removidoPor` — nunca apaga a linha, preservando auditoria (Decisão 4).
+[src/lib/relacoes.ts](../../../src/lib/relacoes.ts): `criarRelacao`/`removerRelacao`/`listarRelacoesDoNo`. `criarRelacao` confirma que origem e destino pertencem ao mesmo usuário antes de inserir (Decisão 7 do Architecture Audit) — isso ainda não é um constraint de banco (exigiria trigger, não desenhado nesta fase), então a checagem vive na camada de domínio. `removerRelacao` só marca `removidoEm`/`removidoPor` — nunca apaga a linha, preservando auditoria (Decisão 4).
 
 Testado com dado real: criar 2 entidades, ligar com relação, listar por nó, remover (soft), confirmar que some da listagem ativa, limpar via cascade.
 
 ## Decisão 9 — Implementar Revisões
 
-[src/lib/versoes.ts](../src/lib/versoes.ts): `listarVersoesEntidade`/`restaurarVersaoEntidade`/`listarVersoesNota`/`restaurarVersaoNota`. Restaurar nunca reescreve histórico — chama o próprio `atualizarEntidade`/`atualizarNota` com o conteúdo da versão antiga, o que gera uma versão *nova* (Decisão 4: "restaurar cria uma versão nova, nunca apaga as intermediárias").
+[src/lib/versoes.ts](../../../src/lib/versoes.ts): `listarVersoesEntidade`/`restaurarVersaoEntidade`/`listarVersoesNota`/`restaurarVersaoNota`. Restaurar nunca reescreve histórico — chama o próprio `atualizarEntidade`/`atualizarNota` com o conteúdo da versão antiga, o que gera uma versão *nova* (Decisão 4: "restaurar cria uma versão nova, nunca apaga as intermediárias").
 
 Testado com dado real: v1 → v2 → restaurar v1 → confirma que virou v3 (3 versões no total, nenhuma apagada).
 

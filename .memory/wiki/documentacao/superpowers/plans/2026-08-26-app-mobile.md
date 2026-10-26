@@ -8,7 +8,7 @@
 
 **Tech Stack:** Expo (Expo Go), TypeScript strict, expo-router, zustand, react-native-svg, react-native-reanimated, react-native-gesture-handler, expo-blur, expo-video, jest-expo + @testing-library/react-native.
 
-**Spec:** `docs/superpowers/specs/2026-08-26-bimo-mobile-design.md`
+**Spec:** `.memory/wiki/documentacao/superpowers/specs/2026-08-26-bimo-mobile-design.md`
 
 ## Global Constraints
 

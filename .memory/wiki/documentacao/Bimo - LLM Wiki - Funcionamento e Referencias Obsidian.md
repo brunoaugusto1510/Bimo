@@ -174,12 +174,12 @@ Para cada caso, preencha: **resultado esperado, resultado observado, origem cons
 | --- | --- |
 | Operação, ativação e limites | [Wiki Viva — Operação](./Bimo%20-%20Wiki%20Viva%20-%20Operacao.md) e [Pendências](./Bimo%20-%20Wiki%20Viva%20-%20Pendencias.md) |
 | Histórico das entregas | [Plano de Notas no Banco](./Bimo%20-%20Plano%20de%20Notas%20no%20Banco.md) |
-| Fontes, afirmações e estrutura | [tipos.ts](../src/lib/wiki/tipos.ts), [estrutura.ts](../src/lib/wiki/estrutura.ts) e [automacao-tipos.ts](../src/lib/wiki/automacao-tipos.ts) |
-| Geração e validação | [gerador.ts](../src/lib/wiki/gerador.ts) e [automacao.ts](../src/lib/wiki/automacao.ts) |
-| Recuperação durante compilação | [recuperacao.ts](../src/lib/wiki/recuperacao.ts) |
-| Consulta e evidências no chat | [consulta.ts](../src/lib/wiki/consulta.ts) e [ferramentas.ts](../src/lib/ferramentas.ts) |
-| Busca textual no repositório | [banco.ts](../src/lib/repositorio-de-notas/banco.ts) |
-| Configuração e disponibilidade | [configuracao.ts](../src/lib/wiki/configuracao.ts) e [disponibilidade.ts](../src/lib/wiki/disponibilidade.ts) |
-| Telas e estados | [PainelDaWiki.tsx](../src/components/wiki/PainelDaWiki.tsx), [NeuronioAberto.tsx](../src/components/wiki/NeuronioAberto.tsx), [cliente.ts](../src/lib/wiki/cliente.ts) e [observabilidade-tipos.ts](../src/lib/wiki/observabilidade-tipos.ts) |
+| Fontes, afirmações e estrutura | [tipos.ts](../../../src/lib/wiki/tipos.ts), [estrutura.ts](../../../src/lib/wiki/estrutura.ts) e [automacao-tipos.ts](../../../src/lib/wiki/automacao-tipos.ts) |
+| Geração e validação | [gerador.ts](../../../src/lib/wiki/gerador.ts) e [automacao.ts](../../../src/lib/wiki/automacao.ts) |
+| Recuperação durante compilação | [recuperacao.ts](../../../src/lib/wiki/recuperacao.ts) |
+| Consulta e evidências no chat | [consulta.ts](../../../src/lib/wiki/consulta.ts) e [ferramentas.ts](../../../src/lib/ferramentas.ts) |
+| Busca textual no repositório | [banco.ts](../../../src/lib/repositorio-de-notas/banco.ts) |
+| Configuração e disponibilidade | [configuracao.ts](../../../src/lib/wiki/configuracao.ts) e [disponibilidade.ts](../../../src/lib/wiki/disponibilidade.ts) |
+| Telas e estados | [PainelDaWiki.tsx](../../../src/components/wiki/PainelDaWiki.tsx), [NeuronioAberto.tsx](../../../src/components/wiki/NeuronioAberto.tsx), [cliente.ts](../../../src/lib/wiki/cliente.ts) e [observabilidade-tipos.ts](../../../src/lib/wiki/observabilidade-tipos.ts) |
 
 Os links externos nas seções 1 e 3 são as fontes da pesquisa sobre o padrão e o Obsidian. Nenhuma descrição de recurso externo deve ser tratada como validação prática do plugin.

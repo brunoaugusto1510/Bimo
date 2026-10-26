@@ -31,12 +31,12 @@ Esses casos justificam melhorar a decisão editorial. Não demonstram que todo n
 
 | Área | Estado conferido | Consequência para o plano |
 | --- | --- | --- |
-| [gerador.ts](../src/lib/wiki/gerador.ts) | Pede utilidade, ausência de repetição e enriquecimento, mas sem contrato editorial explícito. | Tornar a escolha do destino uma decisão estruturada. |
-| [automacao.ts](../src/lib/wiki/automacao.ts) | Até três propostas por trecho; uma afirmação válida pode publicar uma página. | Separar sustentação factual de mérito de publicação. |
-| [recuperacao.ts](../src/lib/wiki/recuperacao.ts) | Busca textual, aliases, dependências, até seis candidatas e índice limitado. | Verificar se o destino adequado foi disponibilizado antes de atribuir uma criação ao modelo. |
-| [afirmacoes.ts](../src/lib/wiki/afirmacoes.ts) | O ID depende do texto e das evidências normalizados. | Nova evidência pode mudar o ID; avaliar reforço de evidência sem duplicar a proposição. |
-| [observabilidade.ts](../src/lib/wiki/observabilidade.ts) | Diagnóstico identifica alguns padrões de duplicata, sem fusão semântica. | Não tratar diagnóstico atual como revisão editorial completa. |
-| [tipos.ts](../src/lib/wiki/tipos.ts) | Evidências, fontes, afirmações, estrutura e destino de publicação têm contratos próprios. | Preservar revisão, procedência e compatibilidade ao evoluir o contrato. |
+| [gerador.ts](../../../src/lib/wiki/gerador.ts) | Pede utilidade, ausência de repetição e enriquecimento, mas sem contrato editorial explícito. | Tornar a escolha do destino uma decisão estruturada. |
+| [automacao.ts](../../../src/lib/wiki/automacao.ts) | Até três propostas por trecho; uma afirmação válida pode publicar uma página. | Separar sustentação factual de mérito de publicação. |
+| [recuperacao.ts](../../../src/lib/wiki/recuperacao.ts) | Busca textual, aliases, dependências, até seis candidatas e índice limitado. | Verificar se o destino adequado foi disponibilizado antes de atribuir uma criação ao modelo. |
+| [afirmacoes.ts](../../../src/lib/wiki/afirmacoes.ts) | O ID depende do texto e das evidências normalizados. | Nova evidência pode mudar o ID; avaliar reforço de evidência sem duplicar a proposição. |
+| [observabilidade.ts](../../../src/lib/wiki/observabilidade.ts) | Diagnóstico identifica alguns padrões de duplicata, sem fusão semântica. | Não tratar diagnóstico atual como revisão editorial completa. |
+| [tipos.ts](../../../src/lib/wiki/tipos.ts) | Evidências, fontes, afirmações, estrutura e destino de publicação têm contratos próprios. | Preservar revisão, procedência e compatibilidade ao evoluir o contrato. |
 
 ## 3. Entregáveis
 

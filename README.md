@@ -24,7 +24,7 @@ GPT-6 Luna consulta e escreve nelas por function calling na Responses API da Ope
 - acesso por senha (cookie de sessão assinado)
 
 O andamento detalhado e as pendências conhecidas estão em
-[docs/Bimo - Plano de Notas no Banco.md](docs/Bimo%20-%20Plano%20de%20Notas%20no%20Banco.md).
+[.memory/wiki/documentacao/Bimo - Plano de Notas no Banco.md](.memory/wiki/documentacao/Bimo%20-%20Plano%20de%20Notas%20no%20Banco.md).
 
 ## Configurar
 
@@ -67,7 +67,7 @@ Em um ambiente novo, revise e aplique as migrações `0007`–`0011`, configure 
 
 Salvar não espera pelo modelo. A fila persistente agrupa autosaves, recupera a base anterior em lotes e publica nota, histórico, evidências e progresso atomicamente. Edições manuais ficam protegidas. Orçamento é reservado antes de cada chamada; consumo incerto continua comprometido. O teto é em tokens por usuário/dia UTC, sem equivalência fixa em dinheiro.
 
-Não há página nem rota para compilar à mão: a manutenção é só pela fila. `GET /api/wiki` expõe o índice e as evidências das sínteses para as telas e o agente. Em memória, os dados são descartáveis e não servem para produção. Citação literal verificada não comprova uma inferência: a qualidade semântica exige avaliação com notas aprovadas. Veja [operação, ativação, limites e testes](./docs/Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
+Não há página nem rota para compilar à mão: a manutenção é só pela fila. `GET /api/wiki` expõe o índice e as evidências das sínteses para as telas e o agente. Em memória, os dados são descartáveis e não servem para produção. Citação literal verificada não comprova uma inferência: a qualidade semântica exige avaliação com notas aprovadas. Veja [operação, ativação, limites e testes](.memory/wiki/documentacao/Bimo%20-%20Wiki%20Viva%20-%20Operacao.md).
 
 ## Rodar
 

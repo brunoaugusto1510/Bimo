@@ -8,7 +8,7 @@
 
 **Tech Stack:** React Native 0.86 / Expo SDK 57, TypeScript strict, Reanimated 4.5, react-native-gesture-handler 2.32, react-native-svg 15.15, zustand 5, Jest + jest-expo + @testing-library/react-native.
 
-**Spec:** `docs/superpowers/specs/2026-08-31-grafo-e-bandeja-design.md`
+**Spec:** `.memory/wiki/documentacao/superpowers/specs/2026-08-31-grafo-e-bandeja-design.md`
 
 ## Global Constraints
 
