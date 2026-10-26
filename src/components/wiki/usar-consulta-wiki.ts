@@ -14,7 +14,10 @@ export function useConsultaWiki<T>(url: string | null, revisao = 0) {
         const dados = await r.json() as T;
         if (!controle.signal.aborted) definir({ url, dados });
       } catch (erro) {
-        if (!controle.signal.aborted) definir({ url, erro: erro instanceof Error ? erro.message : "Não consegui carregar estes dados.", status: (erro as { status?: number }).status });
+        // Uma falha passageira não apaga o que já estava na tela: os dados anteriores continuam, com o erro ao lado.
+        if (!controle.signal.aborted) definir((anterior) => ({ url, dados: anterior?.url === url ? anterior.dados : undefined,
+          // Só as mensagens que o próprio hook escreveu (em português) chegam à tela; "Failed to fetch" e afins não.
+          erro: erro instanceof Error && typeof (erro as { status?: number }).status === "number" ? erro.message : "Não consegui carregar estes dados.", status: (erro as { status?: number }).status }));
       }
     };
     void carregar();

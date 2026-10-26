@@ -30,7 +30,8 @@ import type { RealceNoGrafo } from "@/lib/realce-no-grafo";
 import type { IdDeNota, ItemDeNotas } from "@/lib/types";
 import PainelDaWiki from "./wiki/PainelDaWiki";
 import NeuronioAberto from "./wiki/NeuronioAberto";
-import { acaoWiki } from "./wiki/estilos";
+import { chip } from "./wiki/estilos";
+import { neuroniosDoFiltro, type FiltroDoCerebro } from "./wiki/filtro-do-cerebro";
 import { useConsultaWiki } from "./wiki/usar-consulta-wiki";
 import type { ResumoDoCerebro } from "@/lib/wiki/cliente";
 import { useFocoDoPainel } from "./wiki/usar-foco-do-painel";
@@ -67,13 +68,27 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const [painelWiki, definirPainelWiki] = useState<"cerebro" | "diario" | null>(null);
   const [neuronioAberto, abrirNeuronioId] = useState<string | null>(null);
   const focoNeuronio = useFocoDoPainel(neuronioAberto);
-  const [somenteNeuronios, filtrarNeuronios] = useState(false);
+  const [filtroDoCerebro, filtrarCerebro] = useState<FiltroDoCerebro>("tudo");
   const neuronios = useMemo(() => new Set(grafo.nos.flatMap((n) => n.tipo === "nota" && n.neuronio ? [n.id] : [])), [grafo.nos]);
-  const cerebroWiki = useConsultaWiki<ResumoDoCerebro>(neuronios.size ? "/api/wiki/cerebro" : null);
+  // Com o cérebro aberto consulta mesmo sem neurônio no grafo: é assim que o primeiro, nascido em segundo plano, é descoberto.
+  const cerebroWiki = useConsultaWiki<ResumoDoCerebro>(neuronios.size || painelWiki ? "/api/wiki/cerebro" : null);
+  // Um neurônio que nasceu em segundo plano (consolidação, Cron) não chega ao grafo por nenhuma escrita do usuário: quando o
+  // cérebro traz um id que o grafo desconhece, pede a mesma atualização por API que o agente usa, sem tocar na árvore.
+  useEffect(() => {
+    // Compara com a árvore completa, não só com os nós do grafo: um neurônio que o filtro do grafo oculta (sem raízes, por exemplo)
+    // já é conhecido, e pedir de novo a mesma atualização a cada dez segundos não traria nada.
+    const conhecidas = indexarNotas(itens);
+    if (cerebroWiki?.dados?.neuronios?.some((n) => !neuronios.has(n.id) && !conhecidas.has(n.id))) window.dispatchEvent(new Event("bimo:nota-alterada-pelo-agente"));
+  }, [cerebroWiki?.dados, neuronios, itens]);
   const estadosWiki = useMemo(() => new Map(cerebroWiki?.dados?.neuronios?.map((n) => [n.id, n.estado]) ?? []), [cerebroWiki?.dados]);
+  // "Nascidos esta semana" e "Precisam de você" recortam o grafo aos neurônios do filtro; "Tudo" e "Só neurônios" não recortam por id.
+  const [agoraDoFiltro] = useState(() => Date.now());
+  const neuroniosVisiveis = useMemo(() => neuroniosDoFiltro(cerebroWiki?.dados?.neuronios ?? [], filtroDoCerebro, agoraDoFiltro), [cerebroWiki?.dados, filtroDoCerebro, agoraDoFiltro]);
   // Nota selecionada no grafo da aba Gráfico — a que ganha o cartão de foco. É
   // separada da aberta: selecionar é "olhar", abrir é "ler".
   const [notaFocada, setNotaFocada] = useState<IdDeNota | null>(null);
+  // Com o cérebro filtrado, uma seleção que o filtro esconde deixa de valer: nada de foco (nem cartão) num nó que não está desenhado.
+  const selecaoVisivel = notaFocada && (painelWiki !== "cerebro" || filtroDoCerebro === "tudo" || (neuronios.has(notaFocada) && (neuroniosVisiveis?.has(notaFocada) ?? true))) ? notaFocada : null;
   // Cada escolha na barra lateral pede à câmera que vá até a nota — inclusive de
   // novo, se ela já era a selecionada (ver `focoPedido` no GrafoDeFundo).
   const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
@@ -123,6 +138,15 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const noGrafico = estado.ativa === ABA_DO_GRAFICO;
   const idDaNotaAberta = aba?.tipo === "nota" ? idAtual(aba) : null;
   const dadosDaNotaFocada = notaFocada ? notasPorId.get(notaFocada) : undefined;
+  // No cérebro, escolher um neurônio abre o cartão dele por cima do grafo; as origens são as pontas das sinapses.
+  const neuronioSelecionado = useMemo(() => {
+    if (!selecaoVisivel || !neuronios.has(selecaoVisivel)) return null;
+    const origens = grafo.arestas
+      .flatMap((a) => a.tipo !== "sinapse" ? [] : a.de === selecaoVisivel ? [a.para] : a.para === selecaoVisivel ? [a.de] : [])
+      .flatMap((origem) => notasPorId.get(origem)?.titulo ?? []);
+    const nota = notasPorId.get(selecaoVisivel);
+    return { id: selecaoVisivel, titulo: nota?.titulo ?? "Neurônio", pasta: nota ? grupoDaPasta(nota.pasta) : null, origens };
+  }, [selecaoVisivel, neuronios, grafo.arestas, notasPorId]);
   const tituloDaNota = useCallback((id: IdDeNota) => notasPorId.get(id)?.titulo, [notasPorId]);
   const resumoDoUltimoRastro = useMemo(() => resumoDoRastro(rastro, tituloDaNota), [rastro, tituloDaNota]);
 
@@ -197,6 +221,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   /** No Gráfico a barra lateral seleciona o nó; nas demais abas abre a nota. */
   function escolherNoMenu(id: IdDeNota) {
     if (emNotas && noGrafico) {
+      // Como no clique do grafo: uma nota pessoal escolhida com o cérebro aberto volta ao grafo normal.
+      if (painelWiki === "cerebro" && !neuronios.has(id)) definirPainelWiki(null);
       setNotaFocada(id);
       setPedidoDeFoco((n) => n + 1);
       setMenuAberto(false);
@@ -335,7 +361,10 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
 
         {/* min-w-0 impede que uma mensagem longa estique este painel e quebre o layout. */}
         <main className={`${menuAberto ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
-          <nav aria-label="Conhecimento do Bimo" className="flex shrink-0 gap-2 border-b border-borda bg-painel px-3 py-1"><button className={acaoWiki} onClick={() => mostrarWiki("cerebro")}>Cérebro</button><button className={acaoWiki} onClick={() => mostrarWiki("diario")}>Diário</button></nav>
+          <nav aria-label="Conhecimento do Bimo" className="flex shrink-0 gap-2 border-b border-borda bg-painel px-3 py-1.5">
+            <button type="button" aria-pressed={painelWiki === "cerebro"} className={chip(painelWiki === "cerebro")} onClick={() => painelWiki === "cerebro" ? definirPainelWiki(null) : mostrarWiki("cerebro")}><span aria-hidden>◈</span>Cérebro</button>
+            <button type="button" aria-pressed={painelWiki === "diario"} className={chip(painelWiki === "diario")} onClick={() => painelWiki === "diario" ? definirPainelWiki(null) : mostrarWiki("diario")}>Diário</button>
+          </nav>
           <EspacoDeTrabalho
             ativo={emNotas}
             estado={estado}
@@ -359,8 +388,9 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             aoIrParaNota={() => setPaletaAberta(true)}
           >
             <GrafoDeFundo
-              comPainelWiki={painelWiki === "cerebro"}
-              somenteNeuronios={painelWiki === "cerebro" && somenteNeuronios}
+              somenteNeuronios={painelWiki === "cerebro" && filtroDoCerebro !== "tudo"}
+              neuroniosVisiveis={painelWiki === "cerebro" ? neuroniosVisiveis : null}
+              chaveDoFiltro={painelWiki === "cerebro" ? filtroDoCerebro : "tudo"}
               estadosWiki={estadosWiki}
               nos={grafo.nos}
               arestas={grafo.arestas}
@@ -373,12 +403,11 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
               onAbrirNota={(id) => neuronios.has(id) ? abrirNeuronio(id) : abrirNota(id)}
               interativo={emNotas}
               pausado={emNotas && (!noGrafico || Boolean(neuronioAberto) || painelWiki === "diario")}
-              selecionado={notaFocada}
+              selecionado={selecaoVisivel}
               onSelecionar={(id) => {
                 setNotaFocada(id);
-                if (painelWiki === "cerebro" && id) {
-                  if (neuronios.has(id)) abrirNeuronio(id); else definirPainelWiki(null);
-                }
+                // Um neurônio ganha o cartão do cérebro; uma nota pessoal volta ao grafo normal, com o cartão de foco dela.
+                if (painelWiki === "cerebro" && id && !neuronios.has(id)) definirPainelWiki(null);
               }}
               focoPedido={pedidoDeFoco}
               controleRef={controleDoGrafo}
@@ -438,8 +467,36 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                 )}
               </div>
             )}
-            {painelWiki && <PainelDaWiki tela={painelWiki} somenteNeuronios={somenteNeuronios} aoFiltrarNeuronios={filtrarNeuronios} aoFechar={() => definirPainelWiki(null)} aoAbrirNeuronio={abrirNeuronio} aoVerCerebro={() => mostrarWiki("cerebro")} />}
-            {neuronioAberto && <section ref={focoNeuronio} tabIndex={-1} aria-label="Neurônio aberto" className="outline-none absolute inset-0 z-30 overflow-y-auto bg-painel"><header className="sticky top-0 z-10 flex justify-between border-b border-borda bg-painel p-2"><button className={acaoWiki} onClick={() => mostrarWiki("cerebro")}>← Cérebro</button><button className={acaoWiki} onClick={() => abrirNeuronioId(null)}>Fechar neurônio</button></header><NeuronioAberto key={neuronioAberto} id={neuronioAberto} tituloDaNota={tituloDaNota} aoAbrirNota={(id) => neuronios.has(id) ? abrirNeuronio(id) : abrirNota(id)} aoEditar={(id) => { abrirNota(id); despachar({ tipo: "abrir-nota", id, novaAba: false, modo: "edicao" }); }} aoPerguntar={perguntarAoBimo} /></section>}
+            {painelWiki && (
+              <PainelDaWiki
+                tela={painelWiki}
+                filtro={filtroDoCerebro}
+                aoFiltrar={filtrarCerebro}
+                selecionado={neuronioSelecionado}
+                aoFechar={() => definirPainelWiki(null)}
+                aoAbrirNeuronio={abrirNeuronio}
+                aoVerCerebro={() => mostrarWiki("cerebro")}
+                // Com um filtro as origens não estão desenhadas: enquadrá-las mostraria só o vazio.
+                aoVerOrigens={filtroDoCerebro === "tudo" ? () => controleDoGrafo.current?.enquadrarVizinhos() : undefined}
+                aoPerguntar={perguntarAoBimo}
+                aoDesselecionar={() => setNotaFocada(null)}
+                aoAbrirNota={(id) => { definirPainelWiki(null); abrirNota(id); }}
+              />
+            )}
+            {neuronioAberto && (
+              <section ref={focoNeuronio} tabIndex={-1} aria-label="Neurônio aberto" className="absolute inset-0 z-30 overflow-y-auto bg-painel outline-none">
+                <NeuronioAberto
+                  key={neuronioAberto}
+                  id={neuronioAberto}
+                  tituloDaNota={tituloDaNota}
+                  aoAbrirNota={(id) => neuronios.has(id) ? abrirNeuronio(id) : abrirNota(id)}
+                  aoEditar={(id) => { abrirNota(id); despachar({ tipo: "abrir-nota", id, novaAba: false, modo: "edicao" }); }}
+                  aoPerguntar={perguntarAoBimo}
+                  aoVoltar={() => mostrarWiki("cerebro")}
+                  aoFechar={() => abrirNeuronioId(null)}
+                />
+              </section>
+            )}
           </EspacoDeTrabalho>
         </main>
       </div>

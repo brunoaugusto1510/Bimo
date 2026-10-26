@@ -55,6 +55,7 @@ import {
   type Foco,
   type NoVisual,
 } from "./desenhar-grafo";
+import { ehNeuronio, geometriaDoNeuronio, noVisivel } from "./desenhar-neuronio";
 import { indexarLigacoes } from "./desenhar-rastro";
 
 /** Comandos de câmera que a barra do grafo (fora deste componente) dispara. */
@@ -68,8 +69,15 @@ export type ControleDoGrafo = {
 };
 
 type Props = {
-  comPainelWiki?: boolean;
+  /** Mostra só os neurônios: notas e sinapses somem do desenho e do clique, sem mexer no layout. */
   somenteNeuronios?: boolean;
+  /**
+   * Com `somenteNeuronios`, só os neurônios desta lista (por id) aparecem e respondem ao clique.
+   * `null` ou ausente: todos. Sem `somenteNeuronios`, é ignorado.
+   */
+  neuroniosVisiveis?: ReadonlySet<string> | null;
+  /** Nome do filtro do cérebro em uso: quando muda, a câmera enquadra o que ficou desenhado. */
+  chaveDoFiltro?: string;
   estadosWiki?: ReadonlyMap<string, EstadoDoNeuronio>;
   nos: NoDoGrafo[];
   arestas: ArestaDoGrafo[];
@@ -204,8 +212,9 @@ function pontoMedio(a: Ponto, b: Ponto): Ponto {
  * ficam o loop de animação e os gestos.
  */
 export default function GrafoDeFundo({
-  comPainelWiki = false,
   somenteNeuronios = false,
+  neuroniosVisiveis = null,
+  chaveDoFiltro = "",
   estadosWiki,
   nos,
   arestas,
@@ -264,12 +273,12 @@ export default function GrafoDeFundo({
   const pausadoRef = useRef(pausado);
   const selecionadoRef = useRef(selecionado);
   const notaAbertaRef = useRef(notaAberta);
-  const comPainelWikiRef = useRef(comPainelWiki);
   const estadosWikiRef = useRef(estadosWiki);
   const somenteNeuroniosRef = useRef(somenteNeuronios);
+  const neuroniosVisiveisRef = useRef(neuroniosVisiveis);
   useEffect(() => { somenteNeuroniosRef.current = somenteNeuronios; }, [somenteNeuronios]);
+  useEffect(() => { neuroniosVisiveisRef.current = neuroniosVisiveis; }, [neuroniosVisiveis]);
   useEffect(() => { estadosWikiRef.current = estadosWiki; }, [estadosWiki]);
-  useEffect(() => { comPainelWikiRef.current = comPainelWiki; }, [comPainelWiki]);
 
   const mapaDeCores = useMemo(
     () => criarMapaDeCoresPorGrupo(nos.flatMap((n) => (n.tipo === "nota" ? [n.grupo] : []))),
@@ -449,7 +458,6 @@ export default function GrafoDeFundo({
       canvas.style.width = `${largura}px`;
       canvas.style.height = `${altura}px`;
       contexto.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (comPainelWikiRef.current) acoesRef.current.enquadrar();
     };
     const observador = new ResizeObserver(ajustarTamanho);
     observador.observe(container);
@@ -463,7 +471,11 @@ export default function GrafoDeFundo({
      * ajusta. O teto em 1 faz o zoom só afastar, nunca ampliar um grafo pequeno.
      */
     const enquadramentoDoGrafo = (): Camera | null => {
-      const caixa = caixaDosNos(nosRef.current, "desenhada");
+      // Com um filtro do cérebro, enquadra só o que continua desenhado.
+      const visiveis = somenteNeuroniosRef.current
+        ? new Set(nosRef.current.filter((no) => noVisivel(no, { somenteNeuronios: true, neuroniosVisiveis: neuroniosVisiveisRef.current })).map((no) => no.id))
+        : null;
+      const caixa = caixaDosNos(nosRef.current, "desenhada", visiveis ? (no) => visiveis.has(no.id) : undefined);
       if (!caixa) return null;
       const { largura, altura } = tamanho();
       // No modo fundo o cérebro fica em cima e a conversa embaixo: só a parte de cima enquadra.
@@ -672,6 +684,7 @@ export default function GrafoDeFundo({
           movimentoReduzido,
           estadosWiki: estadosWikiRef.current,
           somenteNeuronios: somenteNeuroniosRef.current,
+          neuroniosVisiveis: neuroniosVisiveisRef.current,
           cores,
           corDoNo,
           raioNaTela: raioDe,
@@ -693,7 +706,16 @@ export default function GrafoDeFundo({
       return { x: evento.clientX - retangulo.left, y: evento.clientY - retangulo.top };
     };
 
-    const SO_NOTAS = (no: NoVisual) => no.tipo === "nota" && (!somenteNeuroniosRef.current || no.neuronio === true);
+    // Com "só neurônios", o clique segue o desenho: só acerta os neurônios que estão na tela.
+    const SO_NOTAS = (no: NoVisual) =>
+      no.tipo === "nota" &&
+      noVisivel(no, {
+        somenteNeuronios: somenteNeuroniosRef.current,
+        neuroniosVisiveis: neuroniosVisiveisRef.current,
+      });
+    // O neurônio é desenhado maior que a bolinha da nota: o clique acerta o anel inteiro.
+    const raioDoAcerto = (no: NoVisual): number =>
+      ehNeuronio(no) ? geometriaDoNeuronio(raioDe(no)).anel : raioDe(no);
 
     // Acerta onde o nó foi desenhado no último quadro (a vaga no cérebro, a respiração), não onde a simulação o deixou.
     const noEm = (ponto: Ponto, margem: number, apenasNotas = false): NoVisual | null =>
@@ -701,7 +723,7 @@ export default function GrafoDeFundo({
         nosRef.current,
         cameraRef.current,
         ponto,
-        raioDe,
+        raioDoAcerto,
         margem,
         apenasNotas || somenteNeuroniosRef.current ? SO_NOTAS : undefined,
       );
@@ -903,12 +925,14 @@ export default function GrafoDeFundo({
     if (interativo && id) acoesRef.current.mostrarNota(id);
   }, [interativo, focoPedido]);
 
+  // Trocar o filtro do cérebro leva a câmera ao que sobrou. A chave é o nome do filtro escolhido, não o
+  // conteúdo do Set: a consulta de 30 s pode mudar quem está no recorte, e isso não deve tirar a câmera do lugar.
   useEffect(() => {
     acoesRef.current.enquadrar();
-  }, [comPainelWiki]);
+  }, [chaveDoFiltro]);
 
   return (
-    <div ref={containerRef} className={comPainelWiki ? "absolute inset-x-0 top-16 -z-0 h-48 md:right-80 md:bottom-0 md:h-auto" : "absolute inset-0 -z-0"}>
+    <div ref={containerRef} className="absolute inset-0 -z-0">
       <canvas
         ref={canvasRef}
         role={interativo && !pausado ? "img" : undefined}

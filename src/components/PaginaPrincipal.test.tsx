@@ -105,7 +105,7 @@ it("Cérebro e Diário preservam os mesmos elementos do Chat e do Grafo", async 
   await usuario.type(campo, "Meu rascunho continua aqui");
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(Response.json(url.includes("diario") ? { eventos: [], proximo: null } : { resumo: { neuronios: 0, sinapses: 0, notasLidas: 0, totalDeNotas: 2, emConsolidacao: 2, impedidas: 0 }, energia: null, neuronios: [] }))));
   await usuario.click(screen.getByRole("button", { name: /^Cérebro$/ }));
-  expect(await screen.findByText("Ainda não nasceu nenhum neurônio.", { exact: false })).toBeInTheDocument();
+  expect(await screen.findByText(/Ainda não nasceu nenhum neurônio/)).toBeInTheDocument();
   await usuario.click(screen.getByRole("button", { name: /^Diário$/ }));
   expect(await screen.findByText(/Nenhuma atividade neste período/)).toBeInTheDocument();
   await usuario.click(abaBimo());
