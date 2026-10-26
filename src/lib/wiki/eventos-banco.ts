@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { paginasWiki, trabalhosWiki } from "../db/schema";
+import { conceitosWiki, paginasWiki, trabalhosWiki } from "../db/schema";
 import { ESTABILIDADE_DA_WIKI_SEGUNDOS } from "./configuracao";
 import { automacaoWikiDisponivel } from "./disponibilidade";
 import type { TransacaoWiki } from "./fila-banco";
@@ -24,4 +24,8 @@ export async function acompanharOrganizacaoWiki(tx: TransacaoWiki, userId: strin
   if (!(await automacaoWikiDisponivel(tx))) return;
   await tx.update(trabalhosWiki).set({ revisao })
     .where(and(eq(trabalhosWiki.userId, userId), sql`${trabalhosWiki.notaId} = ${notaId}::bigint`, eq(trabalhosWiki.revisao, revisao - 1)));
+  // As sínteses que se apoiavam na revisão anterior continuam em dia: sem isso renomear uma origem as deixaria "reconsolidando"
+  // para sempre, e a origem não roda de novo. Quem estava defasado de verdade (origem editada e ainda não lida) não é tocado.
+  await tx.update(conceitosWiki).set({ origens: sql`jsonb_set(${conceitosWiki.origens}, array[${notaId}]::text[], to_jsonb(${revisao}::int))` })
+    .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.origens} ? ${notaId}`, sql`(${conceitosWiki.origens} ->> ${notaId})::int = ${revisao - 1}`));
 }

@@ -23,7 +23,8 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-22T12:
 afterEach(() => vi.useRealTimers());
 
 async function comSintese() {
-  const repo = criarRepositorioEmMemoria([{ titulo: "Limites", conteudo: `${LIMITE_10}. ${PRAZO}.` }]);
+  // A terceira frase só é citada quando a nota é relida (ver `reler`).
+  const repo = criarRepositorioEmMemoria([{ titulo: "Limites", conteudo: `${LIMITE_10}. ${PRAZO}. A partir de março ${LIMITE_20}.` }]);
   vi.advanceTimersByTime(ESPERA);
   await rodar(repo, async (c) => ({ proposta: { propostas: [proposta({ afirmacoes: [
     afirmacao("Limite de 10 itens", c.origem.id, LIMITE_10), afirmacao("Prazo de 5 dias", c.origem.id, PRAZO)] })] }, uso: null }));
@@ -35,6 +36,15 @@ async function novaNota(repo: ReturnType<typeof criarRepositorioEmMemoria>) {
   const r = await repo.criarNota({ titulo: "Atualização", conteudo: `A partir de março ${LIMITE_20}.` }, autor);
   vi.advanceTimersByTime(ESPERA);
   return r.tipo === "ok" ? r.nota.id : "";
+}
+/**
+ * Só a nota que sustenta uma afirmação pode trocá-la ou retirá-la. Para testar a mecânica, a origem é relida: as afirmações
+ * (todas dela, e ainda sustentadas) são mexidas pela própria nota. O contrário (outra nota tentando) tem seu teste abaixo.
+ */
+async function reler(repo: ReturnType<typeof criarRepositorioEmMemoria>) {
+  expect(await repo.wiki!.automacao!.reprocessar("1", 1)).toBe("ok");
+  vi.advanceTimersByTime(ESPERA);
+  return "1";
 }
 const textos = async (repo: ReturnType<typeof criarRepositorioEmMemoria>, id: string) => (await repo.wiki!.obter(id))!.afirmacoes.map((a) => a.texto);
 
@@ -65,7 +75,7 @@ describe("ids de afirmação", () => {
 describe("enriquecer mantém, substitui ou retira", () => {
   it("substitui uma afirmação por id: a antiga sai mesmo com a evidência dela ainda existindo", async () => {
     const { repo, id, limite10 } = await comSintese();
-    const origem = await novaNota(repo);
+    const origem = await reler(repo);
     const r = await rodar(repo, com(proposta({ alvoId: id, substituicoes: [{ id: limite10.id, afirmacao: afirmacao("Limite de 20 itens a partir de março", origem, LIMITE_20) }] })));
     expect(r).toMatchObject({ tipo: "processado", publicadas: 1, descartadas: 0 });
     expect(await textos(repo, id)).toEqual(expect.arrayContaining(["Prazo de 5 dias", "Limite de 20 itens a partir de março"]));
@@ -87,7 +97,7 @@ describe("enriquecer mantém, substitui ou retira", () => {
 
   it("retira uma afirmação por id quando a nota traz uma afirmação nova no lugar", async () => {
     const { repo, id, limite10 } = await comSintese();
-    const origem = await novaNota(repo);
+    const origem = await reler(repo);
     const r = await rodar(repo, com(proposta({ alvoId: id, retiradas: [limite10.id], afirmacoes: [afirmacao("Limite de 20 itens a partir de março", origem, LIMITE_20)] })));
     expect(r).toMatchObject({ publicadas: 1, descartadas: 0 });
     expect(await textos(repo, id)).toEqual(["Prazo de 5 dias", "Limite de 20 itens a partir de março"]);
@@ -96,9 +106,32 @@ describe("enriquecer mantém, substitui ou retira", () => {
 
   it("retirar tudo mas trazer uma afirmação nova é permitido", async () => {
     const { repo, id, limite10, prazo } = await comSintese();
-    const origem = await novaNota(repo);
+    const origem = await reler(repo);
     await rodar(repo, com(proposta({ alvoId: id, retiradas: [limite10.id, prazo.id], afirmacoes: [afirmacao("Limite de 20 itens a partir de março", origem, LIMITE_20)] })));
     expect(await textos(repo, id)).toEqual(["Limite de 20 itens a partir de março"]);
+  });
+
+  it("outra nota não troca nem retira o que a nota de origem sustenta: o que ela traz é só acrescentado", async () => {
+    const { repo, id, limite10, prazo } = await comSintese();
+    const origem = await novaNota(repo);
+    const r = await rodar(repo, com(proposta({ alvoId: id, retiradas: [prazo.id],
+      substituicoes: [{ id: limite10.id, afirmacao: afirmacao("Limite de 20 itens a partir de março", origem, LIMITE_20) }],
+      afirmacoes: [afirmacao("Há uma atualização do limite a partir de março", origem, LIMITE_20)] })));
+    expect(r).toMatchObject({ publicadas: 1, descartadas: 0 });
+    // Nada do que "Limites" afirma saiu; a divergência fica para o modelo registrar, não para esta nota resolver.
+    expect(await textos(repo, id)).toEqual(["Limite de 10 itens", "Prazo de 5 dias", "Há uma atualização do limite a partir de março"]);
+  });
+
+  it("uma afirmação com evidência de duas notas só pode ser mexida por quem a sustenta sozinha: nenhuma das duas", async () => {
+    const { repo, id, limite10 } = await comSintese();
+    const origem = await novaNota(repo);
+    // Reforça o limite com a nota nova: agora ele é sustentado por duas origens.
+    await rodar(repo, com(proposta({ alvoId: id, reforcos: [{ id: limite10.id, evidencias: [{ fonteId: origem, citacao: LIMITE_20 }] }] } as Partial<Proposta>)));
+    expect((await repo.wiki!.obter(id))!.afirmacoes.find((a) => a.id === limite10.id)!.evidencias).toHaveLength(2);
+    // A releitura da origem original não pode retirá-la: a outra nota também a sustenta.
+    await reler(repo);
+    await rodar(repo, com(proposta({ alvoId: id, retiradas: [limite10.id], afirmacoes: [afirmacao("Limite de 20 itens a partir de março", "1", LIMITE_20)] })));
+    expect(await textos(repo, id)).toContain("Limite de 10 itens");
   });
 
   it("ids desconhecidos são ignorados, sem derrubar o que é válido", async () => {
@@ -235,7 +268,7 @@ describe("só se mexe no que o modelo viu", () => {
 
   it("afirmações gravadas antes dos ids ganham o mesmo id no payload e no servidor, e podem ser retiradas por ele", async () => {
     const { repo, id, limite10 } = await comSintese();
-    const origem = await novaNota(repo);
+    const origem = await reler(repo);
     // Como estavam gravadas antes dos ids: o campo simplesmente não existe.
     const semId = (m: Awaited<ReturnType<NonNullable<typeof repo.wiki>["obter"]>>) => m && { ...m, afirmacoes: m.afirmacoes.map((a) => {
       const copia: Partial<AfirmacaoWiki> = { ...a }; delete copia.id; return copia as AfirmacaoWiki;
@@ -266,15 +299,10 @@ describe("remoções e trocas em massa, e dependentes grandes", () => {
       afirmacoes: frases.slice(24).map((f, i) => afirmacao(`Afirmação ${i + 25}`, c.origem.id, f)) })] }, uso: null }));
     return { repo, id };
   }
-  const novoFato = async (repo: ReturnType<typeof criarRepositorioEmMemoria>) => {
-    await repo.criarNota({ titulo: "Novos", conteudo: "Fato número 99 do cadastro de clientes novos." }, autor);
-    vi.advanceTimersByTime(ESPERA);
-  };
-
   it("substituir várias afirmações pela mesma não colapsa a síntese", async () => {
     const { repo, id } = await comTrinta();
     expect(await textos(repo, id)).toHaveLength(30);
-    await novoFato(repo);
+    await reler(repo);
     await rodar(repo, async (c) => {
       const mostradas = entradaDaDescoberta(c).candidatas.find((v) => v.id === id)!.afirmacoes!;
       return { proposta: { propostas: [proposta({ titulo: "Cadastro de clientes", alvoId: id,
@@ -287,7 +315,7 @@ describe("remoções e trocas em massa, e dependentes grandes", () => {
 
   it("trocar de uma vez afirmações que continuam sustentadas tem teto por proposta", async () => {
     const { repo, id } = await comTrinta();
-    await novoFato(repo);
+    await reler(repo);
     await rodar(repo, async (c) => {
       const mostradas = entradaDaDescoberta(c).candidatas.find((v) => v.id === id)!.afirmacoes!;
       return { proposta: { propostas: [proposta({ titulo: "Cadastro de clientes", alvoId: id,
@@ -404,7 +432,7 @@ describe("afirmações obsoletas e fidelidade da síntese", () => {
 
   it("trocar só a evidência de uma afirmação, com o mesmo texto, é uma mudança e não 'sem mudança'", async () => {
     const { repo, id, limite10, prazo } = await comSintese();
-    await novaNota(repo);
+    await reler(repo);
     // A última afirmação troca de evidência: a ordem e o texto não mudam, então o markdown sai idêntico ao anterior.
     const antes = (await repo.obterNota(id))!.conteudo;
     const r = await rodar(repo, com(proposta({ alvoId: id, substituicoes: [{ id: prazo.id,

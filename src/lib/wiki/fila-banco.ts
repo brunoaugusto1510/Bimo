@@ -79,7 +79,8 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async reivindicar(notaId) {
       if (notaId !== undefined && !idValido(notaId)) return null;
       return transacao(async (tx) => {
-        await tx.update(trabalhosWiki).set({ estado: "temporario" }).where(and(eq(trabalhosWiki.userId, userId), eq(trabalhosWiki.estado, "pendente"),
+        // Três posses vencidas sem `falhar` (função encerrada no meio): o trabalho para, e a causa fica à vista na fila.
+        await tx.update(trabalhosWiki).set({ estado: "temporario", ultimoErro: "PosseExpirada" }).where(and(eq(trabalhosWiki.userId, userId), eq(trabalhosWiki.estado, "pendente"),
           sql`${trabalhosWiki.tentativas} >= 3`, sql`(${trabalhosWiki.posseAte} is null or ${trabalhosWiki.posseAte} <= clock_timestamp())`));
         const [proximo] = await tx.select(colunas).from(trabalhosWiki).where(and(eq(trabalhosWiki.userId, userId),
           notaId === undefined ? undefined : sql`${trabalhosWiki.notaId} = ${notaId}::bigint`,
@@ -140,7 +141,10 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
           if (!p.conceito) throw new ErroWiki("Conceito ausente.", 422);
           const [existente] = await tx.select({ id: sql<string>`${conceitosWiki.notaId}::text`, protegida: conceitosWiki.protegida, pausada: conceitosWiki.pausada })
             .from(conceitosWiki).where(and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.chave, p.conceito.chave)));
-          if (existente && (existente.protegida || existente.pausada || existente.id !== p.alvo?.id)) throw new ErroWiki("Conceito protegido ou existente.", 422);
+          // Proteger ou pausar durante a chamada ao modelo é um conflito de momento: a nota de origem volta à fila e, na próxima
+          // leitura, o modelo já vê o alvo protegido. Como 422 ela ficaria em "revisar" para sempre, com o custo perdido.
+          if (existente && (existente.protegida || existente.pausada)) throw new ErroWiki("O neurônio foi protegido ou pausado durante a leitura.", 409);
+          if (existente && existente.id !== p.alvo?.id) throw new ErroWiki("Conceito protegido ou existente.", 422);
           const id = await publicar(tx, p);
           const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`));
           const origens = Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao]));

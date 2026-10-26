@@ -191,7 +191,7 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       if (atual.revisao !== entrada.alvo.revisao) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
       const [conceito] = await tx.select({ protegida: conceitosWiki.protegida, revisao: conceitosWiki.revisaoGerenciada }).from(conceitosWiki)
         .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${atual.id}::bigint`));
-      if (conceito?.protegida || atual.revisao !== (conceito?.revisao ?? meta.revisao)) throw new ErroWiki("A edição manual está protegida.", 422);
+      if (conceito?.protegida || atual.revisao !== (conceito?.revisao ?? meta.revisao)) throw new ErroWiki("A edição manual está protegida.", 409);
       const resultado = await gravarNota(tx, { ...atual, conteudo: entrada.conteudo }, autor, false, false, "nenhum");
       if (resultado.tipo !== "ok") return resultado;
       nota = resultado.nota;

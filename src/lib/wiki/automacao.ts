@@ -151,12 +151,18 @@ const assinatura = (afirmacoes: AfirmacaoWiki[]) => JSON.stringify(afirmacoes.ma
 
 const escapar = (s: string) => s.replace(/[\\`*_{}[\]<>()!#|]/g, "\\$&").replace(/[\r\n]+/g, " ");
 // Os caracteres que quebrariam uma ligação ou o caminho viram hífen ou espaço, em vez de custar a proposta.
-const limparTitulo = (titulo: string) => titulo.replace(/[/\\]/g, "-").replace(/[[\]#^|\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+// Caracteres invisíveis e de direção de texto também saem: "Fatorial" e "Fatorial​" pareceriam o mesmo título.
+const limparTitulo = (titulo: string) => titulo.normalize("NFKC").replace(/[​-‏‪-‮⁠-⁯﻿]/g, "")
+  .replace(/[/\\]/g, "-").replace(/[[\]#^|\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
 const caminhoOcupado = (pasta: string | null, titulo: string) => `${(pasta ?? "").toLowerCase()}\n${titulo.toLowerCase()}`;
 
 /** O título proposto ou, se a pasta já tiver uma nota assim (a própria origem, por exemplo), uma variante de síntese. */
 function tituloLivre(titulo: string, pasta: string | null, ocupados: Set<string>) {
-  return [titulo, `${titulo} (síntese)`].find((opcao) => validarTitulo(opcao).ok && !ocupados.has(caminhoOcupado(pasta, opcao))) ?? null;
+  // Uma nota homônima dentro de uma pasta (tão funda quanto "Neurônios" ou mais) perderia para o neurônio num [[Título]] solto,
+  // que passaria a apontar para ele. Na raiz a nota já vence a desambiguação, então ali o título segue livre.
+  const emUso = (opcao: string) => ocupados.has(caminhoOcupado(pasta, opcao))
+    || [...ocupados].some((c) => c.endsWith(`\n${opcao.toLowerCase()}`) && !c.startsWith("\n"));
+  return [titulo, `${titulo} (síntese)`].find((opcao) => validarTitulo(opcao).ok && !emUso(opcao)) ?? null;
 }
 
 /**
@@ -169,7 +175,8 @@ async function ligacoesDaSintese(repo: RepositorioDeNotas, c: ContextoWiki, pedi
   const conhecidas = new Set(c.candidatas.find((v) => v.nota.id === propria)?.metadados?.estrutura.ligacoes ?? []);
   const remover = new Set(retiradas.filter((id) => conhecidas.has(id)));
   const notas: { id: string; pasta: string | null; titulo: string }[] = [];
-  for (const id of [...existentes, ...pedidas.slice(0, LIMITE_DE_PEDIDAS).filter((p) => vistas.has(p))]) {
+  // Filtrar pelo que o modelo viu antes de limitar: ids inventados não podem empurrar para fora os válidos.
+  for (const id of [...existentes, ...pedidas.filter((p) => vistas.has(p)).slice(0, LIMITE_DE_PEDIDAS)]) {
     if (id === propria || remover.has(id) || notas.some((n) => n.id === id) || notas.length >= LIMITE_DE_LIGACOES) continue;
     const nota = await repo.obterNota(id);
     if (nota && await repo.wiki!.obter(id)) notas.push({ id, pasta: nota.pasta, titulo: nota.titulo });
@@ -300,7 +307,10 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   // Remover ou trocar o que continua sustentado tem teto por proposta; o que já estava obsoleto (a origem mudou) não conta.
   // Sem isso, um modelo errado ou uma nota com instruções desfaria a síntese em poucas ondas.
   let orcamentoDeRemocoes = Math.max(3, Math.ceil(anteriores.length / 4));
-  const podeMexer = (id: string) => mostradas?.obsoletas.has(id) || orcamentoDeRemocoes-- > 0;
+  // Só a nota que sustenta a afirmação pode tirá-la ou trocá-la: outra nota (ou uma instrução dentro dela) que discorda
+  // registra a divergência, não apaga o que B e C afirmam. O que já está obsoleto (a origem mudou) segue livre.
+  const soDaOrigem = (id: string) => anteriores.find((a) => a.id === id)?.evidencias.every((e) => e.fonteId === c.origem.id) ?? false;
+  const podeMexer = (id: string) => mostradas?.obsoletas.has(id) || (soDaOrigem(id) && orcamentoDeRemocoes-- > 0);
   const substituicoes = new Map<string, AfirmacaoWiki>();
   for (const s of alvoId ? p.substituicoes : []) {
     if (!mostradas?.ids.has(s.id) || substituicoes.has(s.id)) continue;
@@ -328,6 +338,9 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     if (retiradas.has(a.id) || substituicoes.has(a.id)) continue;
     const evidencias = a.evidencias.flatMap((e) => {
       const fonte = fontes.get(e.fonteId);
+      // O trecho guardado continua valendo onde está; só se foi deslocado a citação é procurada de novo. Uma citação repetida
+      // no texto não pode saltar para a primeira ocorrência.
+      if (fonte && fonte.conteudo.slice(e.inicio, e.fim) === e.citacao) return [e];
       // Mesma tolerância das novas: espaços e marcação diferentes não apagam uma afirmação ainda sustentada.
       const posicao = fonte && localizarCitacao(fonte.conteudo, e.citacao);
       return fonte && posicao ? [{ ...e, citacao: fonte.conteudo.slice(posicao.inicio, posicao.fim), ...posicao }] : [];
@@ -459,14 +472,20 @@ function classificarFalha(erro: unknown): { motivo: Exclude<MotivoDaFalhaWiki, "
   if (status !== null && status >= 400 && status < 500) {
     return { motivo: [408, 409, 429].includes(status) ? "temporario" : "revisar", consumo: SEM_COBRANCA };
   }
+  // O provedor respondeu com erro de servidor: nada foi gerado nem cobrado. Contar a reserva inteira numa instabilidade
+  // de minutos esgotaria o teto do dia sem gasto real. Falha de rede e prazo estourado seguem incertos (a chamada pode ter sido cobrada).
+  if (status !== null && status >= 500) return { motivo: "temporario", consumo: SEM_COBRANCA };
   return { motivo: "temporario", consumo: null };
 }
 
 /** Um lote curto. A fila persistente é a fonte de verdade, não o tempo de vida da requisição. */
-export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAutomaticoWiki, opcoes: { tetoDiario: number; sinal?: AbortSignal }) {
+export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAutomaticoWiki, opcoes: { tetoDiario: number; sinal?: AbortSignal; verificar?: boolean }) {
   const fila = repo.wiki?.automacao;
   if (!fila) return { tipo: "desligado" as const };
-  await verificarSinteses(repo);
+  // A verificação local é opcional e não chama o modelo: uma falha nela não pode parar a fila.
+  if (opcoes.verificar !== false) {
+    try { await verificarSinteses(repo); } catch (erro) { console.error("[wiki] A verificação das sínteses falhou.", { erro: descreverErro(erro) }); }
+  }
   await fila.reconciliar(50);
   const trabalho = await fila.reivindicar();
   if (!trabalho) return { tipo: "ocioso" as const };

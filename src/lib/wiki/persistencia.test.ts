@@ -296,7 +296,7 @@ describe("diário, diagnóstico e snapshots compactos no Postgres", () => {
     await repo.criarNota({ titulo: "A", conteudo: "Uma evidência verificável para esta síntese." }, autor); await liberar();
     await processarWiki(repo, async (c) => resposta(c), { tetoDiario: 200_000 });
     const [p] = await repo.wiki!.listar();
-    await repo.criarNota({ titulo: "B", conteudo: "Mais evidências verificáveis para enriquecer esta síntese." }, autor); await liberar();
+    const b = await repo.criarNota({ titulo: "B", conteudo: "Mais evidências verificáveis para enriquecer esta síntese." }, autor); await liberar();
     const fila = repo.wiki!.automacao!; const concluir = fila.concluir.bind(fila);
     const espiao = vi.spyOn(fila, "concluir").mockImplementationOnce(async (...args) => {
       await fila.pausar(p.notaId, 1, true); return concluir(...args);
@@ -306,6 +306,9 @@ describe("diário, diagnóstico e snapshots compactos no Postgres", () => {
     expect((await repo.obterNota(p.notaId))!.revisao).toBe(1);
     expect((await pg.query("select * from eventos_wiki where user_id = $1 and tipo = 'cresceu'", [donoA])).rows).toEqual([]);
     expect((await fila.energia(200_000)).utilizada).toBe(400);
+    // A nota de origem não fica presa em "revisar": volta à fila e a próxima leitura já vê o neurônio pausado.
+    if (b.tipo !== "ok") throw new Error("Preparação inválida.");
+    expect((await pg.query("select estado from trabalhos_wiki where nota_id = $1", [b.nota.id])).rows).toEqual([{ estado: "pendente" }]);
   });
   it("falhar ao gravar o diário desfaz a publicação inteira e preserva o custo", async () => {
     const repo = criarRepositorioDoBanco(donoA);
@@ -409,7 +412,8 @@ describe("afirmações com id no Postgres", () => {
 
   it("os ids atravessam o jsonb, e retirar ou substituir por id publica uma versão nova sem a afirmação antiga", async () => {
     const repo = criarRepositorioDoBanco(donoA);
-    await repo.criarNota({ titulo: "Limites", conteudo: "O limite de itens por pedido é 10. O prazo de entrega é de 5 dias." }, autor); await liberar();
+    // A terceira frase só é citada quando a nota é relida: só a nota que sustenta uma afirmação pode trocá-la.
+    const origem = await repo.criarNota({ titulo: "Limites", conteudo: "O limite de itens por pedido é 10. O prazo de entrega é de 5 dias. A partir de março o limite de itens por pedido passou a ser 20." }, autor); await liberar();
     await processarWiki(repo, async (c) => ({ proposta: { propostas: [proposta({ afirmacoes: [
       afirmacao("Limite de 10 itens", c.origem.id, "O limite de itens por pedido é 10"), afirmacao("Prazo de 5 dias", c.origem.id, "O prazo de entrega é de 5 dias")] })] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
     const [pagina] = await repo.wiki!.listar();
@@ -417,12 +421,12 @@ describe("afirmações com id no Postgres", () => {
     expect([idLimite, idPrazo].every((id) => /^a[0-9a-f]{10}$/.test(id))).toBe(true);
     expect((await repo.wiki!.obter(pagina.notaId))!.afirmacoes.map((a) => a.id)).toEqual([idLimite, idPrazo]);
 
-    const origem = await repo.criarNota({ titulo: "Atualização", conteudo: "A partir de março o limite de itens por pedido passou a ser 20." }, autor);
+    if (origem.tipo !== "ok") throw new Error("Preparação inválida.");
+    expect(await repo.wiki!.automacao!.reprocessar(origem.nota.id, 1)).toBe("ok");
     await liberar();
     await processarWiki(repo, async (c) => ({ proposta: { propostas: [proposta({ alvoId: pagina.notaId,
       substituicoes: [{ id: idLimite, afirmacao: afirmacao("Limite de 20 itens", c.origem.id, "o limite de itens por pedido passou a ser 20") }] })] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
     const [depois] = await repo.wiki!.listar();
-    expect(origem.tipo).toBe("ok");
     expect(depois.afirmacoes.map((a) => a.texto)).toEqual(["Prazo de 5 dias", "Limite de 20 itens"]);
     expect(depois.afirmacoes[0].id).toBe(idPrazo);
     expect((await repo.obterNota(pagina.notaId))!.conteudo).not.toContain("Limite de 10 itens");

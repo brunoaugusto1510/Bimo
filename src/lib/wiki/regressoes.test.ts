@@ -87,9 +87,22 @@ describe("validação por proposta", () => {
     vi.advanceTimersByTime(ESPERA);
     expect(await rodar(repo, gerar)).toMatchObject({ tipo: "processado", publicadas: 1 });
     const [pagina] = await repo.wiki!.listar();
-    expect(await repo.obterNota(pagina.notaId)).toMatchObject({ titulo: "TCP", pasta: "Neurônios" });
+    // Um [[TCP]] solto resolveria entre duas notas de mesma profundidade (Estudos e Neurônios): o neurônio ganha o sufixo.
+    expect(await repo.obterNota(pagina.notaId)).toMatchObject({ titulo: "TCP (síntese)", pasta: "Neurônios" });
     expect((await repo.wiki!.automacao!.conceitos())[0].chave).toBe("tcp");
     expect(gerar).toHaveBeenCalledTimes(1);
+  });
+
+  it("título de neurônio com caracteres invisíveis não se disfarça de outro título nem repete o da nota de uma pasta", async () => {
+    const repo = criarRepositorioEmMemoria([{ titulo: "Fatorial", pasta: "Matemática/Básica", conteudo: "O fatorial de n é o produto de 1 a n." }]);
+    const gerar = gerador((id) => proposta("Fatorial​", id, "O fatorial de n é o produto de 1 a n"));
+    vi.advanceTimersByTime(ESPERA);
+    expect(await rodar(repo, gerar)).toMatchObject({ tipo: "processado", publicadas: 1 });
+    const [pagina] = await repo.wiki!.listar();
+    const nota = (await repo.obterNota(pagina.notaId))!;
+    expect(nota.titulo).not.toMatch(/[​-‏‪-‮⁠-⁯﻿]/);
+    // Há uma nota "Fatorial" numa pasta: o neurônio não pode ficar com o mesmo título.
+    expect(nota.titulo).toBe("Fatorial (síntese)");
   });
 
   it("caracteres proibidos no título são trocados em vez de descartar a proposta", async () => {

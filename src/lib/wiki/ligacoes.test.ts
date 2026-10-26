@@ -169,10 +169,10 @@ describe("ligações entre neurônios", () => {
     const c = await comDoisNeuronios();
     const antes = (await c.repo.wiki!.listar()).map((p) => p.notaId);
     const lixo = Array.from({ length: 31 }, (_, i) => `nao-existe-${i}`);
-    // A leitura está entre as 32 primeiras pedidas; a fermentação, na 33ª, passa do que o servidor lê.
+    // Ids inventados não ocupam o limite: o que vale vem depois deles e continua valendo.
     const r = await rodar(c.repo, com(paciencia(c, [c.leitura, ...lixo, c.fermentacao])));
     expect(r).toMatchObject({ publicadas: 1, descartadas: 0 });
-    expect((await c.repo.wiki!.obter(await idDaNova(c.repo, antes)))!.estrutura.ligacoes).toEqual([c.leitura]);
+    expect((await c.repo.wiki!.obter(await idDaNova(c.repo, antes)))!.estrutura.ligacoes).toEqual([c.leitura, c.fermentacao]);
   });
 
   it("numa síntese que já existe, só ligar a outra já é uma mudança; repetir a mesma ligação não é", async () => {

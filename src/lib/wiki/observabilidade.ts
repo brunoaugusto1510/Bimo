@@ -18,10 +18,11 @@ export function estadoDoNeuronio(meta: MetadadosWiki, conceito: ConceitoWiki | u
 }
 
 /** Dados comuns às telas, sem depender de layout e sem enviar cópias completas das origens. */
-export async function obterCerebroWiki(repo: RepositorioDeNotas, teto: number) {
+/** `teto` nulo (configuração inválida) deixa só a energia indisponível: o resto do cérebro continua legível. */
+export async function obterCerebroWiki(repo: RepositorioDeNotas, teto: number | null) {
   const wiki = exigirWiki(repo);
   const [paginas, conceitos, resumos, cobertura, energia] = await Promise.all([
-    wiki.listar(), wiki.automacao?.conceitos() ?? [], repo.listarResumos(), wiki.automacao?.cobertura(), wiki.automacao?.energia(teto),
+    wiki.listar(), wiki.automacao?.conceitos() ?? [], repo.listarResumos(), wiki.automacao?.cobertura(), teto === null ? undefined : wiki.automacao?.energia(teto),
   ]);
   const notas = new Map(resumos.map((n) => [n.id, n])); const porId = new Map(conceitos.map((c) => [c.notaId, c]));
   const neuronios = paginas.flatMap((p) => {

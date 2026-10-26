@@ -94,7 +94,8 @@ it.each(["mesmo-texto", "texto-alterado", "par-reconfirmado"])("substituição %
   })] }, uso: null }), { tetoDiario: 200_000 });
   const [antes] = await repo.wiki!.listar();
   const texto = caso === "mesmo-texto" ? fraseA : "No manual atualizado, a entrega ocorre em sete dias úteis.";
-  await repo.criarNota({ titulo: "Prazo do manual atualizado", conteudo: texto }, autor); vi.advanceTimersByTime(91_000);
+  // A atualização vem da própria nota que sustentava as afirmações (outra nota não pode trocá-las): a origem é editada.
+  await repo.atualizarNota("1", { conteudo: `${fraseA}\n${fraseB}\n${texto}` }, { revisaoBase: 1, autor }); vi.advanceTimersByTime(91_000);
   const r = await processarWiki(repo, async (c) => ({ proposta: { politica: POLITICA_EDITORIAL, semPublicacao: null, propostas: [proposta({
     alvoId: antes.notaId, editorial: { ...editorial, acao: "enriquecer", candidatas: [antes.notaId] },
     substituicoes: [{ id: antes.afirmacoes[0].id, afirmacao: { texto, natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: texto }] } }],
@@ -108,7 +109,8 @@ it.each(["mesmo-texto", "texto-alterado", "par-reconfirmado"])("substituição %
   } else {
     expect(r).toMatchObject({ publicadas: 1 });
     const trocada = depois.afirmacoes.find((a) => a.texto === texto)!;
-    expect(trocada.id).not.toBe(antes.afirmacoes[0].id);
+    // O id vem do texto e da evidência: o mesmo texto citado na mesma nota é a mesma afirmação, e só uma mudança cria outro.
+    if (caso === "mesmo-texto") expect(trocada.id).toBe(antes.afirmacoes[0].id); else expect(trocada.id).not.toBe(antes.afirmacoes[0].id);
     expect(depois.estrutura.divergencias).toHaveLength(1);
     expect(depois.estrutura.divergencias![0]).toMatchObject({ a: { afirmacaoId: trocada.id }, b: { afirmacaoId: antes.afirmacoes[1].id } });
   }

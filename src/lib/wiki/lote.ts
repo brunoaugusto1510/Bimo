@@ -23,8 +23,12 @@ export async function processarLoteWiki(repo: RepositorioDeNotas, gerar: Gerador
   while (lote.rodadas < maxRodadas) {
     if (opcoes.sinal?.aborted) { lote.parada = "cancelado"; break; }
     if (prazo.aborted || Date.now() - inicio >= PRAZO_DO_LOTE_MS - MARGEM_DA_RODADA_MS) { lote.parada = "tempo"; break; }
-    ultima = await processarWiki(repo, gerar, { tetoDiario: opcoes.tetoDiario, sinal });
+    // Verificar as sínteses uma vez por lote: cada rodada releria todas as páginas sem necessidade.
+    ultima = await processarWiki(repo, gerar, { tetoDiario: opcoes.tetoDiario, sinal, verificar: lote.rodadas === 0 });
     lote.rodadas++;
+    // Uma nota que pede revisão (ou uma decisão editorial de adiar) é problema dela: o trabalho seguinte pode estar pronto.
+    // Falha temporária ou de configuração é do provedor, e insistir só gastaria tentativas de outras notas.
+    if (ultima.tipo === "adiado" && ultima.motivo === "revisar") continue;
     if (ultima.tipo !== "processado") { lote.parada = ultima.tipo; break; }
     lote.processados++;
     lote.publicadas += ultima.publicadas;

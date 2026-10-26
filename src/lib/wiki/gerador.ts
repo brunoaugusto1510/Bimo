@@ -66,8 +66,9 @@ export const gerarConhecimentoWiki: GeradorAutomaticoWiki = async (contexto, sin
       "enriqueça-a se tiver sido lida e não estiver protegida; só crie quando o assunto realmente não existe. " +
       "Desambigue homônimos com títulos contextualizados. " +
       "Cada afirmação de uma candidata gerenciada traz um id. Ao enriquecer uma síntese: use afirmacoes só para acrescentar o que ainda não está nela " +
-      "(não repita uma afirmação existente); use substituicoes (id da afirmação e a nova afirmação completa) quando esta nota corrige ou atualiza o que uma afirmação diz; " +
-      "use retiradas (ids) para as que esta nota torna falsas ou obsoletas, junto de uma afirmação nova ou substituta que a nota sustente. " +
+      "(não repita uma afirmação existente); use substituicoes (id da afirmação e a nova afirmação completa) quando esta nota atualiza o que uma afirmação sustentada só por ela diz; " +
+      "use retiradas (ids) para as sustentadas só por esta nota que ela torna falsas ou obsoletas, junto de uma afirmação nova ou substituta que a nota sustente. " +
+      "Uma afirmação que outras notas também sustentam não é trocada nem retirada por esta nota: se esta nota a contradiz, registre a divergência entre as duas. " +
       "Uma afirmação marcada desatualizada tem evidência numa nota que mudou: confira com o texto atual e, se já não vale, substitua ou retire (essas podem ser retiradas sozinhas); se continua valendo, deixe-a. " +
       "Afirmações que você não citar são mantidas. " +
       "Use reforcos (id da afirmação visível e evidencias) quando outra origem confirma a mesma proposição; não a acrescente outra vez em afirmacoes. " +

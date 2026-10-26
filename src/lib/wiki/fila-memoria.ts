@@ -33,6 +33,8 @@ export function criarFilaWikiEmMemoria(acesso: {
     const anterior = trabalhos.get(nota.id);
     if (mudanca === "organizacao") {
       if (anterior?.revisao === nota.revisao - 1) anterior.revisao = nota.revisao;
+      // As sínteses que se apoiavam na revisão anterior continuam em dia (mesmo critério do banco).
+      for (const conceito of conceitos.values()) if (conceito.origens[nota.id] === nota.revisao - 1) conceito.origens[nota.id] = nota.revisao;
       return;
     }
     if (anterior?.revisao === nota.revisao) return;
@@ -108,7 +110,7 @@ export function criarFilaWikiEmMemoria(acesso: {
         chaves.add(p.conceito.chave);
         if ([...conceitos.values()].some((c) => c.chave === p.conceito!.chave && c.notaId !== p.alvo?.id)) throw new ErroWiki("Conceito já existente.", 409);
         if (p.alvo) {
-          if (alvos.has(p.alvo.id) || !acesso.paginas.has(p.alvo.id) || conceitos.get(p.alvo.id)?.protegida || conceitos.get(p.alvo.id)?.pausada || acesso.notas.get(p.alvo.id)?.revisao !== p.alvo.revisao) throw new ErroWiki("Edição protegida ou superada.", 422);
+          if (alvos.has(p.alvo.id) || !acesso.paginas.has(p.alvo.id) || conceitos.get(p.alvo.id)?.protegida || conceitos.get(p.alvo.id)?.pausada || acesso.notas.get(p.alvo.id)?.revisao !== p.alvo.revisao) throw new ErroWiki("Edição protegida ou superada.", 409);
           alvos.add(p.alvo.id);
         }
       }
