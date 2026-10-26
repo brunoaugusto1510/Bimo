@@ -11,9 +11,11 @@ export type MotivoDaFalhaWiki = "temporario" | "revisar" | "configuracao" | "orc
 export interface AutomacaoWiki {
   /** Inserção idempotente; a reconciliação também recupera notas anteriores à ativação. */
   solicitar(notaId: string): Promise<void>;
+  /** Releitura explícita de uma origem, sem editar a nota ou invalidar uma posse ativa. Não reabre configuração. */
+  reprocessar(notaId: string, revisaoBase: number): Promise<"ok" | "conflito" | "ocupado" | "nao-encontrada" | "derivada" | "configuracao">;
   reconciliar(limite: number): Promise<number>;
   /** Um trabalho por dono de cada vez: chamadas paralelas não disputam o mesmo orçamento. */
-  reivindicar(): Promise<TrabalhoWiki | null>;
+  reivindicar(notaId?: string): Promise<TrabalhoWiki | null>;
   conceitos(): Promise<ConceitoWiki[]>;
   cobertura(): Promise<CoberturaWiki>;
   reservar(trabalho: TrabalhoWiki, quantidade: number, tetoDiario: number): Promise<string | null>;
@@ -23,9 +25,10 @@ export interface AutomacaoWiki {
    * Publicações, dependentes avaliadas sem mudança e avanço do cursor/conclusão são uma única transação.
    * `avaliadas` são sínteses que o modelo viu desatualizadas e decidiu não alterar.
    */
-  concluir(trabalho: TrabalhoWiki, publicacoes: PublicacaoWiki[], proximoCursor: number | null, avaliadas?: string[]): Promise<void>;
+  concluir(trabalho: TrabalhoWiki, publicacoes: PublicacaoWiki[], proximoCursor: number | null, avaliadas?: string[], revisar?: boolean,
+    decisao?: import("./editorial").DecisaoSemPublicacao): Promise<void>;
   /** `erro` é só a categoria (ex.: "ErroOpenAI:429"), nunca texto de nota. Falta de orçamento não gasta tentativa. */
-  falhar(trabalho: TrabalhoWiki, motivo: MotivoDaFalhaWiki, erro?: string): Promise<void>;
+  falhar(trabalho: TrabalhoWiki, motivo: MotivoDaFalhaWiki, erro?: string, decisao?: import("./editorial").DecisaoSemPublicacao): Promise<void>;
   /** Operação explícita após resolver configuração/falha; preserva proteção editorial. */
   retomar(): Promise<void>;
   gerenciar(notaId: string, revisaoBase: number, gerenciada: boolean): Promise<"ok" | "conflito" | "nao-encontrada">;

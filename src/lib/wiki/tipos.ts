@@ -18,7 +18,7 @@ export type AfirmacaoWiki = {
  * `ligacoes` são os ids de outras sínteses a que ela se liga (não são evidência) e `lacunas`, as perguntas em aberto.
  */
 export type DivergenciaWiki = { a: { afirmacaoId: string; contexto: string }; b: { afirmacaoId: string; contexto: string } };
-export type EstruturaWiki = { ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[] };
+export type EstruturaWiki = { ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[]; editorial?: import("./editorial").RegistroEditorial };
 export type MetadadosWiki = {
   notaId: string; revisaoPublicada: number; fontes: FontePersistidaWiki[]; afirmacoes: AfirmacaoWiki[]; estrutura: EstruturaWiki;
   /** Presente em sínteses da automação: a revisão que ela considera sua (renomear e mover a acompanham). */
@@ -29,6 +29,7 @@ export type PublicacaoWiki = {
   titulo: string; conteudo: string; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[];
   /** Ids de outras sínteses a que esta se liga; já validados (existem, não são ela mesma). */
   ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[];
+  editorial?: import("./editorial").RegistroEditorial;
   /** Onde cada síntese ligada estava quando o texto foi escrito: renomeada ou movida até a publicação, o link ficaria errado. */
   destinos: DestinoDeLigacao[];
   alvo: { id: string; revisao: number } | null;

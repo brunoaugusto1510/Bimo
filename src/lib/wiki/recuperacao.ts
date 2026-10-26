@@ -114,6 +114,23 @@ export const dependeDeRevisaoAnterior = (conceito: ConceitoWiki, origem: FonteWi
 
 const porId = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
+/** Mesmo formato e verificação de fontes para recuperação normal e leitura dirigida. */
+export async function carregarCandidata(repo: RepositorioDeNotas, id: string, conceitos: ConceitoWiki[]): Promise<CandidataWiki | null> {
+  const nota = await repo.obterNota(id); if (!nota) return null;
+  const metadados = await repo.wiki!.obter(id) ?? undefined;
+  let obsoletas: string[] | undefined;
+  if (metadados) {
+    const validas = new Set<string>();
+    for (const fonte of metadados.fontes) {
+      const atual = await repo.obterNota(fonte.id);
+      if (atual && fonteConfere(atual.conteudo, fonte)) validas.add(fonte.id);
+    }
+    metadados.afirmacoes = garantirIds(metadados.afirmacoes);
+    obsoletas = metadados.afirmacoes.filter((a) => !a.evidencias.every((e) => validas.has(e.fonteId))).map((a) => a.id);
+  }
+  return { nota, metadados, conceito: conceitos.find((c) => c.notaId === id), obsoletas };
+}
+
 /**
  * Todas as sínteses por título e apelidos, as mais próximas da nota primeiro, dentro de um teto de entradas e de tamanho.
  * É o que permite ao modelo reconhecer um conceito que a recuperação não trouxe.
@@ -170,22 +187,9 @@ export async function recuperarContexto(repo: RepositorioDeNotas, origem: FonteW
   }
   const candidatas: CandidataWiki[] = [];
   for (const id of ids) {
-    const nota = await repo.obterNota(id); if (!nota || id === origem.id) continue;
-    const metadados = await repo.wiki!.obter(id) ?? undefined;
-    let obsoletas: string[] | undefined;
-    if (metadados) {
-      // Renomear ou mover uma raiz muda a revisão sem mudar o que ela diz: vale o conteúdo.
-      const validas = new Set<string>();
-      for (const fonte of metadados.fontes) {
-        const atual = await repo.obterNota(fonte.id);
-        if (atual && fonteConfere(atual.conteudo, fonte)) validas.add(fonte.id);
-      }
-      // Não se esconde a afirmação cuja origem mudou: é justamente a que o modelo precisa poder corrigir. Ela segue com
-      // o id e vai marcada como desatualizada.
-      metadados.afirmacoes = garantirIds(metadados.afirmacoes);
-      obsoletas = metadados.afirmacoes.filter((a) => !a.evidencias.every((e) => validas.has(e.fonteId))).map((a) => a.id);
-    }
-    candidatas.push({ nota, metadados, conceito: conceitos.find((c) => c.notaId === id), obsoletas });
+    if (id === origem.id) continue;
+    const candidata = await carregarCandidata(repo, id, conceitos);
+    if (candidata) candidatas.push(candidata);
   }
   return { candidatas, dependentes, indice: construirIndice(conceitos, new Map(resumos.map((r) => [r.id, r])), termos) };
 }

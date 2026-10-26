@@ -6,9 +6,10 @@ import { ErroDaGeracaoWiki, ErroWiki, type AfirmacaoWiki, type DivergenciaWiki, 
 import type { ConceitoWiki, ConsumoWiki, ContextoWiki, GeradorAutomaticoWiki, MotivoDaFalhaWiki } from "./automacao-tipos";
 import { afirmacoesVisiveis, comId, garantirIds, LIMITE_DE_AFIRMACOES, LIMITE_DE_AFIRMACOES_VISIVEIS } from "./afirmacoes";
 import { citacaoInsuficiente, localizarCitacao } from "./citacoes";
-import { comPalavrasDe, dependeDeRevisaoAnterior, palavrasEmComum, recuperarContexto } from "./recuperacao";
+import { comPalavrasDe, dependeDeRevisaoAnterior, palavrasEmComum, recuperarContexto, carregarCandidata } from "./recuperacao";
 import { verificarSinteses } from "./observabilidade";
 import { estruturaCompativel } from "./estrutura";
+import { camposDoEnvelopeEditorial, DecisaoEditorialAdiada, esquemaDoEnvelopeEditorial, esquemaEditorial, POLITICA_EDITORIAL, PropostaEditorialRecusada } from "./editorial";
 
 const esquemaDaAfirmacao = z.object({ texto: z.string().trim().min(1).max(2000),
   natureza: z.enum(["explicita", "inferencia"]),
@@ -24,6 +25,8 @@ const esquemaDaProposta = z.object({
   substituicoes: z.array(z.object({ id: z.string(), afirmacao: esquemaDaAfirmacao }).strict()).max(24).default([]),
   /** Retira afirmações existentes, pelo id que o modelo viu. */
   retiradas: z.array(z.string()).max(24).default([]),
+  /** Outra evidência da mesma proposição: mantém identidade lógica, texto e natureza. */
+  reforcos: z.array(z.object({ id: z.string(), evidencias: esquemaDaAfirmacao.shape.evidencias }).strict()).max(24).default([]),
   /** Ids de outras sínteses a que esta se liga (o que o modelo viu no índice ou nas candidatas); não são evidência. */
   // Sem teto aqui: o servidor guarda no máximo `LIMITE_DE_LIGACOES`, e um excesso não pode custar a proposta inteira.
   ligacoes: z.array(z.string()).default([]),
@@ -32,24 +35,35 @@ const esquemaDaProposta = z.object({
   divergencias: z.array(z.object({ a: ladoDaDivergencia, b: ladoDaDivergencia }).strict()).max(10).default([]),
   /** A lista completa de perguntas em aberto; vazia (ou só de espaços) numa síntese que já existe mantém as que ela tinha. */
   lacunas: z.array(z.string().max(1000)).max(10),
+  limparLacunas: z.boolean().default(false),
 }).strict();
 const LIMITE_DE_LIGACOES = 8;
 /** O que se lê das ligações pedidas, para que uma lista enorme não vire uma enxurrada de consultas. */
 const LIMITE_DE_PEDIDAS = 32;
 export const esquemaDaDescoberta = z.object({ propostas: z.array(esquemaDaProposta).max(3) }).strict();
+const esquemaDaPropostaEditorial = esquemaDaProposta.extend({ editorial: esquemaEditorial });
+export const esquemaDaDescobertaEditorial = z.object({ ...camposDoEnvelopeEditorial, propostas: z.array(esquemaDaPropostaEditorial).max(3) }).strict();
 /** O servidor valida o envelope e depois cada proposta: uma malformada não derruba as outras. */
 const esquemaDoEnvelope = z.object({ propostas: z.array(z.unknown()).max(3) }).strict();
-type PropostaWiki = z.infer<typeof esquemaDaProposta>;
+type PropostaWiki = z.infer<typeof esquemaDaProposta> & { editorial?: z.infer<typeof esquemaEditorial> };
 
 const SEM_COBRANCA: ConsumoWiki = { entrada: 0, saida: 0 };
 
 /** Payload limitado: os snapshots completos ficam no servidor, fora do contexto do modelo. */
 export function entradaDaDescoberta(c: ContextoWiki) {
   const relacionada = comPalavrasDe(c.trecho.texto);
-  return { origem: { id: c.origem.id, titulo: c.origem.titulo, revisao: c.origem.revisao, ...c.trecho },
+  const lidos = c.candidatas.filter((p) => p.metadados).map((p) => p.nota.id);
+  return { origem: { tipo: "nota_pessoal" as const, id: c.origem.id, titulo: c.origem.titulo, revisao: c.origem.revisao,
+    totalDeCaracteres: c.origem.conteudo.length, leituraParcial: c.trecho.inicio > 0 || c.trecho.fim < c.origem.conteudo.length, ...c.trecho },
+    papeis: { fontesPessoaisLidas: [c.origem.id, ...c.candidatas.filter((p) => !p.metadados).map((p) => p.nota.id)],
+      neuroniosLidos: lidos, neuroniosSomenteNoIndice: c.indice.entradas.filter((p) => !lidos.includes(p.id)).map((p) => p.id) },
     // Todas as sínteses por título e apelidos (as mais próximas da nota primeiro): reconhecer um conceito que a busca não trouxe.
     indice: c.indice,
     candidatas: c.candidatas.map((p) => ({ id: p.nota.id, titulo: p.nota.titulo, revisao: p.nota.revisao,
+      tipo: p.metadados ? "neuronio" : "nota_pessoal", podeSerFonte: !p.metadados,
+      conteudoIgualAOrigem: !p.metadados && p.nota.conteudo === c.origem.conteudo,
+      leituraParcial: p.nota.conteudo.length > 4000 || (p.metadados?.afirmacoes.length ?? 0) > LIMITE_DE_AFIRMACOES_VISIVEIS,
+      podeReceberEdicao: Boolean(p.metadados) && !p.conceito?.protegida && !p.conceito?.pausada && !p.metadados?.gerencia?.protegida,
       gerenciada: Boolean(p.metadados), protegida: Boolean(p.conceito?.protegida || p.conceito?.pausada), pausada: p.conceito?.pausada ?? false,
       // Síntese construída sobre uma revisão anterior desta origem: o modelo deve atualizá-la ou deixá-la como está.
       desatualizadaPelaOrigem: p.conceito ? dependeDeRevisaoAnterior(p.conceito, c.origem) : false,
@@ -78,12 +92,56 @@ function trechoDaOrigem(conteudo: string, inicio: number) {
   return { inicio, fim, texto: conteudo.slice(inicio, fim) };
 }
 
-type Descarte = "estrutura" | "titulo" | "alvo" | "protegida" | "evidencia" | "limite" | "repetida" | "titulo-em-uso" | "sem-mudanca";
+/** Apenas IDs de neurônios vistos só no índice podem originar leitura dirigida. */
+function decisaoDaDescoberta(bruto: unknown, c: ContextoWiki) {
+  if (!bruto || typeof bruto !== "object" || !("politica" in bruto)) return null;
+  const envelope = esquemaDoEnvelopeEditorial.parse(bruto);
+  const d = envelope.semPublicacao;
+  if (d?.tipoDePendencia === "leitura_de_neuronio") {
+    const permitidos = new Set(c.indice.entradas.filter((v) => !v.protegida && !c.candidatas.some((p) => p.nota.id === v.id && p.metadados)).map((v) => v.id));
+    if (d.neuroniosALer.some((id) => !permitidos.has(id))) throw new PropostaEditorialRecusada();
+  }
+  return envelope;
+}
+
+/** Reduz primeiro o contexto menos prioritário; mantém origem, dependentes e leituras solicitadas. */
+function limitarContexto(c: ContextoWiki, maximo: number, solicitadas: Set<string>) {
+  const fixas = new Set([...c.dependentes, ...solicitadas]);
+  while (Buffer.byteLength(JSON.stringify(entradaDaDescoberta(c)), "utf8") > Math.max(0, maximo)) {
+    const candidata = c.candidatas.findLastIndex((v) => !fixas.has(v.nota.id));
+    if (candidata >= 0) { c.candidatas.splice(candidata, 1); continue; }
+    const indice = c.indice.entradas.findLastIndex((v) => !solicitadas.has(v.id));
+    if (indice >= 0) { c.indice.entradas.splice(indice, 1); continue; }
+    break;
+  }
+}
+
+async function lerDestinos(repo: RepositorioDeNotas, c: ContextoWiki, ids: string[]) {
+  const conceitos = await repo.wiki!.automacao!.conceitos();
+  const novas = [];
+  for (const id of ids) {
+    const p = await carregarCandidata(repo, id, conceitos);
+    if (!p?.metadados || !p.conceito || p.conceito.protegida || p.conceito.pausada || p.metadados.gerencia?.protegida) throw new PropostaEditorialRecusada();
+    novas.push(p);
+  }
+  const fixas = c.candidatas.filter((p) => c.dependentes.includes(p.nota.id));
+  const unicas = new Map([...fixas, ...novas, ...c.candidatas].map((p) => [p.nota.id, p]));
+  // As fixas precedem as novas, mas uma cópia antiga nunca substitui uma leitura recém-feita.
+  for (const p of novas) unicas.set(p.nota.id, p);
+  c.candidatas = [...unicas.values()].slice(0, 6);
+  for (const p of novas) {
+    const entrada = c.indice.entradas.find((e) => e.id === p.nota.id)!;
+    entrada.titulo = p.nota.titulo;
+  }
+}
+
+type Descarte = "estrutura" | "titulo" | "alvo" | "protegida" | "evidencia" | "divergencia" | "limite" | "repetida" | "titulo-em-uso" | "sem-mudanca" | "editorial";
 /**
  * `tentadas`: sínteses que o modelo quis atualizar; se a proposta foi descartada, não contam como avaliadas.
  * Exceção: "sem-mudanca" é uma decisão (a síntese já diz isso), então a síntese conta como avaliada.
  */
-type Preparo = { publicacoes: PublicacaoWiki[]; descartadas: Descarte[]; tentadas: Set<string> };
+type Preparo = { publicacoes: PublicacaoWiki[]; descartadas: Descarte[]; tentadas: Set<string>; revisar?: boolean;
+  decisao?: import("./editorial").DecisaoSemPublicacao };
 
 /** Ids que o modelo recebeu de cada síntese (`ids`) e quais delas estavam marcadas como desatualizadas (`obsoletas`). */
 type Visiveis = Map<string, { ids: Set<string>; obsoletas: Set<string> }>;
@@ -194,9 +252,19 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   const conceito = conceitos.find((v) => v.notaId === alvoId);
   if (alvoId && (!alvo || !meta)) return "alvo";
   if (conceito?.protegida || conceito?.pausada) return "protegida";
+  if (p.limparLacunas && p.lacunas.some((v) => v.trim())) return "estrutura";
+  if (p.editorial) {
+    const e = p.editorial;
+    const vistas = new Set([...c.indice.entradas.map((v) => v.id), ...c.candidatas.filter((v) => v.metadados).map((v) => v.nota.id)]);
+    if ([e.utilidade, e.ganho, e.destino].some((v) => v.avaliacao !== "suficiente") || e.candidatas.some((id) => !vistas.has(id))) return "editorial";
+    // Alterar exige ler o conteúdo do alvo; um título no índice não autoriza enriquecer às cegas.
+    if (e.acao === "criar" ? Boolean(alvoId) : (!alvoId || !c.candidatas.some((v) => v.nota.id === alvoId && v.metadados) || !e.candidatas.includes(alvoId))) return "editorial";
+    if (e.acao === "relacionar" && (p.afirmacoes.length || p.substituicoes.length || p.retiradas.length || p.reforcos.length)) return "editorial";
+    if (!alvoId && (p.reforcos.length || p.substituicoes.length || p.retiradas.length)) return "editorial";
+  }
   // As perguntas em aberto são a lista completa: vazia (ou só de espaços), numa síntese que já existe, mantém as que ela tinha.
   const pedidasEmAberto = p.lacunas.map((l) => l.trim()).filter(Boolean);
-  const lacunas = pedidasEmAberto.length ? pedidasEmAberto : meta?.estrutura?.lacunas ?? [];
+  const lacunas = p.limparLacunas ? [] : pedidasEmAberto.length ? pedidasEmAberto : meta?.estrutura?.lacunas ?? [];
   const ligadas = await ligacoesDaSintese(repo, c, p.ligacoes, meta?.estrutura?.ligacoes ?? [], alvoId ?? null, p.ligacoesRetiradas);
   // Ligar a outra síntese ou mudar as perguntas é uma mudança por si só, mesmo sem afirmação nova: sem isso uma síntese
   // antiga nunca ganharia a ligação a uma criada depois.
@@ -204,7 +272,7 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     || JSON.stringify(ligadas.map((n) => n.id)) !== JSON.stringify(meta?.estrutura?.ligacoes ?? []));
   // Uma síntese que já existe e nenhuma operação pedida: o modelo a viu e decidiu não mudar nada. Isso é uma decisão,
   // não uma falha, e a síntese conta como avaliada em vez de travar a nota em chamadas repetidas.
-  if (alvoId && !p.afirmacoes.length && !p.substituicoes.length && !p.retiradas.length && !p.divergencias.length && !mudaEstrutura) return "sem-mudanca";
+  if (alvoId && !p.afirmacoes.length && !p.substituicoes.length && !p.retiradas.length && !p.reforcos.length && !p.divergencias.length && !mudaEstrutura) return "sem-mudanca";
   const fontes = await fontesPermitidas(repo, c, meta);
   const validar = (a: z.infer<typeof esquemaDaAfirmacao>): AfirmacaoWiki | null => {
     const evidencias = a.evidencias.map((e) => localizarEvidencia(e, fontes, textos, c));
@@ -213,10 +281,21 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     return comId({ ...a, evidencias: evidencias.filter((e): e is NonNullable<typeof e> => e !== null) });
   };
   const novasPorPosicao = p.afirmacoes.map(validar);
+  if (p.editorial && novasPorPosicao.some((a) => a === null)) return "evidencia";
   const novas = novasPorPosicao.filter((a): a is AfirmacaoWiki => a !== null);
   // Manter, substituir ou retirar só vale numa síntese que já existe e só para o que o modelo viu (os ids que mostramos).
   const mostradas = visiveis.get(alvoId ?? "");
   const anteriores = garantirIds(meta?.afirmacoes ?? []);
+  if (p.editorial && [...p.substituicoes.map((s) => s.id), ...p.retiradas].some((id) => !mostradas?.ids.has(id))) return "evidencia";
+  // Igualdade textual é só uma barreira objetiva; paráfrases continuam exigindo avaliação semântica.
+  if (p.editorial && novas.some((a) => anteriores.some((v) => normalizarTexto(v.texto) === normalizarTexto(a.texto)))) return "editorial";
+  const reforcos = new Map<string, AfirmacaoWiki["evidencias"]>();
+  for (const r of p.reforcos) {
+    if (!mostradas?.ids.has(r.id) || p.substituicoes.some((s) => s.id === r.id) || p.retiradas.includes(r.id)) return "evidencia";
+    const evidencias = r.evidencias.map((e) => localizarEvidencia(e, fontes, textos, c));
+    if (evidencias.some((e) => !e)) return "evidencia";
+    reforcos.set(r.id, [...reforcos.get(r.id) ?? [], ...evidencias.filter((e): e is NonNullable<typeof e> => e !== null)]);
+  }
   const idsAnteriores = new Set(anteriores.map((a) => a.id));
   // Remover ou trocar o que continua sustentado tem teto por proposta; o que já estava obsoleto (a origem mudou) não conta.
   // Sem isso, um modelo errado ou uma nota com instruções desfaria a síntese em poucas ondas.
@@ -228,7 +307,10 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     const nova = validar(s.afirmacao);
     // Substituição com evidência sem suporte não vale: a afirmação antiga continua no lugar. Também não vale trocar por
     // algo que a síntese já tem (ou que outra troca já produziu): isso só apagaria a antiga, e em ondas esvaziaria tudo.
-    if (!nova || (nova.id !== s.id && (idsAnteriores.has(nova.id) || [...substituicoes.values()].some((v) => v.id === nova.id)))) continue;
+    if (!nova || (nova.id !== s.id && (idsAnteriores.has(nova.id) || [...substituicoes.values()].some((v) => v.id === nova.id)))) {
+      if (p.editorial) return "evidencia";
+      continue;
+    }
     if (podeMexer(s.id)) substituicoes.set(s.id, nova);
   }
   // Retirar sem que a nota traga algo no lugar só vale para o que já estava obsoleto. Retirar o que continua sustentado
@@ -239,7 +321,7 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     if (!mostradas?.ids.has(id) || substituicoes.has(id)) continue;
     if ((justificada || mostradas.obsoletas.has(id)) && podeMexer(id)) retiradas.add(id);
   }
-  if (!novas.length && !substituicoes.size && !retiradas.size && !mudaEstrutura && !p.divergencias.length) return "evidencia";
+  if (!novas.length && !substituicoes.size && !retiradas.size && !reforcos.size && !mudaEstrutura && !p.divergencias.length) return "evidencia";
   // O que nenhuma operação cita é mantido, desde que a evidência ainda exista nas origens atuais.
   const preservadas: AfirmacaoWiki[] = [];
   for (const a of anteriores) {
@@ -250,7 +332,12 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
       const posicao = fonte && localizarCitacao(fonte.conteudo, e.citacao);
       return fonte && posicao ? [{ ...e, citacao: fonte.conteudo.slice(posicao.inicio, posicao.fim), ...posicao }] : [];
     });
-    if (evidencias.length === a.evidencias.length) preservadas.push({ ...a, evidencias });
+    if (evidencias.length === a.evidencias.length) {
+      const unicas = new Map(evidencias.map((e) => [`${e.fonteId}:${e.inicio}:${e.fim}`, e]));
+      for (const e of reforcos.get(a.id) ?? []) unicas.set(`${e.fonteId}:${e.inicio}:${e.fim}`, e);
+      if (unicas.size > 10) return "limite";
+      preservadas.push({ ...a, evidencias: [...unicas.values()] });
+    } else if (reforcos.has(a.id)) return "evidencia";
   }
   // Pelo id, e a primeira vence: reapresentar uma afirmação que já existe não a duplica nem muda sua natureza (inferência
   // não vira fato por ser repetida); só uma substituição troca o conteúdo.
@@ -265,13 +352,31 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     const chave = [d.a.afirmacaoId, d.b.afirmacaoId].sort().join(":");
     if (!pares.has(chave) && divergencias.length < 10) { pares.add(chave); divergencias.push(d); }
   };
-  // Uma troca ou retirada desfaz pares que já não existem. Um par preservado mantém os contextos anteriores.
-  for (const d of meta?.estrutura.divergencias ?? []) manter(d);
   const resolver = (id: string) => /^nova:[1-9]\d?$/.test(id) ? novasPorPosicao[Number(id.slice(5)) - 1]?.id
-    : mostradas?.ids.has(id) ? id : undefined;
+    : mostradas?.ids.has(id) ? substituicoes.get(id)?.id ?? id : undefined;
+  const pedidos: DivergenciaWiki[] = [];
   for (const d of p.divergencias) {
     const a = resolver(d.a.afirmacaoId); const b = resolver(d.b.afirmacaoId);
-    if (a && b) manter({ a: { ...d.a, afirmacaoId: a }, b: { ...d.b, afirmacaoId: b } });
+    // Uma divergência nova não pode desaparecer silenciosamente: ambos os lados precisam sobreviver à proposta.
+    if (!a || !b || a === b || !porId.has(a) || !porId.has(b)) return "divergencia";
+    pedidos.push({ a: { ...d.a, afirmacaoId: a }, b: { ...d.b, afirmacaoId: b } });
+  }
+  for (const d of meta?.estrutura.divergencias ?? []) {
+    // Retirada explícita encerra o par. Trocar só a evidência mantém a relação com os IDs atualizados.
+    if (retiradas.has(d.a.afirmacaoId) || retiradas.has(d.b.afirmacaoId)) continue;
+    const a = substituicoes.get(d.a.afirmacaoId), b = substituicoes.get(d.b.afirmacaoId);
+    const mudaProposicao = (id: string, nova?: AfirmacaoWiki) => nova && anteriores.some((v) => v.id === id && (v.texto !== nova.texto || v.natureza !== nova.natureza));
+    const idA = a?.id ?? d.a.afirmacaoId, idB = b?.id ?? d.b.afirmacaoId;
+    if (mudaProposicao(d.a.afirmacaoId, a) || mudaProposicao(d.b.afirmacaoId, b)) {
+      // Não presumir que uma relação continua válida após mudar seu significado, nem apagá-la sem confirmação.
+      if (!pedidos.some((v) => [v.a.afirmacaoId, v.b.afirmacaoId].sort().join(":") === [idA, idB].sort().join(":"))) return "divergencia";
+      continue;
+    }
+    manter({ a: { ...d.a, afirmacaoId: idA }, b: { ...d.b, afirmacaoId: idB } });
+  }
+  for (const d of pedidos) {
+    if (!pares.has([d.a.afirmacaoId, d.b.afirmacaoId].sort().join(":")) && divergencias.length >= 10) return "limite";
+    manter(d);
   }
   const usadas = new Set(afirmacoes.flatMap((a) => a.evidencias.map((e) => e.fonteId)));
   const raizes = [...fontes.values()].filter((f) => usadas.has(f.id));
@@ -294,6 +399,8 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   // para o mesmo texto seria descartada como "sem mudança".
   if (alvo && conteudo === alvo.conteudo && aliases.length === (conceito?.aliases.length ?? 0) && assinatura(afirmacoes) === assinatura(anteriores)) return "sem-mudanca";
   return { titulo: nome, conteudo, fontes: raizes, afirmacoes, ligacoes: ligadas.map((n) => n.id), destinos: ligadas, lacunas, divergencias,
+    ...(p.editorial ? { editorial: { ...p.editorial, politica: POLITICA_EDITORIAL,
+      origem: { id: c.origem.id, revisao: c.origem.revisao, inicio: c.trecho.inicio, fim: c.trecho.fim } } } : {}),
     alvo: alvo ? { id: alvo.id, revisao: alvo.revisao } : null, pasta,
     conceito: { chave: conceito?.chave ?? chave, aliases },
   };
@@ -301,7 +408,11 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
 
 /** Cada proposta é validada sozinha: uma citação ruim não joga fora o resultado pago das outras. */
 async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, bruto: unknown): Promise<Preparo> {
-  const envelope = esquemaDoEnvelope.parse(bruto);
+  // Apenas callbacks internos legados usam o contrato antigo. O gerador real exige a versão editorial.
+  const editorial = Boolean(bruto && typeof bruto === "object" && "politica" in bruto);
+  const decisao = editorial ? decisaoDaDescoberta(bruto, c) : null;
+  const envelope = decisao ?? esquemaDoEnvelope.parse(bruto);
+  if (decisao?.semPublicacao?.decisao === "adiar") throw new DecisaoEditorialAdiada(decisao.semPublicacao);
   const conceitos = await repo.wiki!.automacao!.conceitos();
   const ocupados = new Set((await repo.listarResumos()).map((n) => caminhoOcupado(n.pasta, n.titulo)));
   const textos = textosDasEntradas(c);
@@ -310,9 +421,9 @@ async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, br
     ids: new Set(v.afirmacoes.map((a) => a.id)),
     obsoletas: new Set(v.afirmacoes.filter((a) => "desatualizada" in a).map((a) => a.id)),
   }] as const] : []));
-  const preparo: Preparo = { publicacoes: [], descartadas: [], tentadas: new Set() };
+  const preparo: Preparo = { publicacoes: [], descartadas: [], tentadas: new Set(), ...(decisao?.semPublicacao ? { decisao: decisao.semPublicacao } : {}) };
   for (const bruta of envelope.propostas) {
-    const valida = esquemaDaProposta.safeParse(bruta);
+    const valida = (editorial ? esquemaDaPropostaEditorial : esquemaDaProposta).safeParse(bruta);
     if (!valida.success) { preparo.descartadas.push("estrutura"); continue; }
     const p = valida.data;
     const resultado = await prepararProposta(repo, c, p, conceitos, textos, ocupados, visiveis);
@@ -323,6 +434,14 @@ async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, br
     if (preparo.publicacoes.some((q) => (q.alvo?.id ?? q.conceito!.chave) === identidade)) { preparo.descartadas.push("repetida"); continue; }
     if (!resultado.alvo) ocupados.add(caminhoOcupado(resultado.pasta ?? null, resultado.titulo));
     preparo.publicacoes.push(resultado);
+  }
+  if (editorial && preparo.descartadas.some((v) => v !== "sem-mudanca")) {
+    if (!preparo.publicacoes.length) {
+      console.info("[wiki] Propostas descartadas na validação.", { quantidade: preparo.descartadas.length, motivos: [...new Set(preparo.descartadas)] });
+      throw new PropostaEditorialRecusada();
+    }
+    // Aproveitar o que foi validado sem declarar concluída a parte recusada nem repeti-la automaticamente.
+    preparo.revisar = true;
   }
   return preparo;
 }
@@ -358,23 +477,31 @@ export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAuto
     if (!origem.conteudo.trim()) { await fila.concluir(trabalho, [], null); return { tipo: "processado" as const, publicadas: 0, descartadas: 0 }; }
     const trecho = trechoDaOrigem(origem.conteudo, trabalho.cursor);
     const contexto: ContextoWiki = { origem, trecho, ...await recuperarContexto(repo, origem, trecho.texto, await fila.conceitos()) };
-    // Um byte por token é uma reserva conservadora, não uma medição de tokenização.
-    // Primeiro as candidatas; só depois o índice, das entradas menos próximas da nota para as mais.
-    while (Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8") > 65_000) {
-      if (contexto.candidatas.length) contexto.candidatas.pop();
-      else if (contexto.indice.entradas.length) contexto.indice.entradas.pop();
-      else break;
-    }
-    const quantidade = Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8") + 8192 + 4096;
-    reserva = await fila.reservar(trabalho, quantidade, opcoes.tetoDiario);
-    if (!reserva) { await fila.falhar(trabalho, "orcamento"); return { tipo: "orcamento" as const }; }
     const sinal = opcoes.sinal ? AbortSignal.any([opcoes.sinal, AbortSignal.timeout(40_000)]) : AbortSignal.timeout(40_000);
-    sinal.throwIfAborted();
-    chamou = true;
-    const resultado = await gerar(contexto, sinal);
-    await fila.confirmarConsumo(reserva, resultado.uso); contabilizada = true;
+    let resultado: Awaited<ReturnType<GeradorAutomaticoWiki>> | undefined;
+    const solicitadas = new Set<string>();
+    for (let etapa = 0; etapa < 2; etapa++) {
+      // O orçamento permanece igual. Quando há pouco saldo, reduzir contexto evita exigir a reserva máxima sem necessidade.
+      const saldo = (await fila.energia(opcoes.tetoDiario)).restante;
+      limitarContexto(contexto, Math.min(65_000, saldo - 8192 - 4096), solicitadas);
+      const tamanho = Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8");
+      if (tamanho > 65_000) throw new PropostaEditorialRecusada();
+      reserva = await fila.reservar(trabalho, tamanho + 8192 + 4096, opcoes.tetoDiario);
+      contabilizada = false; chamou = false;
+      if (!reserva) { await fila.falhar(trabalho, "orcamento"); return { tipo: "orcamento" as const }; }
+      sinal.throwIfAborted(); chamou = true;
+      resultado = await gerar(contexto, sinal);
+      await fila.confirmarConsumo(reserva, resultado.uso); contabilizada = true;
+      const d = decisaoDaDescoberta(resultado.proposta, contexto)?.semPublicacao;
+      if (etapa !== 0 || d?.tipoDePendencia !== "leitura_de_neuronio") break;
+      for (const id of d.neuroniosALer) solicitadas.add(id);
+      await lerDestinos(repo, contexto, d.neuroniosALer);
+      const atual = await repo.obterNota(origem.id);
+      if (!atual || atual.revisao !== origem.revisao) throw new ErroWiki("Entrada superada.", 409);
+    }
+    if (!resultado) throw new ErroWiki("Geração indisponível.");
     // O resultado já foi pago: daqui em diante só a posse e as revisões decidem se ele vale.
-    const { publicacoes, descartadas, tentadas } = await prepararPublicacoes(repo, contexto, resultado.proposta);
+    const { publicacoes, descartadas, tentadas, revisar, decisao } = await prepararPublicacoes(repo, contexto, resultado.proposta);
     if (descartadas.length) console.info("[wiki] Propostas descartadas na validação.", { quantidade: descartadas.length, motivos: [...new Set(descartadas)] });
     const atualizadas = new Set(publicacoes.flatMap((p) => p.alvo ? [p.alvo.id] : []));
     // Só as dependentes que cabiam nas propostas desta chamada contam como vistas; as outras esperam a próxima onda.
@@ -386,7 +513,7 @@ export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAuto
     const avaliadas = desatualizadas.filter((c) => vistas.has(c.notaId) && !tentadas.has(c.notaId)).map((c) => c.notaId);
     // Ondas limitadas: dependentes ainda não vistas mantêm a origem na fila, sem declarar cobertura completa.
     const restantes = desatualizadas.some((c) => !vistas.has(c.notaId));
-    await fila.concluir(trabalho, publicacoes, restantes ? trabalho.cursor : trecho.fim < origem.conteudo.length ? trecho.fim : null, avaliadas);
+    await fila.concluir(trabalho, publicacoes, revisar || restantes ? trabalho.cursor : trecho.fim < origem.conteudo.length ? trecho.fim : null, revisar ? [] : avaliadas, revisar, decisao);
     return { tipo: "processado" as const, publicadas: publicacoes.length, descartadas: descartadas.length };
   } catch (erro) {
     const classificada = classificarFalha(erro);
@@ -396,7 +523,7 @@ export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAuto
     if (reserva && !contabilizada) await fila.confirmarConsumo(reserva, consumo);
     const categoria = descreverErro(erro);
     console.error("[wiki] Trabalho adiado.", { motivo, erro: categoria });
-    await fila.falhar(trabalho, motivo, categoria);
+    await fila.falhar(trabalho, motivo, categoria, erro instanceof DecisaoEditorialAdiada ? erro.decisao : undefined);
     return { tipo: "adiado" as const, motivo };
   }
 }
