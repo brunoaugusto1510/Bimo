@@ -27,4 +27,3 @@ Correção proposta: alinhar README e demais descrições operacionais com os li
 - A migração anterior corrigiu a referência da extração para `src/lib/extracao/index.ts`. Na checagem inicial desta ingestão, não havia link local quebrado na MemWiki.
 
 Fontes: [agente](../../src/lib/agente.ts), [README](../../README.md), [recuperação da wiki](../../src/lib/wiki/recuperacao.ts), [consulta da wiki](../../src/lib/wiki/consulta.ts), [serviços mobile](../../mobile/src/servicos/ProvedorDeServicos.tsx) e [relatório de ingestão/lint](verificacoes/2026-10-26-ingest-lint.md).
-

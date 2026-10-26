@@ -54,6 +54,7 @@ Os 25 documentos de `docs/` foram incorporados integralmente a `documentacao/`, 
 - [Ensaio real — 25/10/2026](documentacao/Bimo%20-%20Ensaio%20Real%20dos%20Neuronios%20-%202026-10-25.md): primeira passagem documentada.
 - [Segunda passagem — 26/10/2026](documentacao/Bimo%20-%20Segunda%20Passagem%20dos%20Neuronios%20-%202026-10-26.md): ajustes e resultados posteriores.
 - [Correções e terceira passagem — 26/10/2026](documentacao/Bimo%20-%20Correcoes%20e%20Terceira%20Passagem%20-%202026-10-26.md): correções editoriais e novo ensaio.
+- [Revisão geral da Wiki Viva — 26/10/2026](documentacao/Bimo%20-%20Revisao%20Geral%20da%20Wiki%20Viva%20-%202026-10-26.md): quatro revisões, teste de jornada, correções do commit `87b6da8`, ordem de deploy da migração 0011 e achados abertos.
 
 ### Interface e aplicativo móvel — planos e especificações
 
