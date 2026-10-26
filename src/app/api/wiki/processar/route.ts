@@ -2,11 +2,11 @@ import { exigirSessao } from "@/lib/autenticacao";
 import { exigirMesmaOrigem, respostaDeErro } from "@/lib/http-de-notas";
 import { obterRepositorio } from "@/lib/repositorio-de-notas";
 import { descreverErro } from "@/lib/registro-de-erros";
-import { processarWiki } from "@/lib/wiki/automacao";
+import { processarLoteWiki } from "@/lib/wiki/lote";
 import { gerarConhecimentoWiki } from "@/lib/wiki/gerador";
 import { automacaoWikiHabilitada, cronWikiAutorizado, executorWikiAutorizado, tetoDiarioWiki } from "@/lib/wiki/configuracao";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 /** GET existe exclusivamente para o Cron autenticado. Não reativa bloqueios de configuração. */
 export async function GET(request: Request) {
   if (!cronWikiAutorizado(request)) return respostaDeErro(401, "Executor não autorizado.");
@@ -27,7 +27,7 @@ async function executar(request: Request, podeRetomar: boolean) {
   try {
     const repo = await obterRepositorio();
     if (podeRetomar && new URL(request.url).searchParams.get("acao") === "retomar") await repo.wiki?.automacao?.retomar();
-    const resultado = await processarWiki(repo, gerarConhecimentoWiki, { tetoDiario: tetoDiarioWiki(), sinal: request.signal });
+    const resultado = await processarLoteWiki(repo, gerarConhecimentoWiki, { tetoDiario: tetoDiarioWiki(), sinal: request.signal });
     return Response.json({ ...resultado, cobertura: await repo.wiki?.automacao?.cobertura() }, { headers: { "Cache-Control": "no-store" } });
   } catch (erro) {
     console.error("[wiki] Falha na rodada de manutenção.", { erro: descreverErro(erro) });

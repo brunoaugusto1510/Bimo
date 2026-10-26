@@ -14,7 +14,7 @@ let falhas = 0;
 let ultimoTipo = "";
 do {
   try {
-    const resposta = await fetch(alvo, { method: "POST", redirect: "error", signal: AbortSignal.timeout(65_000),
+    const resposta = await fetch(alvo, { method: "POST", redirect: "error", signal: AbortSignal.timeout(310_000),
       headers: { authorization: `Bearer ${segredo}` } });
     if ([401, 403, 503].includes(resposta.status)) {
       console.error("Executor interrompido: confira autenticação, habilitação e configuração do servidor.");
@@ -25,6 +25,11 @@ do {
     const tipo = ["processado", "ocioso", "orcamento", "adiado", "desligado"].includes(dados.tipo) ? dados.tipo : "resposta inesperada";
     const motivo = tipo === "adiado" && ["temporario", "revisar", "configuracao"].includes(dados.motivo) ? ` (${dados.motivo})` : "";
     console.info("[wiki]", tipo + motivo);
+    if (dados.lote && dados.cobertura) {
+      const contagens = { rodadas: dados.lote.rodadas, processados: dados.lote.processados, publicacoes: dados.lote.publicadas,
+        lidas: dados.cobertura.concluidos, pendentes: dados.cobertura.pendentes, impedidas: dados.cobertura.impedidos };
+      if (Object.values(contagens).every((n) => Number.isSafeInteger(n) && n >= 0)) console.info("[wiki] Progresso", contagens);
+    }
     falhas = 0; ultimoTipo = tipo;
     alvo.searchParams.delete("acao");
   } catch {
@@ -33,5 +38,5 @@ do {
     if (++falhas >= 5 || umaVez) { process.exitCode = 1; break; }
   }
   // Sem orçamento só há o que fazer no próximo dia UTC; consultar a cada dez segundos seria ruído.
-  if (!umaVez) await esperar(ultimoTipo === "orcamento" ? 30 * 60_000 : 10_000);
+  if (!umaVez) await esperar(ultimoTipo === "orcamento" ? 30 * 60_000 : ultimoTipo === "ocioso" ? 60_000 : 10_000);
 } while (!umaVez);
