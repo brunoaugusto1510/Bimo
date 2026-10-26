@@ -1,6 +1,6 @@
 # Bimo — Wiki Viva: o que falta
 
-Atualizado em 23/10/2026, após concluir o backend e implementar as telas sobre o commit `c3da565`.
+Atualizado em 26/10/2026, após processamento em lotes, política editorial v4 e ensaios reais de criação/edição.
 O que já está feito e como operar fica em `Bimo - Wiki Viva - Operacao.md`; o desenho das telas está no
 artefato "Bimo — Wiki Viva: conceitos e telas" (https://claude.ai/artifact/Jr5HEw8UqmRFsVJDQBEVFy).
 Vocabulário do artefato: neurônio = síntese, sinapse = evidência, consolidação = reprocessar após 90 s sem digitar,
@@ -17,8 +17,8 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 ## Decisões confirmadas pelo usuário em 23/10
 
 1. **Pasta própria:** novas sínteses nascem em `Neurônios`. As existentes mantêm a pasta atual; o papel vem dos metadados.
-2. **Vercel Hobby:** GET protegido por `CRON_SECRET` e uma rodada diária, às 05:00 UTC, preparada em `vercel.json`.
-   O POST do executor externo continua disponível. Cada chamada processa um trabalho; a aceleração após atividade continua.
+2. **Vercel Hobby:** GET protegido por `CRON_SECRET` e execução diária, às 05:00 UTC, preparada em `vercel.json`.
+   Na revisão de 25/10, GET e POST passam a percorrer um lote de até 25 rodadas, respeitando duração e orçamento. A aceleração após atividade continua com uma rodada.
 3. **Telas incluídas no escopo:** referência recebida no HTML "Bimo — Wiki Viva conceitos e telas", com 17 pranchas. Implementadas na página principal, com os tokens existentes.
 
 ## Situação desta implementação
@@ -31,7 +31,14 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 - [x] Dados do grafo identificam neurônios, sinapses e ligações entre neurônios, sempre derivados do texto.
 - [x] Cérebro, Diário, neurônio aberto e aparência do grafo, conforme o arquivo visual recebido.
 - [x] Aplicar migrações 0007–0011, configurar e publicar na Vercel, confirmar o Cron e executar piloto real (duas notas, um neurônio).
-- [ ] Completar o processamento inicial das 383 notas e avaliar qualidade/custo em uma amostra maior. Ao final do piloto: duas notas lidas, 381 aguardando processamento; nenhum impedimento registrado.
+- [x] Rever a cadência da carga inicial: executor em lotes, limites de tempo/rodadas, retomada persistida e contagens no executor.
+- [x] Critérios de utilidade/ganho/destino, conservação/adiamento, reforço de evidência, limpeza explícita de perguntas e procedência editorial.
+- [x] Leitura dirigida limitada, retomada operacional por ID/revisão e distinção entre fontes pessoais e destinos gerenciados.
+- [x] Recusar divergências inválidas ou acima do teto e preservar/reconfirmar relações após substituir afirmações.
+- [x] Ensaios reais documentados e correções revisadas do PDF e do middleware, sem alterar as origens.
+- [ ] Completar o processamento inicial e ampliar a avaliação com exemplos inéditos. Fotografia final de 26/10: 389 origens, 38 leituras concluídas, 351 pendentes, nenhum trabalho impedido e 17 neurônios. As 383 notas e a cobertura 2/383 pertencem ao piloto histórico de 23/10.
+- [ ] Avaliar a recuperação de candidatas pouco relacionadas, a atomização das afirmações e a decisão conservadora de Bling em uma amostra independente.
+- [ ] Escolher/implementar os modos do brainstorming, se aprovados: seleção manual, revisão integral, diário e demais propostas. O arquivo de modos não significa que esses controles já existam.
 
 ## Plano do que falta (ordem sugerida)
 
@@ -55,7 +62,7 @@ energia = orçamento diário. No código os nomes continuam síntese, evidência
 
 ### 4. Estados do neurônio e divergências estruturadas — concluído no backend
 - Estados disponíveis: vivo, reconsolidando, seu, em tensão, sem raízes e em pausa; alertas podem coexistir com o estado.
-- Divergências são pares de ids de afirmação com o contexto de cada lado; referências inventadas são ignoradas.
+- Divergências são pares de ids de afirmação com o contexto de cada lado. Na política v4, referências inventadas ou pares inválidos recusam a proposta; mudanças na proposição exigem reconfirmação e alterações somente de evidência preservam a relação.
 - "Devolver ao Bimo" já tem endpoint (`/api/wiki/gerenciamento`).
 
 ### 5. Resumo do cérebro — concluído
