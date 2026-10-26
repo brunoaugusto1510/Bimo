@@ -22,6 +22,20 @@ O grafo deriva nós e arestas das notas e dos wikilinks. Metadados distinguem ne
 
 Cérebro, Diário e neurônio aberto usam contratos de leitura e gerenciamento da Wiki Viva. Métricas de cobertura ou energia não devem ser apresentadas como prova de correção do conhecimento.
 
+## Telas da Wiki Viva e o desenho — 26/10/2026
+
+A fonte do desenho é o artifact "Bimo — Wiki Viva: conceitos e telas" (https://claude.ai/artifact/Jr5HEw8UqmRFsVJDQBEVFy): pranchetas `Cerebro`, `Neuronio`, `Diario`, `Estados` e as variantes `*Escuro` e `*Celular`. As telas foram reescritas para segui-lo e conferidas no navegador com dados reais (claro, escuro e 375 px), sem avaliação em produção.
+
+- **Cérebro** (`wiki/CerebroDaWiki.tsx`): sobreposição no grafo inteiro, não um painel lateral. No alto, legenda (some no celular) e chips "Tudo / Só neurônios / Nascidos esta semana · N / Precisam de você · N"; embaixo, a pílula da fila ("N notas na fila para consolidar", estática: a fila não diz se há rodada em andamento, e `BimoPensando` é só para o Bimo pensando agora) e o cartão do neurônio escolhido, que vira folha presa à base no celular. Escolher um neurônio no grafo abre o cartão; "Abrir neurônio" leva ao detalhe. As origens do cartão vêm das arestas `sinapse` do grafo.
+- **Filtros**: `filtro-do-cerebro.ts` calcula os ids; `GrafoDeFundo` recebe `somenteNeuronios` e `neuroniosVisiveis`, e a câmera enquadra o que sobra. O enquadramento depende do conteúdo do filtro, não da identidade do `Set` (a consulta de 30 s recria o Set).
+- **Diário** (`wiki/DiarioDaWiki.tsx`): manchete na voz do Bimo calculada dos eventos, cartões por tipo (nascimento em azul-suave), leituras sem novidade agrupadas num `<details>`, resumo (despertar, neurônios, sinapses, energia) à direita só a partir de `lg`, porque a barra lateral estreita a área em `md`. Evento sem neurônio e com `origemId` oferece "Abrir nota".
+- **Neurônio aberto** (`wiki/NeuronioAberto.tsx`): barra "← pasta / título ✕" própria, citações como sobrescritos pequenos com área de toque ampliada, sinapses numeradas pela fonte, interruptor "O Bimo cuida deste neurônio" (desligar envia `gerenciada: false`) e, se protegido, "Devolver ao Bimo". No celular (abaixo de `md`) a citação abre uma folha "Sinapse i de n".
+- **Grafo** (`desenhar-neuronio.ts`): halo, anel e miolo por estado; rótulos permanentes dos neurônios só em canvas com 768 px ou mais.
+- **Seleção e filtro**: `PaginaPrincipal` deriva `selecaoVisivel`; um neurônio escolhido que o filtro esconde perde o cartão e o foco do grafo, e volta a valer em "Tudo". A câmera reenquadra pela chave do filtro escolhido (`chaveDoFiltro`), não pelo conteúdo do recorte. "Ver origens" só aparece em "Tudo". Com o cérebro aberto a página consulta o resumo mesmo sem neurônio no grafo, para descobrir o primeiro.
+- O modo `comPainelWiki` do `GrafoDeFundo` (canvas encolhido para um painel lateral) foi removido junto com o painel.
+
+Desvios conscientes: o diário não oferece "Deixar como está/Devolver ao Bimo" direto no cartão, porque o evento não traz a revisão; o cartão leva ao neurônio. As bolinhas de pasta nas sinapses ficaram fora, porque a cor da pasta depende do mapa de grupos do grafo.
+
 ## Onde conferir
 
 - [Página principal](../../../src/components/PaginaPrincipal.tsx), [moldura estável](../../../src/components/EspacoDeTrabalho.tsx), [atualizador](../../../src/components/AtualizadorDasNotas.tsx) e [estado das abas](../../../src/lib/espaco-de-trabalho/estado.ts).
