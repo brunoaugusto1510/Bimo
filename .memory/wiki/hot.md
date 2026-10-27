@@ -4,6 +4,12 @@
 
 ## Estado atual — 26/10/2026
 
+- **27/10: primeira fonte de `.raw/` ingerida.** `.memory/.raw/llm-wiki.md` é o texto do padrão LLM Wiki, resumido em [fonte: LLM Wiki](fontes/llm-wiki-karpathy.md).
+  - A referência de 23/10 e a auditoria de 26/10 conferem com a fonte; nada foi contradito.
+  - Pontos novos (F1–F6): discutir a fonte com a pessoa antes de escrever, página de resumo por fonte, lint que sugere perguntas e fontes, índice suficiente até cerca de 100 fontes, frontmatter.
+  - `.raw/` continua fora do git. Versionar e transformar o fluxo por fonte em regra do `AGENTS.md` dependem do usuário.
+  - Só MemWiki mudou; nenhum código.
+
 - **Atualização das 20h25: Wiki Viva em rede (política `rede-v5`).** Branch `feat/wiki-viva-em-rede`, criada a partir da `main` em `80be741`. *(Commitada em 27/10, sem push e sem PR; o ponteiro `.claude/worktrees/login-multiusuario` ficou fora.)*
   - O usuário aceitou o HIGH da auditoria: nota salva pelo chat pode virar raiz de neurônio.
   - Pediu as recomendações sem conservadorismo, perto do LLM Wiki do Karpathy. O que entrou:

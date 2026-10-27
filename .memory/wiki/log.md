@@ -87,3 +87,11 @@
 - A pedido do usuário, a branch `feat/wiki-viva-em-rede` foi commitada com código, testes e MemWiki da política `rede-v5`.
 - O ponteiro `.claude/worktrees/login-multiusuario` ficou fora do commit.
 - Sem push, PR, modelo real ou produção.
+
+## [2026-10-27] ingest | LLM Wiki (texto do padrão)
+
+- Fonte: `.memory/.raw/llm-wiki.md` (11.985 bytes), primeira fonte bruta da MemWiki. Lida, não alterada.
+- Criada [fonte: LLM Wiki](fontes/llm-wiki-karpathy.md): resumo, conferência com a referência de 23/10 e o checklist C1–C16 da auditoria (sem contradições), e seis pontos da fonte não cobertos antes (F1–F6).
+- Atualizados `index.md` (seção "Fontes brutas ingeridas"), `dominios/wiki-viva.md` e `hot.md`.
+- Esta é a primeira entrada com o prefixo `## [data] operação | título` sugerido pela fonte; as anteriores ficam como estão.
+- Sem código, testes, commit ou push. `.raw/` segue fora do git.

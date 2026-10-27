@@ -17,6 +17,12 @@ Diretório central do conhecimento de desenvolvimento. Leia `hot.md` primeiro; u
 - [Interface e grafo](dominios/interface-e-grafo.md): árvore estável, editor, autosave, simulação e design.
 - [Mobile](dominios/mobile.md): Expo, serviços simulados, estado e testes separados.
 
+## Fontes brutas ingeridas
+
+Resumos das fontes em `.memory/.raw/` (imutáveis; a página resume e confronta, o arquivo bruto é a fonte da verdade).
+
+- [LLM Wiki — texto do padrão](fontes/llm-wiki-karpathy.md): ingerida em 27/10/2026; confere a referência de 23/10 e a auditoria de 26/10, e lista o que a fonte traz além delas.
+
 ## Verificações da memória
 
 - [Ingestão e lint — 26/10/2026](verificacoes/2026-10-26-ingest-lint.md): escopo, achados, correções e limites de evidência.
