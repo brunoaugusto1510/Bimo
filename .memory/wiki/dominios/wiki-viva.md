@@ -34,6 +34,38 @@ A construção usa termos característicos, títulos, aliases e dependências. S
 
 Diagnóstico local identifica condições como raízes ausentes, possíveis duplicatas e ligações quebradas. O diário registra eventos de publicação e impedimentos. Cérebro e detalhe de neurônio apresentam cobertura, energia, estados e evidências. O lint de sínteses do aplicativo é diferente do lint da MemWiki solicitado aos agentes.
 
+## Rede de neurônios — política `rede-v5` (26/10/2026, noite)
+
+Decisão em [decisões](../decisions.md). O que mudou no código:
+
+- **Escrita:**
+  - até 6 propostas por resposta (`PROPOSTAS_POR_RESPOSTA` em `editorial.ts`);
+  - `resumo` de uma linha por neurônio em `estrutura.resumo` (null mantém o atual);
+  - `ligacoes` aceita `proposta:N` para outra proposta da mesma resposta. `ligarIrmas` (`automacao.ts`) liga as duas nos dois sentidos, só entre as publicadas, e escreve o link no texto; a fila completa os ids em `estrutura.ligacoes` depois de gravar (`ligacoesComIrmas`, mesma transação);
+  - teto de 16 ligações (`LIMITE_DE_LIGACOES` em `tipos.ts`).
+- **Índice e recuperação:**
+  - `conceitos()` traz `resumo` (ou a primeira afirmação) e `ligacoes` da publicação mais recente;
+  - o índice que o modelo vê tem até 250 entradas e 30 mil caracteres, com resumo, e o resumo conta na pontuação;
+  - 8 candidatas por rodada; vizinhos de um neurônio pontuado herdam metade da pontuação (`vizinhosDosNeuronios`);
+  - candidatas trazem `ligadoPor`.
+- **Chat:**
+  - `consultarConhecimentoWiki` casa termos inteiros (`comTermosDe`, aceita siglas) e exclui neurônio sem nenhuma origem;
+  - devolve até 4 neurônios e `relacionados` (vizinhos com caminho e resumo);
+  - a ferramenta `indice_da_wiki` mostra o mapa: resumo, `ligaA` e `citadoPor`.
+- **Lint:**
+  - o alerta `isolado` é informativo (`pedeAtencao`): não vai ao Diário nem a "Precisam de você";
+  - se o neurônio continua isolado na verificação seguinte e a fila está ociosa, a origem é relida uma vez (`diagnostico.religacao`), no máximo duas origens por verificação.
+- **O que não mudou:** citação literal obrigatória, nenhuma escrita em nota pessoal, proteção por edição manual, a regra "só a nota que sustenta troca ou retira", o teto de contexto (65 mil bytes) e o orçamento diário.
+- **Ajustes das revisões independentes (`code-reviewer` do ECC e Codex):**
+  - a descoberta usa `max_output_tokens` de 12.288 (`SAIDA_MAXIMA_DA_WIKI`, o mesmo valor da reserva), enquanto o chat segue com 4.096;
+  - a marca `religacao` sobrevive à republicação do neurônio e vale também para irmãos da mesma origem;
+  - o par `proposta:N` só fecha com vaga nas duas pontas;
+  - uma síntese existente que só seria republicada por `proposta:N`, sem link novo, não é republicada;
+  - a consulta aceita termos de 3 letras como palavra inteira, ordena título e apelido antes de resumo, e exclui neurônios sem raízes também dos relacionados e do índice;
+  - a assinatura do diagnóstico ignora `isolado`;
+  - `limitarContexto` corta o índice até 60 entradas antes de cortar candidatas.
+- **Testes:** `rede.test.ts` (memória). A jornada (`jornada.test.ts`) passou a verificar que nada existente é apagado ou trocado, em vez de exigir que nenhum neurônio mude: com mais candidatas, um neurônio devolvido ao Bimo pode ser enriquecido por uma nota nova.
+
 ## Evidência e limites
 
 Localizar uma citação e conferir sua revisão não demonstra que ela sustenta logicamente a conclusão. Cobertura mede processamento, sem garantir leitura exaustiva ou qualidade. O histórico de ensaios deve ser usado com a data, política e amostra descritas.

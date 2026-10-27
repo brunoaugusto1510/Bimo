@@ -21,6 +21,7 @@ const textos: Record<AlertaWiki, string> = {
   duplicata: "Há neurônios com títulos ou apelidos semelhantes; confira se tratam do mesmo conceito.",
   protegida_com_novidades: "Seu neurônio tem anotações relacionadas que ainda não foram incorporadas.",
   ligacao_quebrada: "Uma ligação deste neurônio aponta para outro que não está mais disponível.",
+  isolado: "Este neurônio ainda não se liga a nenhum outro; o Bimo vai reler a origem para procurar conexões.",
 };
 export function eventoDoDiagnostico(alertas: AlertaWiki[]): { tipo: TipoDeEventoWiki; texto: string } {
   return { tipo: alertas.length === 1 && alertas[0] === "divergencias" ? "discordam" : "precisa_de_voce",

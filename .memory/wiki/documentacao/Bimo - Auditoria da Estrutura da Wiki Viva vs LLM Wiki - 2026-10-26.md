@@ -179,6 +179,25 @@ O isolamento por `user_id` foi verificado em todas as consultas lidas de `fila-b
   - RV l.79 diz que o CLAUDE.md "ainda manda o andamento para `docs/`", mas `CLAUDE.md:36` aponta para `.memory/wiki/documentacao/`.
 - **Ainda aberto na camada B:** a divergência de limites do chat entre `README.md:49` (45 s) e `src/lib/agente.ts:10-11` (12 voltas, 150 s) continua como registrada em `bugs.md`.
 
+## Adendo — 26/10/2026, noite: decisões e implementação
+
+O usuário aceitou o HIGH (lacuna 1) como comportamento desejado: nota criada pelo chat é anotação legítima e pode virar raiz. A recomendação 1 não será implementada.
+
+Também pediu as demais recomendações da camada A, sem conservadorismo e próximas do LLM Wiki. A implementação está na branch `feat/wiki-viva-em-rede`, descrita em [decisões](../decisions.md) e no [domínio Wiki Viva](../dominios/wiki-viva.md).
+
+Situação das lacunas:
+
+| Lacuna | Situação |
+| --- | --- |
+| 6 — consulta | Fechada |
+| 10 — ligações | Fechada |
+| 8 — lint | Parcial: entrou o alerta `isolado`, com releitura; contradição entre neurônios continua fora |
+| 9 — índice | Parcial: resumo e teto maior; a chave congelada após renomear e as paráfrases continuam |
+| 7 — remoções sem evento no Diário | Aberta |
+| 4 | Aberta |
+| 17, 18, 19 | Abertas |
+| Camada B | Abertas |
+
 ## 7. Limites desta auditoria
 
 - **Produção:** não verificada. Não foi possível confirmar se a 0011 está aplicada, nem a exposição da API de dados, nem o volume de linhas. Os números de neurônios (14, com 10 sem ligação) vêm da análise de 25/10.

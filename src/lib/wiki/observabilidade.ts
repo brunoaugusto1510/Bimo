@@ -1,7 +1,7 @@
 import { normalizarTexto } from "../caminho-da-nota";
 import type { RepositorioDeNotas, ResumoDeNota } from "../repositorio-de-notas/tipos";
 import type { ConceitoWiki } from "./automacao-tipos";
-import type { AlertaWiki, EstadoDoNeuronio } from "./observabilidade-tipos";
+import { pedeAtencao, type AlertaWiki, type EstadoDoNeuronio } from "./observabilidade-tipos";
 import { compactarFontes, hashDoConteudo } from "./fontes";
 import { ordenarTermos } from "./recuperacao";
 import { exigirWiki } from "./servico";
@@ -36,7 +36,10 @@ export async function obterCerebroWiki(repo: RepositorioDeNotas, teto: number | 
     emConsolidacao: cobertura?.pendentes ?? 0, impedidas: cobertura?.impedidos ?? 0 }, energia: energia ?? null, neuronios, cobertura };
 }
 
-/** Verificação local em lotes, no máximo uma vez por dia por síntese; não chama o modelo. */
+/** Releituras pedidas por verificação para ligar neurônios isolados; cada uma custa uma leitura paga da origem. */
+const RELEITURAS_POR_VERIFICACAO = 2;
+
+/** Verificação local em lotes, no máximo uma vez por dia por síntese; não chama o modelo (só reenfileira origens). */
 export async function verificarSinteses(repo: RepositorioDeNotas, limite = 20) {
   const fila = repo.wiki?.automacao; if (!fila) return 0;
   const [paginas, conceitos, resumos] = await Promise.all([repo.wiki!.listar(), fila.conceitos(), repo.listarResumos()]);
@@ -50,6 +53,11 @@ export async function verificarSinteses(repo: RepositorioDeNotas, limite = 20) {
     const ids = identidades.get(chave) ?? new Set<string>(); ids.add(c.notaId); identidades.set(chave, ids);
   }
   const duplicadas = new Set([...identidades.values()].filter((ids) => ids.size > 1).flatMap((ids) => [...ids]));
+  // Quem é citado por outro neurônio não está isolado, mesmo sem ligações próprias.
+  const citadas = new Set(paginas.flatMap((p) => p.estrutura.ligacoes.filter((id) => id !== p.notaId)));
+  const relidas = new Set<string>();
+  let ociosa: boolean | undefined;
+  const filaOciosa = async () => (ociosa ??= (await fila.cobertura()).pendentes === 0);
   const agora = new Date();
   const candidatas = paginas.filter((p) => notas.has(p.notaId) && porId.has(p.notaId))
     .sort((a, b) => (porId.get(a.notaId)?.diagnostico?.verificadoEm ?? "").localeCompare(porId.get(b.notaId)?.diagnostico?.verificadoEm ?? ""))
@@ -68,8 +76,25 @@ export async function verificarSinteses(repo: RepositorioDeNotas, limite = 20) {
       if ([...relacionadas].some((id) => !derivadas.has(id) && notas.has(id) && c.origens[id] !== notas.get(id)!.revisao)) alertas.push("protegida_com_novidades");
     }
     if (p.estrutura.ligacoes.some((id) => !derivadas.has(id) || !notas.has(id))) alertas.push("ligacao_quebrada");
+    const isolado = paginas.length > 1 && !p.estrutura.ligacoes.length && !citadas.has(p.notaId);
+    if (isolado) alertas.push("isolado");
+    // O lint também corrige: um neurônio isolado tem a origem relida uma vez, já com o índice e os vizinhos atuais, para
+    // ganhar ligações. Só quem já estava isolado na verificação anterior (um dia antes), com a fila ociosa (notas novas vêm
+    // antes) e uma vez por isolamento: um neurônio que nasce de uma releitura espera um dia, o que impede uma cascata de
+    // releituras pagas. Continuar isolado não gera outra; voltar a ter ligações zera a tentativa.
+    let religacao = isolado ? c.diagnostico?.religacao : undefined;
+    if (isolado && c.diagnostico?.alertas.includes("isolado") && !religacao && !c.protegida && !c.pausada) {
+      const origem = p.fontes.map((f) => notas.get(f.id)).find((n) => n && !derivadas.has(n.id));
+      // Um irmão da mesma origem já relida nesta verificação conta como tentado: a releitura serve aos dois.
+      if (origem && relidas.has(origem.id)) religacao = agora.toISOString();
+      else if (origem && relidas.size < RELEITURAS_POR_VERIFICACAO && await filaOciosa()
+        && (await fila.reprocessar(origem.id, origem.revisao)) === "ok") {
+        relidas.add(origem.id); religacao = agora.toISOString();
+      }
+    }
     await fila.registrarDiagnostico(p.notaId, notas.get(p.notaId)!.revisao, {
-      assinatura: hashDoConteudo(JSON.stringify(alertas)), alertas, verificadoEm: agora.toISOString(),
+      // A assinatura decide se o Diário ganha um evento: só os alertas que pedem atenção contam (entrar ou sair de "isolado" não repete o aviso).
+      assinatura: hashDoConteudo(JSON.stringify(alertas.filter(pedeAtencao))), alertas, verificadoEm: agora.toISOString(), ...(religacao ? { religacao } : {}),
     });
   }
   return candidatas.length;

@@ -18,7 +18,9 @@ export type AfirmacaoWiki = {
  * `ligacoes` são os ids de outras sínteses a que ela se liga (não são evidência) e `lacunas`, as perguntas em aberto.
  */
 export type DivergenciaWiki = { a: { afirmacaoId: string; contexto: string }; b: { afirmacaoId: string; contexto: string } };
-export type EstruturaWiki = { ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[]; editorial?: import("./editorial").RegistroEditorial };
+/** `resumo`: uma frase sobre o que o neurônio trata; é o que o índice mostra ao lado do título. */
+export type EstruturaWiki = { ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[]; resumo?: string;
+  editorial?: import("./editorial").RegistroEditorial };
 export type MetadadosWiki = {
   notaId: string; revisaoPublicada: number; fontes: FontePersistidaWiki[]; afirmacoes: AfirmacaoWiki[]; estrutura: EstruturaWiki;
   /** Presente em sínteses da automação: a revisão que ela considera sua (renomear e mover a acompanham). */
@@ -28,7 +30,12 @@ export type DestinoDeLigacao = Pick<NotaCompleta, "id" | "titulo" | "pasta">;
 export type PublicacaoWiki = {
   titulo: string; conteudo: string; fontes: FonteWiki[]; afirmacoes: AfirmacaoWiki[];
   /** Ids de outras sínteses a que esta se liga; já validados (existem, não são ela mesma). */
-  ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[];
+  ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[]; resumo?: string | null;
+  /**
+   * Posições (nesta mesma lista de publicações) dos neurônios irmãos a que este se liga. Eles ainda não têm id: a fila
+   * completa `ligacoes` depois de gravar todos, na mesma transação. O texto já traz os links pelo caminho.
+   */
+  irmas?: number[];
   editorial?: import("./editorial").RegistroEditorial;
   /** Onde cada síntese ligada estava quando o texto foi escrito: renomeada ou movida até a publicação, o link ficaria errado. */
   destinos: DestinoDeLigacao[];
@@ -55,6 +62,14 @@ export class ErroWiki extends Error {
 export class ErroDaGeracaoWiki extends Error {
   override name = "ErroDaGeracaoWiki";
   constructor(mensagem: string, readonly uso: { entrada: number; saida: number } | null) { super(mensagem); }
+}
+
+/** No máximo dezesseis ligações por neurônio, contando as irmãs da mesma rodada. */
+export const LIMITE_DE_LIGACOES = 16;
+/** As ligações finais de cada publicação, já com os ids que as irmãs receberam ao ser gravadas. */
+export function ligacoesComIrmas(publicacoes: PublicacaoWiki[], ids: string[]) {
+  return publicacoes.map((p, i) => [...new Set([...p.ligacoes, ...(p.irmas ?? []).filter((j) => j !== i && ids[j]).map((j) => ids[j])])]
+    .filter((id) => id !== ids[i]).slice(0, LIMITE_DE_LIGACOES));
 }
 
 /** Dentro da publicação: cada síntese ligada ainda existe, continua sendo uma síntese e está onde o link diz. */

@@ -21,7 +21,7 @@ import { obterRepositorio } from "./repositorio-de-notas";
 import type { RepositorioDeNotas } from "./repositorio-de-notas/tipos";
 import { caminhoDaNota, resolverNotaDoAgente } from "./resolver-nota-do-agente";
 import { escolherPortaDeEscrita } from "./porta-de-escrita-do-agente";
-import { consultarConhecimentoWiki, evidenciasDaWiki } from "./wiki/consulta";
+import { consultarConhecimentoWiki, evidenciasDaWiki, indiceDaWiki } from "./wiki/consulta";
 import { descreverErro } from "./registro-de-erros";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
@@ -79,6 +79,23 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
         },
       },
       required: ["caminho"],
+    },
+  },
+  {
+    name: "indice_da_wiki",
+    description:
+      "Mostra o mapa da Wiki Viva: os neurônios (sínteses que o Bimo escreveu a partir das notas) com um resumo de uma linha, " +
+      "a quem cada um se liga e quem o cita. Use antes de perguntas amplas ou que cruzam assuntos ('o que sei sobre X', " +
+      "'como A se relaciona com B') para escolher o que ler; depois abra os neurônios com ler_nota e siga as ligações.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        consulta: {
+          type: "string",
+          description: "Termos para filtrar pelo caminho e pelo resumo. Omita para ver o mapa inteiro.",
+        },
+      },
+      required: [],
     },
   },
   {
@@ -172,6 +189,8 @@ export async function executarFerramenta(
         return await execListar(args, repositorio);
       case "ler_nota":
         return await execLer(args, repositorio, opcoes.leituras);
+      case "indice_da_wiki":
+        return await execIndiceDaWiki(args, repositorio);
       case "criar_nota":
         return await execCriar(args, repositorio);
       case "editar_nota":
@@ -294,6 +313,28 @@ async function execLer(args: Args, repositorio: RepositorioDeNotas, leituras?: L
     },
     resumo: `Leu "${caminhoDaNota(resultado)}"`,
     ids: [resultado.id],
+  };
+}
+
+async function execIndiceDaWiki(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
+  const consulta = typeof args.consulta === "string" ? args.consulta : undefined;
+  const neuronios = await tentarWiki(() => indiceDaWiki(repositorio, consulta));
+  if (!neuronios) {
+    return {
+      resposta: { total: 0, neuronios: [], aviso: "A Wiki Viva não está disponível agora. Use buscar_notas." },
+      resumo: "Índice da wiki indisponível",
+    };
+  }
+  // O mapa inteiro de um acervo grande gastaria contexto à toa: acima do limite, filtre pela consulta.
+  const LIMITE = 150;
+  return {
+    resposta: {
+      total: neuronios.length,
+      ...(neuronios.length > LIMITE ? { aviso: `Mostrando ${LIMITE} de ${neuronios.length}. Informe uma consulta para filtrar.` } : {}),
+      neuronios: neuronios.slice(0, LIMITE).map(({ caminho, resumo, ligaA, citadoPor }) => ({ caminho, resumo, ligaA, citadoPor })),
+    },
+    resumo: `Consultou o índice da wiki — ${neuronios.length} neurônio(s)`,
+    ids: neuronios.slice(0, LIMITE).map((n) => n.id),
   };
 }
 

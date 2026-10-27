@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { ErroWiki } from "./tipos";
 
-export const POLITICA_EDITORIAL = "sintetica-v4" as const;
+/** `rede-v5`: uma fonte toca várias páginas, liga-se generosamente e cada neurônio tem um resumo para o índice. */
+export const POLITICA_EDITORIAL = "rede-v5" as const;
+export const PROPOSTAS_POR_RESPOSTA = 6;
 const justificativa = z.string().trim().min(12).max(700);
 const criterio = z.object({ avaliacao: z.enum(["suficiente", "insuficiente", "incerto"]), justificativa }).strict();
 /** Justificativas auditáveis de produto; não são raciocínio interno nem prova de mérito semântico. */
@@ -19,7 +21,7 @@ const semPublicacao = z.object({ decisao: z.enum(["conservar_origem", "adiar"]),
 export type DecisaoSemPublicacao = z.infer<typeof semPublicacao>;
 /** Envelope separado permite validar propostas individualmente sem aceitar a omissão da política no provedor. */
 export const camposDoEnvelopeEditorial = { politica: z.literal(POLITICA_EDITORIAL), semPublicacao: semPublicacao.nullable() };
-export const esquemaDoEnvelopeEditorial = z.object({ ...camposDoEnvelopeEditorial, propostas: z.array(z.unknown()).max(3) }).strict()
+export const esquemaDoEnvelopeEditorial = z.object({ ...camposDoEnvelopeEditorial, propostas: z.array(z.unknown()).max(PROPOSTAS_POR_RESPOSTA) }).strict()
   .superRefine((e, ctx) => {
     if (Boolean(e.propostas.length) === Boolean(e.semPublicacao)) ctx.addIssue({ code: "custom", message: "Escolha propostas ou uma decisão sem publicação." });
     if (e.semPublicacao?.decisao === "adiar" && !e.semPublicacao.condicao) ctx.addIssue({ code: "custom", message: "Adiamento exige condição de reavaliação." });
@@ -31,7 +33,8 @@ export const esquemaDoEnvelopeEditorial = z.object({ ...camposDoEnvelopeEditoria
     if (d && new Set(d.neuroniosALer).size !== d.neuroniosALer.length) ctx.addIssue({ code: "custom", message: "Destinos repetidos." });
   });
 export type DecisaoEditorial = z.infer<typeof esquemaEditorial>;
-export type RegistroEditorial = DecisaoEditorial & { politica: typeof POLITICA_EDITORIAL;
+/** `politica` é a versão vigente na publicação; registros antigos guardam a sua (ex.: "sintetica-v4"). */
+export type RegistroEditorial = DecisaoEditorial & { politica: string;
   origem: { id: string; revisao: number; inicio: number; fim: number } };
 
 /** Categoria distinta e segura para a fila: não transportar justificativa ou texto de notas nos logs. */

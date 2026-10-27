@@ -7,7 +7,9 @@ import type { FonteWiki } from "./tipos";
 
 /** Sínteses desatualizadas por esta origem entram primeiro, em ondas pequenas. */
 export const DEPENDENTES_POR_ONDA = 3;
-export const CANDIDATAS_POR_RODADA = 6;
+export const CANDIDATAS_POR_RODADA = 8;
+/** Quanto da pontuação de um neurônio passa aos vizinhos: a rede traz o que a busca por palavras não alcança. */
+const PESO_DO_VIZINHO = 0.5;
 /** Termos consultados no acervo, no mínimo; termos só da própria nota não recuperam nada e não contam como úteis. */
 export const TERMOS_PRELIMINARES = 10;
 const TERMOS_UTEIS_MINIMOS = 3;
@@ -19,10 +21,11 @@ export const TERMOS_FINAIS = 6;
  * A consulta pede um a mais, para que a própria nota não esconda a saturação.
  */
 export const LIMITE_DA_CONSULTA_DE_TERMO = 20;
-const ENTRADAS_NO_INDICE = 120;
+const ENTRADAS_NO_INDICE = 250;
 const ALIASES_NO_INDICE = 6;
-/** Em caracteres da serialização; o payload inteiro tem seu próprio teto. */
-const TAMANHO_DO_INDICE = 12_000;
+const RESUMO_NO_INDICE = 160;
+/** Em caracteres da serialização; o payload inteiro tem seu próprio teto (e corta o fim do índice antes de recusar). */
+const TAMANHO_DO_INDICE = 30_000;
 
 // Normalizadas (sem acento). Palavras de função e verbos auxiliares que não distinguem uma nota de outra.
 const PALAVRAS_COMUNS = new Set(`
@@ -100,6 +103,20 @@ export function comPalavrasDe(referencia: string) {
   return (outro: string) => palavrasDe(outro).some((p) => dela.some((q) => casa(p, q)));
 }
 
+/**
+ * Comparador para uma pergunta curta: algum termo dela (palavra não comum de 3+ letras, para que "tcp", "dns" e "api"
+ * contem mesmo em minúsculas) casa com alguma palavra inteira do texto? `null` quando a pergunta não tem termo útil.
+ */
+export function comTermosDe(consulta: string) {
+  const termos = (consulta.normalize("NFC").match(/\p{L}[\p{L}\p{N}]*/gu) ?? [])
+    .flatMap((bruto) => { const termo = normalizarTexto(bruto); return termo.length >= 3 && !PALAVRAS_COMUNS.has(termo) ? [termo] : []; });
+  if (!termos.length) return null;
+  return (texto: string) => {
+    const palavras = normalizarTexto(texto).match(/[\p{L}\p{N}]+/gu) ?? [];
+    return termos.some((t) => palavras.some((p) => casa(p, t)));
+  };
+}
+
 /** Alguma palavra (4+ letras) de um lado casa com alguma do outro; barreira barata contra o id errado vindo do índice. */
 export const palavrasEmComum = (a: string, b: string) => comPalavrasDe(b)(a);
 
@@ -128,22 +145,32 @@ export async function carregarCandidata(repo: RepositorioDeNotas, id: string, co
     metadados.afirmacoes = garantirIds(metadados.afirmacoes);
     obsoletas = metadados.afirmacoes.filter((a) => !a.evidencias.every((e) => validas.has(e.fonteId))).map((a) => a.id);
   }
-  return { nota, metadados, conceito: conceitos.find((c) => c.notaId === id), obsoletas };
+  const ligadoPor = metadados ? conceitos.filter((c) => c.notaId !== id && c.ligacoes?.includes(id)).map((c) => c.notaId) : undefined;
+  return { nota, metadados, conceito: conceitos.find((c) => c.notaId === id), obsoletas, ...(ligadoPor ? { ligadoPor } : {}) };
+}
+
+/** Vizinhos de cada neurônio nos dois sentidos: a quem ele se liga e quem se liga a ele. */
+export function vizinhosDosNeuronios(conceitos: ConceitoWiki[]) {
+  const vizinhos = new Map<string, Set<string>>();
+  const ligar = (a: string, b: string) => { if (a !== b) vizinhos.set(a, (vizinhos.get(a) ?? new Set()).add(b)); };
+  for (const c of conceitos) for (const outro of c.ligacoes ?? []) { ligar(c.notaId, outro); ligar(outro, c.notaId); }
+  return vizinhos;
 }
 
 /**
- * Todas as sínteses por título e apelidos, as mais próximas da nota primeiro, dentro de um teto de entradas e de tamanho.
- * É o que permite ao modelo reconhecer um conceito que a recuperação não trouxe.
+ * Todas as sínteses por título, apelidos e resumo, as mais próximas da nota primeiro, dentro de um teto de entradas e de
+ * tamanho. É o que permite ao modelo reconhecer um conceito que a recuperação não trouxe e ligá-lo.
  */
 export function construirIndice(conceitos: ConceitoWiki[], resumos: Map<string, Pick<ResumoDeNota, "titulo">>, termos: TermoPontuado[]): IndiceWiki {
   const todas = conceitos.flatMap((c) => {
-    const resumo = resumos.get(c.notaId);
-    return resumo ? [{ c, titulo: resumo.titulo, pontos: pontuacaoDoTexto(`${resumo.titulo} ${c.aliases.join(" ")}`, termos) }] : [];
+    const nota = resumos.get(c.notaId);
+    return nota ? [{ c, titulo: nota.titulo, pontos: pontuacaoDoTexto(`${nota.titulo} ${c.aliases.join(" ")} ${c.resumo ?? ""}`, termos) }] : [];
   // Empate: as mais recentes primeiro, que são as que a nota ainda não viu e as mais prováveis de ser duplicadas.
   }).sort((a, b) => b.pontos - a.pontos || porId(b.c.notaId, a.c.notaId));
   const entradas: IndiceWiki["entradas"] = []; let tamanho = 0;
   for (const { c, titulo } of todas) {
-    const entrada = { id: c.notaId, titulo, aliases: c.aliases.slice(0, ALIASES_NO_INDICE), protegida: c.protegida || Boolean(c.pausada) };
+    const entrada = { id: c.notaId, titulo, aliases: c.aliases.slice(0, ALIASES_NO_INDICE), protegida: c.protegida || Boolean(c.pausada),
+      resumo: c.resumo?.slice(0, RESUMO_NO_INDICE) ?? null };
     const custo = JSON.stringify(entrada).length + 1;
     if (entradas.length >= ENTRADAS_NO_INDICE || tamanho + custo > TAMANHO_DO_INDICE) break;
     entradas.push(entrada); tamanho += custo;
@@ -173,11 +200,14 @@ export async function recuperarContexto(repo: RepositorioDeNotas, origem: FonteW
   const somar = (id: string, pontos: number) => pontuacao.set(id, (pontuacao.get(id) ?? 0) + pontos);
   for (const t of termos) for (const id of acertos.get(t.termo) ?? []) somar(id, t.pontuacao);
   for (const c of conceitos) {
-    const pontos = pontuacaoDoTexto(`${c.chave} ${c.aliases.join(" ")}`, termos);
+    const pontos = pontuacaoDoTexto(`${c.chave} ${c.aliases.join(" ")} ${c.resumo ?? ""}`, termos);
     if (pontos > 0) somar(c.notaId, pontos);
   }
+  // Um salto na rede: o vizinho de um neurônio pontuado herda parte da pontuação dele (sobre a pontuação direta, sem cascata).
+  const vizinhos = vizinhosDosNeuronios(conceitos);
+  for (const [id, pontos] of [...pontuacao]) for (const vizinho of vizinhos.get(id) ?? []) somar(vizinho, pontos * PESO_DO_VIZINHO);
   const ids = new Set<string>();
-  // O modelo devolve no máximo três propostas: só estas dependentes têm garantia de ser atualizáveis nesta chamada.
+  // Ondas pequenas de dependentes (`DEPENDENTES_POR_ONDA`): só estas têm garantia de ser atualizáveis nesta chamada.
   // As demais, mesmo quando a pontuação as traz como candidatas, ficam para a próxima onda.
   const dependentes = conceitos.filter((v) => dependeDeRevisaoAnterior(v, origem)).slice(0, DEPENDENTES_POR_ONDA).map((c) => c.notaId);
   for (const id of dependentes) ids.add(id);

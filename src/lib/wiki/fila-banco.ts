@@ -2,17 +2,24 @@ import "server-only";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/cliente";
 import { conceitosWiki, consumosWiki, eventosWiki, notas, paginasWiki, trabalhosWiki } from "../db/schema";
-import { ErroWiki, type PublicacaoWiki } from "./tipos";
+import { ErroWiki, ligacoesComIrmas, type PublicacaoWiki } from "./tipos";
 import type { AutomacaoWiki, TrabalhoWiki } from "./automacao-tipos";
 import { automacaoWikiDisponivel } from "./disponibilidade";
 import { registrarAlteracaoWiki } from "./eventos-banco";
-import { renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
+import { DIAGNOSTICO_VAZIO_EM, pedeAtencao, renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
 import { eventoDoDiagnostico, textoDaPublicacao, textoDoAdiamento, textoDaConservacao } from "./diario";
 
 export type TransacaoWiki = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const colunas = { notaId: sql<string>`${trabalhosWiki.notaId}::text`, revisao: trabalhosWiki.revisao,
   geracao: trabalhosWiki.geracao, cursor: trabalhosWiki.cursor, posse: trabalhosWiki.posse, tentativas: trabalhosWiki.tentativas };
 const idValido = (id: string) => /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= BigInt("9223372036854775807");
+/** Lista de ids guardada em jsonb e lida como texto; qualquer outra forma vale como lista vazia. */
+function lerIds(texto: string | null): string[] {
+  try {
+    const valor: unknown = texto ? JSON.parse(texto) : [];
+    return Array.isArray(valor) ? valor.filter((v): v is string => typeof v === "string") : [];
+  } catch { return []; }
+}
 
 
 export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWiki, entrada: PublicacaoWiki) => Promise<string>): AutomacaoWiki {
@@ -97,11 +104,16 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
       });
     },
     async conceitos() {
-      return db.select({ notaId: sql<string>`${conceitosWiki.notaId}::text`, chave: conceitosWiki.chave, aliases: conceitosWiki.aliases,
+      // Resumo e ligações vêm da publicação mais recente (a chave primária de paginas_wiki serve a ordenação).
+      const ultima = sql`from ${paginasWiki} p where p.user_id = ${userId}::uuid and p.nota_id = ${conceitosWiki.notaId} order by p.revisao_publicada desc limit 1`;
+      const linhas = await db.select({ notaId: sql<string>`${conceitosWiki.notaId}::text`, chave: conceitosWiki.chave, aliases: conceitosWiki.aliases,
         protegida: sql<boolean>`(${conceitosWiki.protegida} or ${conceitosWiki.revisaoGerenciada} <> ${notas.revisao})`,
-        origens: conceitosWiki.origens, revisaoGerenciada: conceitosWiki.revisaoGerenciada, pausada: conceitosWiki.pausada, diagnostico: conceitosWiki.diagnostico })
+        origens: conceitosWiki.origens, revisaoGerenciada: conceitosWiki.revisaoGerenciada, pausada: conceitosWiki.pausada, diagnostico: conceitosWiki.diagnostico,
+        resumo: sql<string | null>`(select coalesce(p.estrutura->>'resumo', p.afirmacoes->0->>'texto') ${ultima})`,
+        ligacoes: sql<string | null>`(select (p.estrutura->'ligacoes')::text ${ultima})` })
         .from(conceitosWiki).innerJoin(notas, and(eq(notas.userId, userId), eq(notas.id, conceitosWiki.notaId)))
         .where(eq(conceitosWiki.userId, userId)).orderBy(asc(conceitosWiki.notaId));
+      return linhas.map((c) => ({ ...c, ligacoes: lerIds(c.ligacoes) }));
     },
     async cobertura() {
       const semRegistroAtual = sql`(${trabalhosWiki.notaId} is null or ${trabalhosWiki.revisao} <> ${notas.revisao})`;
@@ -137,6 +149,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         const [origem] = await tx.select({ revisao: notas.revisao }).from(notas)
           .where(and(eq(notas.userId, userId), sql`${notas.id} = ${trabalho.notaId}::bigint`)).for("share");
         if (!origem || origem.revisao !== trabalho.revisao) throw new ErroWiki("Origem superada.", 409);
+        const publicadas: { id: string; revisao: number }[] = [];
         for (const p of publicacoes) {
           if (!p.conceito) throw new ErroWiki("Conceito ausente.", 422);
           const [existente] = await tx.select({ id: sql<string>`${conceitosWiki.notaId}::text`, protegida: conceitosWiki.protegida, pausada: conceitosWiki.pausada })
@@ -149,10 +162,21 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
           const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`));
           const origens = Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao]));
           await tx.insert(conceitosWiki).values({ userId, notaId: sql`${id}::bigint`, ...p.conceito, origens, revisaoGerenciada: nota.revisao })
-            .onConflictDoUpdate({ target: conceitosWiki.notaId, set: { aliases: p.conceito.aliases, origens, revisaoGerenciada: nota.revisao, diagnostico: null },
+            // Republicar zera o diagnóstico, mas não a marca de releitura de um neurônio isolado: sem ela, cada republicação
+            // reabriria uma releitura paga. A verificação seguinte refaz os alertas.
+            .onConflictDoUpdate({ target: conceitosWiki.notaId, set: { aliases: p.conceito.aliases, origens, revisaoGerenciada: nota.revisao,
+              diagnostico: sql`case when ${conceitosWiki.diagnostico} ? 'religacao' then jsonb_build_object('assinatura', '', 'alertas', '[]'::jsonb,
+                'verificadoEm', ${DIAGNOSTICO_VAZIO_EM}::text, 'religacao', ${conceitosWiki.diagnostico}->'religacao') end` },
               setWhere: and(eq(conceitosWiki.userId, userId), eq(conceitosWiki.protegida, false), eq(conceitosWiki.pausada, false)) });
           await evento(tx, `publicacao:${id}:${nota.revisao}`, { tipo: p.alvo ? "cresceu" : "nasceu", sinteseId: id,
             origemId: trabalho.notaId, texto: textoDaPublicacao(p.titulo, !p.alvo) });
+          publicadas.push({ id, revisao: nota.revisao });
+        }
+        // As irmãs da mesma resposta só têm id agora: completa as ligações gravadas, na mesma transação.
+        const ligacoes = ligacoesComIrmas(publicacoes, publicadas.map((p) => p.id));
+        for (const [i, p] of publicacoes.entries()) if (p.irmas?.length) {
+          await tx.update(paginasWiki).set({ estrutura: sql`jsonb_set(${paginasWiki.estrutura}, '{ligacoes}', ${JSON.stringify(ligacoes[i])}::jsonb)` })
+            .where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${publicadas[i].id}::bigint`, eq(paginasWiki.revisaoPublicada, publicadas[i].revisao)));
         }
         if (avaliadas.length) {
           // O modelo viu estas sínteses desatualizadas e não as mudou: a dependência passa a esta revisão.
@@ -258,8 +282,9 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         const [c] = await tx.select({ diagnostico: conceitosWiki.diagnostico }).from(conceitosWiki).where(filtro).for("update");
         if (!c || (c.diagnostico?.verificadoEm ?? "") > diagnostico.verificadoEm) return;
         await tx.update(conceitosWiki).set({ diagnostico }).where(filtro);
-        if (c.diagnostico?.assinatura !== diagnostico.assinatura && diagnostico.alertas.length) await evento(tx,
-          `lint:${id}:${diagnostico.verificadoEm}:${diagnostico.assinatura}`, { ...eventoDoDiagnostico(diagnostico.alertas), sinteseId: id, origemId: null });
+        const relevantes = diagnostico.alertas.filter(pedeAtencao);
+        if (c.diagnostico?.assinatura !== diagnostico.assinatura && relevantes.length) await evento(tx,
+          `lint:${id}:${diagnostico.verificadoEm}:${diagnostico.assinatura}`, { ...eventoDoDiagnostico(relevantes), sinteseId: id, origemId: null });
       });
     },
   };

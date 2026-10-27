@@ -206,7 +206,8 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       nota = paraNota(linha); await versionar(tx, nota, autor, false);
     }
     await tx.insert(paginasWiki).values({ notaId: sql`${nota.id}::bigint`, userId, revisaoPublicada: nota.revisao, fontes: compactarFontes(entrada.fontes, entrada.afirmacoes), afirmacoes: entrada.afirmacoes,
-      estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [], ...(entrada.editorial ? { editorial: entrada.editorial } : {}) } });
+      estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [],
+        ...(entrada.resumo ? { resumo: entrada.resumo } : {}), ...(entrada.editorial ? { editorial: entrada.editorial } : {}) } });
     return { tipo: "ok", nota };
   }
 

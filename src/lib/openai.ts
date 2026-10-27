@@ -8,6 +8,8 @@ export type PedidoOpenAI = {
   tools: Record<string, unknown>[];
   tool_choice?: "none";
   text?: { format: { type: "json_schema"; name: string; strict: true; schema: Record<string, unknown> } };
+  /** Teto de saída (raciocínio incluído); o chat usa o padrão de 4096. */
+  max_output_tokens?: number;
 };
 
 const esquemaDaResposta = z.object({
@@ -43,7 +45,7 @@ export async function criarRespostaOpenAI(pedido: PedidoOpenAI, sinal: AbortSign
         reasoning: { effort: "low" },
         store: false,
         parallel_tool_calls: false,
-        max_output_tokens: 4096,
+        max_output_tokens: pedido.max_output_tokens ?? 4096,
       }),
       signal: sinal,
       cache: "no-store",

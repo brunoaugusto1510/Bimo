@@ -4,6 +4,20 @@
 
 ## Estado atual — 26/10/2026
 
+- **Atualização das 20h25: Wiki Viva em rede (política `rede-v5`).** Branch `feat/wiki-viva-em-rede`, criada a partir da `main` em `80be741`. *(Commitada em 27/10, sem push e sem PR; o ponteiro `.claude/worktrees/login-multiusuario` ficou fora.)*
+  - O usuário aceitou o HIGH da auditoria: nota salva pelo chat pode virar raiz de neurônio.
+  - Pediu as recomendações sem conservadorismo, perto do LLM Wiki do Karpathy. O que entrou:
+    - até 6 propostas por resposta e resumo de uma linha por neurônio;
+    - ligações `proposta:N` recíprocas e teto de 16 ligações;
+    - índice com resumo (250 entradas), 8 candidatas e vizinhos na recuperação;
+    - consulta do chat com `relacionados` e a ferramenta `indice_da_wiki`;
+    - alerta `isolado` com uma releitura da origem;
+    - saída do modelo de 12.288 tokens na descoberta.
+  - Detalhes em [decisões](decisions.md) e no [domínio Wiki Viva](dominios/wiki-viva.md).
+  - **Verificado:** `tsc` e `eslint src scripts` limpos; 2.100 testes offline em 174 arquivos, sem as duas suítes de banco real.
+  - **Não verificado:** comportamento com o modelo real; custo por chamada com seis propostas; produção.
+  - Uma execução anterior desta sessão incluiu `src/lib/tests` inteiro, o que pode ter rodado `busca-textual.integration.test.ts` contra o Supabase real. Essa suíte usa usuários efêmeros e nunca o dono real.
+
 - **Atualização das 17h37 (auditoria somente de leitura):** o checkout está em `fix/revisao-geral-wiki-viva`, HEAD `e90ee94`, sincronizado com o origin.
   - Telas da Wiki Viva: commits `d1677a9` e `57754ae`.
   - Registro na MemWiki: `e90ee94`.
@@ -28,6 +42,17 @@
 - Telas da Wiki Viva reescritas em 26/10 para seguir o artifact de design: cérebro em sobreposição com chips e cartão, diário "Enquanto você estava fora", neurônio aberto com sinapses e folha no celular, glifos de estado no grafo. Detalhes em [interface e grafo](dominios/interface-e-grafo.md). Testes, tipos e lint passam; nada commitado.
 
 ## Próximos passos
+
+- Revisar e commitar a branch `feat/wiki-viva-em-rede` (sem o ponteiro `.claude/worktrees/login-multiusuario`, que aparece modificado e não faz parte da mudança). *(Commit feito em 27/10; falta decidir push e PR.)*
+- Antes de ligar a política `rede-v5` em produção:
+  - rodar algumas notas reais e medir o consumo por chamada (seis propostas e 12.288 tokens de saída);
+  - conferir a qualidade das ligações e dos panoramas;
+  - acompanhar a proporção de neurônios isolados.
+- Lacunas da auditoria que seguem abertas:
+  - 7: remoções sem evento no Diário;
+  - 9: chave congelada após renomear e paráfrases;
+  - 8: contradição entre neurônios;
+  - toda a camada B (hot/log/bugs).
 
 - Revisar e commitar as telas da Wiki Viva junto das alterações de backend que já estavam pendentes no checkout. *(Commit feito em 26/10: `d1677a9`, `57754ae`, `e90ee94`, branch no origin. Falta a revisão humana e decidir o PR.)*
 - Decidir o tratamento do HIGH da auditoria (autoria das fontes: nota escrita pelo chat como raiz de neurônio) antes de ampliar o processamento do acervo.

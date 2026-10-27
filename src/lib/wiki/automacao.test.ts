@@ -129,7 +129,8 @@ describe("Wiki Viva integrada", () => {
     expect(atual?.notas[0]).not.toHaveProperty("sintese");
     expect(atual?.notas[0].afirmacoes).toEqual([]);
     const semAcesso = { ...repo, obterNota: vi.fn(async (id: string) => id === "1" ? null : repo.obterNota(id)) };
-    expect((await consultarConhecimentoWiki(semAcesso, "sincronização", []))?.notas[0].afirmacoes).toEqual([]);
+    // Sem nenhuma origem acessível, a síntese fica fora das respostas (como a tela promete), em vez de vir vazia.
+    expect((await consultarConhecimentoWiki(semAcesso, "sincronização", []))?.notas).toEqual([]);
   });
   it("limita recuperação de posse abandonada e interrompe toda a fila após falha de autenticação", async () => {
     const repo = criarRepositorioEmMemoria([{ titulo: "A", conteudo: "texto" }]); const fila = repo.wiki!.automacao!;

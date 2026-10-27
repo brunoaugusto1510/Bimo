@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { ferramentasOpenAI } from "./ferramentas-openai";
 
-it("declara as cinco ferramentas com schemas estritos e campos opcionais anuláveis", () => {
-  expect(ferramentasOpenAI.map((f) => f.name)).toEqual(["buscar_notas", "listar_notas", "ler_nota", "criar_nota", "editar_nota"]);
+it("declara as seis ferramentas com schemas estritos e campos opcionais anuláveis", () => {
+  expect(ferramentasOpenAI.map((f) => f.name)).toEqual(["buscar_notas", "listar_notas", "ler_nota", "indice_da_wiki", "criar_nota", "editar_nota"]);
   for (const ferramenta of ferramentasOpenAI) {
     expect(ferramenta).toMatchObject({ type: "function", strict: true });
     expect(ferramenta.parameters.additionalProperties).toBe(false);

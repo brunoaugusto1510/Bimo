@@ -81,7 +81,7 @@ describe("persistência local da Wiki Viva", () => {
     utilidade: { avaliacao: "suficiente", justificativa: "Como manter as cópias atuais?" },
     ganho: { avaliacao: "suficiente", justificativa: "Organiza a atualização das cópias do cache." },
     destino: { avaliacao: "suficiente", justificativa: "O mesmo assunto está neste destino." } });
-  const novaResposta = (c: ContextoWiki, extras: Record<string, unknown> = {}) => ({ proposta: { politica: "sintetica-v4", semPublicacao: null,
+  const novaResposta = (c: ContextoWiki, extras: Record<string, unknown> = {}) => ({ proposta: { politica: "rede-v5", semPublicacao: null,
     propostas: [{ ...resposta(c).proposta.propostas[0], editorial: editorial("criar"), ...extras }] }, uso: { entrada: 100, saida: 100 } });
 
   it("divergência inválida bloqueia no SQL sem publicar versão, preservando consumo e origem", async () => {
@@ -103,7 +103,7 @@ describe("persistência local da Wiki Viva", () => {
     await repo.criarNota({ titulo: "Cache", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
     await processarWiki(repo, async (c) => novaResposta(c, { lacunas: ["Quando atualizar?"] }), { tetoDiario: 200_000 });
     const [pagina] = await repo.wiki!.listar();
-    expect(pagina.estrutura.editorial).toMatchObject({ politica: "sintetica-v4", origem: { id: "1", revisao: 1 } });
+    expect(pagina.estrutura.editorial).toMatchObject({ politica: "rede-v5", origem: { id: "1", revisao: 1 } });
     await repo.criarNota({ titulo: "Cache confirmação", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
     expect(await processarWiki(repo, async (c) => novaResposta(c, { alvoId: pagina.notaId, afirmacoes: [],
       editorial: editorial("enriquecer", [pagina.notaId]), limparLacunas: true,
@@ -128,7 +128,7 @@ describe("persistência local da Wiki Viva", () => {
     expect(await repo.wiki!.automacao!.cobertura()).toMatchObject({ concluidos: 0, impedidos: 1 });
     expect((await pg.query("select estado, ultimo_erro from trabalhos_wiki")).rows).toEqual([{ estado: "revisar", ultimo_erro: "PropostaEditorialRecusada:422" }]);
     await repo.criarNota({ titulo: "Dúvida", conteudo: "Identificar o projeto anterior." }, autor); await liberar();
-    await processarWiki(repo, async () => ({ proposta: { politica: "sintetica-v4", propostas: [], semPublicacao: {
+    await processarWiki(repo, async () => ({ proposta: { politica: "rede-v5", propostas: [], semPublicacao: {
       decisao: "adiar", motivo: "Falta identificar o projeto anterior.", condicao: "Informar o nome do projeto na origem.", tipoDePendencia: "contexto_da_origem",
     } }, uso: { entrada: 100, saida: 100 } }), { tetoDiario: 200_000 });
     expect((await pg.query("select texto from eventos_wiki where texto like 'Decisão adiada:%'")).rows)

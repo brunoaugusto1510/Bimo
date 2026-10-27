@@ -1,4 +1,5 @@
 import type { ResumoDoCerebro } from "@/lib/wiki/cliente";
+import { pedeAtencao } from "@/lib/wiki/observabilidade-tipos";
 
 /** Os chips do cérebro: "Tudo", "Só neurônios", "Nascidos esta semana" e "Precisam de você". */
 export type FiltroDoCerebro = "tudo" | "neuronios" | "novos" | "atencao";
@@ -7,8 +8,8 @@ type Neuronio = ResumoDoCerebro["neuronios"][number];
 const SEMANA_MS = 7 * 86_400_000;
 
 export const nasceuNaSemana = (n: Neuronio, agora: number) => Boolean(n.criadoEm) && agora - Date.parse(n.criadoEm!) < SEMANA_MS;
-/** Precisa de você: tem alerta, ou saiu dos estados em que o Bimo segue sozinho. */
-export const precisaDeVoce = (n: Neuronio) => n.alertas.length > 0 || !["vivo", "reconsolidando"].includes(n.estado);
+/** Precisa de você: tem alerta que pede atenção, ou saiu dos estados em que o Bimo segue sozinho. */
+export const precisaDeVoce = (n: Neuronio) => n.alertas.some(pedeAtencao) || !["vivo", "reconsolidando"].includes(n.estado);
 
 /**
  * Ids que o grafo mostra para o filtro. `null` quando o filtro não recorta por

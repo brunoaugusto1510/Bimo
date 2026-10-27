@@ -1,8 +1,8 @@
-import { ErroWiki, conferirFontes, type MetadadosWiki, type PublicacaoWiki } from "./tipos";
+import { ErroWiki, conferirFontes, ligacoesComIrmas, type MetadadosWiki, type PublicacaoWiki } from "./tipos";
 import type { NotaCompleta } from "../repositorio-de-notas/tipos";
 import type { AutomacaoWiki, ConceitoWiki, TrabalhoWiki } from "./automacao-tipos";
 import { ESTABILIDADE_DA_WIKI_SEGUNDOS } from "./configuracao";
-import { renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
+import { DIAGNOSTICO_VAZIO_EM, pedeAtencao, renovarEnergiaEm, type EventoWiki } from "./observabilidade-tipos";
 import { eventoDoDiagnostico, textoDaPublicacao, textoDoAdiamento, textoDaConservacao } from "./diario";
 
 type Registro = Omit<TrabalhoWiki, "posse"> & { posse: string | null; ate: number; disponivel: number; estado: string; ultimoErro?: string };
@@ -79,8 +79,14 @@ export function criarFilaWikiEmMemoria(acesso: {
       return { notaId: trabalho.notaId, revisao: trabalho.revisao, geracao: trabalho.geracao,
         cursor: trabalho.cursor, posse: trabalho.posse, tentativas: trabalho.tentativas };
     },
-    async conceitos() { return [...conceitos.values()].map((c) => ({ ...c, aliases: [...c.aliases], origens: { ...c.origens },
-      ...(c.diagnostico ? { diagnostico: { ...c.diagnostico, alertas: [...c.diagnostico.alertas] } } : {}) })); },
+    async conceitos() {
+      return [...conceitos.values()].map((c) => {
+        const pagina = acesso.paginas.get(c.notaId);
+        return { ...c, aliases: [...c.aliases], origens: { ...c.origens },
+          resumo: pagina?.estrutura.resumo ?? pagina?.afirmacoes[0]?.texto ?? null, ligacoes: [...pagina?.estrutura.ligacoes ?? []],
+          ...(c.diagnostico ? { diagnostico: { ...c.diagnostico, alertas: [...c.diagnostico.alertas] } } : {}) };
+      });
+    },
     async cobertura() {
       const valores = [...trabalhos.values()].filter((t) => acesso.notas.has(t.notaId) && !acesso.paginas.has(t.notaId));
       const elegiveis = [...acesso.notas.values()].filter((n) => !acesso.paginas.has(n.id));
@@ -115,9 +121,15 @@ export function criarFilaWikiEmMemoria(acesso: {
         }
       }
       const ids = acesso.publicarAtomico(publicacoes);
+      // As irmãs da mesma resposta só têm id agora: completa as ligações gravadas.
+      const ligacoes = ligacoesComIrmas(publicacoes, ids);
+      for (const [i, p] of publicacoes.entries()) if (p.irmas?.length) acesso.paginas.get(ids[i])!.estrutura.ligacoes = ligacoes[i];
       for (const [i, p] of publicacoes.entries()) {
         const revisao = acesso.notas.get(ids[i])!.revisao;
-        conceitos.set(ids[i], { notaId: ids[i], ...p.conceito!, protegida: false, pausada: false, origens: Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao])), revisaoGerenciada: revisao });
+        // Republicar zera o diagnóstico, mas não a marca de releitura de um neurônio isolado (mesmo critério do banco).
+        const religacao = conceitos.get(ids[i])?.diagnostico?.religacao;
+        conceitos.set(ids[i], { notaId: ids[i], ...p.conceito!, protegida: false, pausada: false, origens: Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao])), revisaoGerenciada: revisao,
+          ...(religacao ? { diagnostico: { assinatura: "", alertas: [], verificadoEm: DIAGNOSTICO_VAZIO_EM, religacao } } : {}) });
         evento(`publicacao:${ids[i]}:${revisao}`, { tipo: p.alvo ? "cresceu" : "nasceu", sinteseId: ids[i], origemId: trabalho.notaId, texto: textoDaPublicacao(p.titulo, !p.alvo) });
       }
       for (const id of avaliadas) {
@@ -183,8 +195,9 @@ export function criarFilaWikiEmMemoria(acesso: {
     },
     async registrarDiagnostico(id, revisao, diagnostico) {
       const c = conceitos.get(id); if (!c || acesso.notas.get(id)?.revisao !== revisao) return;
-      if (c.diagnostico?.assinatura !== diagnostico.assinatura && diagnostico.alertas.length) {
-        evento(`lint:${id}:${diagnostico.verificadoEm}:${diagnostico.assinatura}`, { ...eventoDoDiagnostico(diagnostico.alertas), sinteseId: id, origemId: null });
+      const relevantes = diagnostico.alertas.filter(pedeAtencao);
+      if (c.diagnostico?.assinatura !== diagnostico.assinatura && relevantes.length) {
+        evento(`lint:${id}:${diagnostico.verificadoEm}:${diagnostico.assinatura}`, { ...eventoDoDiagnostico(relevantes), sinteseId: id, origemId: null });
       }
       c.diagnostico = { ...diagnostico, alertas: [...diagnostico.alertas] };
     },

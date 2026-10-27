@@ -142,7 +142,7 @@ describe("ferramentas com repositório de notas", () => {
     expect((await executar(semear(), "desconhecida", {})).resumo).toMatch(/desconhecida/);
   });
   it("declara os contratos sem armazenamento fixo", () => {
-    expect(declaracoesDeFerramentas.map((d) => d.name)).toEqual(["buscar_notas", "listar_notas", "ler_nota", "criar_nota", "editar_nota"]);
+    expect(declaracoesDeFerramentas.map((d) => d.name)).toEqual(["buscar_notas", "listar_notas", "ler_nota", "indice_da_wiki", "criar_nota", "editar_nota"]);
     expect(JSON.stringify(declaracoesDeFerramentas)).not.toMatch(/vault|commit/i);
     expect(declaracoesDeFerramentas[0].description).toContain("título e no conteúdo");
     expect(declaracoesDeFerramentas[0].description).toContain("tags e no caminho");

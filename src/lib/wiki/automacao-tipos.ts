@@ -4,7 +4,12 @@ import type { DiagnosticoWiki, EnergiaWiki, EventoWiki, PeriodoDoDiario } from "
 export type TrabalhoWiki = {
   notaId: string; revisao: number; geracao: number; cursor: number; posse: string; tentativas: number;
 };
-export type ConceitoWiki = { notaId: string; chave: string; aliases: string[]; protegida: boolean; pausada?: boolean; diagnostico?: DiagnosticoWiki | null; origens: Record<string, number>; revisaoGerenciada: number };
+/**
+ * `resumo` e `ligacoes` vêm da publicação mais recente: o resumo de uma linha (ou, sem ele, a primeira afirmação) e os
+ * neurônios a que este se liga. São o mapa da rede para o índice, a recuperação e a consulta.
+ */
+export type ConceitoWiki = { notaId: string; chave: string; aliases: string[]; protegida: boolean; pausada?: boolean; diagnostico?: DiagnosticoWiki | null;
+  origens: Record<string, number>; revisaoGerenciada: number; resumo?: string | null; ligacoes?: string[] };
 export type CoberturaWiki = { elegiveis: number; naoRegistradas: number; pendentes: number; concluidos: number; impedidos: number };
 export type ConsumoWiki = { entrada: number; saida: number };
 export type MotivoDaFalhaWiki = "temporario" | "revisar" | "configuracao" | "orcamento";
@@ -39,16 +44,17 @@ export interface AutomacaoWiki {
   registrarDiagnostico(notaId: string, revisao: number, diagnostico: DiagnosticoWiki): Promise<void>;
 }
 /** `obsoletas`: ids das afirmações cuja origem mudou desde que a síntese foi escrita; o modelo as vê marcadas. */
-export type CandidataWiki = { nota: FonteWiki; metadados?: MetadadosWiki; conceito?: ConceitoWiki; obsoletas?: string[] };
-/** Uma síntese existente, só pela identidade: o modelo escolhe enriquecê-la ou evitar duplicá-la sem ler o texto. */
-export type EntradaDoIndice = { id: string; titulo: string; aliases: string[]; protegida: boolean };
+/** `ligadoPor`: os neurônios que se ligam a este (o caminho de volta, derivado na leitura). */
+export type CandidataWiki = { nota: FonteWiki; metadados?: MetadadosWiki; conceito?: ConceitoWiki; obsoletas?: string[]; ligadoPor?: string[] };
+/** Uma síntese existente pela identidade e pelo resumo: o modelo escolhe enriquecê-la, ligá-la ou evitar duplicá-la sem ler o texto. */
+export type EntradaDoIndice = { id: string; titulo: string; aliases: string[]; protegida: boolean; resumo?: string | null };
 /** `total` é o número de sínteses; `entradas` pode ser menor, com as mais próximas da nota primeiro. */
 export type IndiceWiki = { total: number; entradas: EntradaDoIndice[] };
 export type ContextoWiki = {
   origem: FonteWiki; trecho: { inicio: number; fim: number; texto: string };
   candidatas: CandidataWiki[];
   indice: IndiceWiki;
-  /** Sínteses desatualizadas por esta origem que o modelo tem garantia de poder atualizar nesta chamada (no máximo três). */
+  /** Sínteses desatualizadas por esta origem que o modelo tem garantia de poder atualizar nesta chamada (no máximo `DEPENDENTES_POR_ONDA`). */
   dependentes: string[];
 };
 export type ResultadoDaGeracaoWiki = { proposta: unknown; uso: ConsumoWiki | null };

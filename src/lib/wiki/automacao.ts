@@ -2,14 +2,14 @@ import { z } from "zod";
 import { normalizarTexto, validarTitulo, caminhoParaLigacao } from "../caminho-da-nota";
 import { descreverErro } from "../registro-de-erros";
 import type { RepositorioDeNotas } from "../repositorio-de-notas/tipos";
-import { ErroDaGeracaoWiki, ErroWiki, type AfirmacaoWiki, type DivergenciaWiki, type FonteWiki, type MetadadosWiki, type PublicacaoWiki } from "./tipos";
+import { ErroDaGeracaoWiki, ErroWiki, LIMITE_DE_LIGACOES, type AfirmacaoWiki, type DivergenciaWiki, type FonteWiki, type MetadadosWiki, type PublicacaoWiki } from "./tipos";
 import type { ConceitoWiki, ConsumoWiki, ContextoWiki, GeradorAutomaticoWiki, MotivoDaFalhaWiki } from "./automacao-tipos";
 import { afirmacoesVisiveis, comId, garantirIds, LIMITE_DE_AFIRMACOES, LIMITE_DE_AFIRMACOES_VISIVEIS } from "./afirmacoes";
 import { citacaoInsuficiente, localizarCitacao } from "./citacoes";
-import { comPalavrasDe, dependeDeRevisaoAnterior, palavrasEmComum, recuperarContexto, carregarCandidata } from "./recuperacao";
+import { CANDIDATAS_POR_RODADA, comPalavrasDe, dependeDeRevisaoAnterior, palavrasEmComum, recuperarContexto, carregarCandidata } from "./recuperacao";
 import { verificarSinteses } from "./observabilidade";
 import { estruturaCompativel } from "./estrutura";
-import { camposDoEnvelopeEditorial, DecisaoEditorialAdiada, esquemaDoEnvelopeEditorial, esquemaEditorial, POLITICA_EDITORIAL, PropostaEditorialRecusada } from "./editorial";
+import { camposDoEnvelopeEditorial, DecisaoEditorialAdiada, esquemaDoEnvelopeEditorial, esquemaEditorial, POLITICA_EDITORIAL, PROPOSTAS_POR_RESPOSTA, PropostaEditorialRecusada } from "./editorial";
 
 const esquemaDaAfirmacao = z.object({ texto: z.string().trim().min(1).max(2000),
   natureza: z.enum(["explicita", "inferencia"]),
@@ -27,9 +27,14 @@ const esquemaDaProposta = z.object({
   retiradas: z.array(z.string()).max(24).default([]),
   /** Outra evidência da mesma proposição: mantém identidade lógica, texto e natureza. */
   reforcos: z.array(z.object({ id: z.string(), evidencias: esquemaDaAfirmacao.shape.evidencias }).strict()).max(24).default([]),
-  /** Ids de outras sínteses a que esta se liga (o que o modelo viu no índice ou nas candidatas); não são evidência. */
+  /**
+   * Ids de outras sínteses a que esta se liga (o que o modelo viu no índice ou nas candidatas) ou `proposta:N`, outra
+   * proposta desta mesma resposta (a partir de 1). Não são evidência.
+   */
   // Sem teto aqui: o servidor guarda no máximo `LIMITE_DE_LIGACOES`, e um excesso não pode custar a proposta inteira.
   ligacoes: z.array(z.string()).default([]),
+  /** Uma frase sobre o que o neurônio trata, para o índice; null mantém a atual. */
+  resumo: z.string().trim().max(240).nullable().default(null),
   ligacoesRetiradas: z.array(z.string()).max(32).default([]),
   /** Cada lado aponta para um id visível ou `nova:N` (posição na lista de acréscimos, a partir de 1). */
   divergencias: z.array(z.object({ a: ladoDaDivergencia, b: ladoDaDivergencia }).strict()).max(10).default([]),
@@ -37,17 +42,19 @@ const esquemaDaProposta = z.object({
   lacunas: z.array(z.string().max(1000)).max(10),
   limparLacunas: z.boolean().default(false),
 }).strict();
-const LIMITE_DE_LIGACOES = 8;
 /** O que se lê das ligações pedidas, para que uma lista enorme não vire uma enxurrada de consultas. */
 const LIMITE_DE_PEDIDAS = 32;
-export const esquemaDaDescoberta = z.object({ propostas: z.array(esquemaDaProposta).max(3) }).strict();
+const IRMA = /^proposta:[1-9]\d?$/;
+export const esquemaDaDescoberta = z.object({ propostas: z.array(esquemaDaProposta).max(PROPOSTAS_POR_RESPOSTA) }).strict();
 const esquemaDaPropostaEditorial = esquemaDaProposta.extend({ editorial: esquemaEditorial });
-export const esquemaDaDescobertaEditorial = z.object({ ...camposDoEnvelopeEditorial, propostas: z.array(esquemaDaPropostaEditorial).max(3) }).strict();
+export const esquemaDaDescobertaEditorial = z.object({ ...camposDoEnvelopeEditorial, propostas: z.array(esquemaDaPropostaEditorial).max(PROPOSTAS_POR_RESPOSTA) }).strict();
 /** O servidor valida o envelope e depois cada proposta: uma malformada não derruba as outras. */
-const esquemaDoEnvelope = z.object({ propostas: z.array(z.unknown()).max(3) }).strict();
+const esquemaDoEnvelope = z.object({ propostas: z.array(z.unknown()).max(PROPOSTAS_POR_RESPOSTA) }).strict();
 type PropostaWiki = z.infer<typeof esquemaDaProposta> & { editorial?: z.infer<typeof esquemaEditorial> };
 
 const SEM_COBRANCA: ConsumoWiki = { entrada: 0, saida: 0 };
+/** Teto de saída de uma descoberta (raciocínio incluído): seis propostas editoriais não cabem nos 4096 do chat. A reserva usa o mesmo valor. */
+export const SAIDA_MAXIMA_DA_WIKI = 12_288;
 
 /** Payload limitado: os snapshots completos ficam no servidor, fora do contexto do modelo. */
 export function entradaDaDescoberta(c: ContextoWiki) {
@@ -73,8 +80,10 @@ export function entradaDaDescoberta(c: ContextoWiki) {
       afirmacoes: p.metadados && afirmacoesVisiveis(garantirIds(p.metadados.afirmacoes), { origemId: c.origem.id, obsoletas: new Set(p.obsoletas), relacionada })
         .map((a) => (p.obsoletas?.includes(a.id) ? { ...a, desatualizada: true } : a)),
       totalDeAfirmacoes: p.metadados?.afirmacoes.length,
-      // O que a síntese já liga e as perguntas que ela ainda tem em aberto: o modelo devolve a lista completa das perguntas.
+      // O que a síntese já liga, quem a cita e as perguntas que ela ainda tem em aberto: o modelo devolve a lista completa das perguntas.
+      resumo: p.metadados?.estrutura?.resumo ?? null,
       ligacoes: p.metadados?.estrutura?.ligacoes,
+      ligadoPor: p.metadados ? p.ligadoPor ?? [] : undefined,
       lacunas: p.metadados?.estrutura?.lacunas,
       divergencias: p.metadados?.estrutura?.divergencias ?? [],
     })),
@@ -104,13 +113,20 @@ function decisaoDaDescoberta(bruto: unknown, c: ContextoWiki) {
   return envelope;
 }
 
-/** Reduz primeiro o contexto menos prioritário; mantém origem, dependentes e leituras solicitadas. */
+/** Entradas do índice que só saem depois das candidatas: abaixo disso o modelo perderia o mapa dos conceitos próximos. */
+const PISO_DO_INDICE = 60;
+
+/**
+ * Reduz primeiro o contexto menos prioritário: o fim do índice (as entradas menos próximas) até o piso, depois as
+ * candidatas e por último o resto do índice. Mantém origem, dependentes e leituras solicitadas.
+ */
 function limitarContexto(c: ContextoWiki, maximo: number, solicitadas: Set<string>) {
   const fixas = new Set([...c.dependentes, ...solicitadas]);
   while (Buffer.byteLength(JSON.stringify(entradaDaDescoberta(c)), "utf8") > Math.max(0, maximo)) {
+    const indice = c.indice.entradas.findLastIndex((v) => !solicitadas.has(v.id));
+    if (indice >= PISO_DO_INDICE) { c.indice.entradas.splice(indice, 1); continue; }
     const candidata = c.candidatas.findLastIndex((v) => !fixas.has(v.nota.id));
     if (candidata >= 0) { c.candidatas.splice(candidata, 1); continue; }
-    const indice = c.indice.entradas.findLastIndex((v) => !solicitadas.has(v.id));
     if (indice >= 0) { c.indice.entradas.splice(indice, 1); continue; }
     break;
   }
@@ -128,7 +144,7 @@ async function lerDestinos(repo: RepositorioDeNotas, c: ContextoWiki, ids: strin
   const unicas = new Map([...fixas, ...novas, ...c.candidatas].map((p) => [p.nota.id, p]));
   // As fixas precedem as novas, mas uma cópia antiga nunca substitui uma leitura recém-feita.
   for (const p of novas) unicas.set(p.nota.id, p);
-  c.candidatas = [...unicas.values()].slice(0, 6);
+  c.candidatas = [...unicas.values()].slice(0, CANDIDATAS_POR_RODADA);
   for (const p of novas) {
     const entrada = c.indice.entradas.find((e) => e.id === p.nota.id)!;
     entrada.titulo = p.nota.titulo;
@@ -167,7 +183,7 @@ function tituloLivre(titulo: string, pasta: string | null, ocupados: Set<string>
 
 /**
  * As sínteses a que esta se liga: as que já tinha, que ainda existem, e as novas que o modelo pediu e viu (índice ou
- * candidatas). Sem repetição, sem ela mesma, no máximo oito. Id que não é de uma síntese (nota pessoal, inexistente) sai
+ * candidatas). Sem repetição, sem ela mesma, no máximo `LIMITE_DE_LIGACOES`. Id que não é de uma síntese (nota pessoal, inexistente) sai
  * sozinho: ligar é uma sugestão, e uma sugestão ruim não derruba a proposta.
  */
 async function ligacoesDaSintese(repo: RepositorioDeNotas, c: ContextoWiki, pedidas: string[], existentes: string[], propria: string | null, retiradas: string[]) {
@@ -241,7 +257,7 @@ function localizarEvidencia(e: { fonteId: string; citacao: string }, fontes: Map
 }
 
 async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: PropostaWiki,
-  conceitos: ConceitoWiki[], textos: Leituras, ocupados: Set<string>, visiveis: Visiveis): Promise<PublicacaoWiki | Descarte> {
+  conceitos: ConceitoWiki[], textos: Leituras, ocupados: Set<string>, visiveis: Visiveis): Promise<Preparada | Descarte> {
   const titulo = validarTitulo(limparTitulo(p.titulo));
   if (!titulo.ok) return "titulo";
   const chave = normalizarTexto(titulo.titulo);
@@ -273,10 +289,14 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   const pedidasEmAberto = p.lacunas.map((l) => l.trim()).filter(Boolean);
   const lacunas = p.limparLacunas ? [] : pedidasEmAberto.length ? pedidasEmAberto : meta?.estrutura?.lacunas ?? [];
   const ligadas = await ligacoesDaSintese(repo, c, p.ligacoes, meta?.estrutura?.ligacoes ?? [], alvoId ?? null, p.ligacoesRetiradas);
-  // Ligar a outra síntese ou mudar as perguntas é uma mudança por si só, mesmo sem afirmação nova: sem isso uma síntese
-  // antiga nunca ganharia a ligação a uma criada depois.
+  // Posições (na resposta, a partir de 0) das propostas irmãs; só viram ligação se a irmã também for publicada.
+  const irmas = [...new Set(p.ligacoes.filter((id) => IRMA.test(id)).map((id) => Number(id.slice(9)) - 1))];
+  const resumo = p.resumo?.trim() || meta?.estrutura?.resumo || null;
+  // Ligar a outra síntese, mudar as perguntas ou o resumo é uma mudança por si só, mesmo sem afirmação nova: sem isso uma
+  // síntese antiga nunca ganharia a ligação a uma criada depois.
   const mudaEstrutura = Boolean(alvoId) && (JSON.stringify(lacunas) !== JSON.stringify(meta?.estrutura?.lacunas ?? [])
-    || JSON.stringify(ligadas.map((n) => n.id)) !== JSON.stringify(meta?.estrutura?.ligacoes ?? []));
+    || JSON.stringify(ligadas.map((n) => n.id)) !== JSON.stringify(meta?.estrutura?.ligacoes ?? [])
+    || irmas.length > 0 || resumo !== (meta?.estrutura?.resumo ?? null));
   // Uma síntese que já existe e nenhuma operação pedida: o modelo a viu e decidiu não mudar nada. Isso é uma decisão,
   // não uma falha, e a síntese conta como avaliada em vez de travar a nota em chamadas repetidas.
   if (alvoId && !p.afirmacoes.length && !p.substituicoes.length && !p.retiradas.length && !p.reforcos.length && !p.divergencias.length && !mudaEstrutura) return "sem-mudanca";
@@ -410,13 +430,65 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
   // O modelo concluiu que a síntese já diz isso: nada a publicar, e republicar só criaria uma revisão idêntica.
   // O markdown não mostra a evidência (só o número da origem): comparar também as afirmações, senão uma evidência nova
   // para o mesmo texto seria descartada como "sem mudança".
-  if (alvo && conteudo === alvo.conteudo && aliases.length === (conceito?.aliases.length ?? 0) && assinatura(afirmacoes) === assinatura(anteriores)) return "sem-mudanca";
+  const igual = Boolean(alvo) && conteudo === alvo!.conteudo && aliases.length === (conceito?.aliases.length ?? 0)
+    && assinatura(afirmacoes) === assinatura(anteriores) && resumo === (meta?.estrutura?.resumo ?? null);
+  if (igual && !irmas.length) return "sem-mudanca";
   return { titulo: nome, conteudo, fontes: raizes, afirmacoes, ligacoes: ligadas.map((n) => n.id), destinos: ligadas, lacunas, divergencias,
+    // Só as irmãs justificam republicar: se nenhum link novo sair delas, `ligarIrmas` desiste da publicação.
+    resumo, irmas, ...(igual ? { soIrmas: true } : {}),
     ...(p.editorial ? { editorial: { ...p.editorial, politica: POLITICA_EDITORIAL,
       origem: { id: c.origem.id, revisao: c.origem.revisao, inicio: c.trecho.inicio, fim: c.trecho.fim } } } : {}),
     alvo: alvo ? { id: alvo.id, revisao: alvo.revisao } : null, pasta,
     conceito: { chave: conceito?.chave ?? chave, aliases },
   };
+}
+
+/** Acrescenta itens à seção "Neurônios relacionados" (criando-a), que sempre antecede "Notas de origem". */
+function comRelacionados(conteudo: string, caminhos: string[]) {
+  const itens = caminhos.map((c) => `- [[${c}]]`).filter((item) => !conteudo.includes(item));
+  if (!itens.length) return conteudo;
+  const fim = conteudo.lastIndexOf("\n\n## Notas de origem");
+  const antes = conteudo.slice(0, fim);
+  const cabecalho = antes.includes("\n\n## Neurônios relacionados") ? "" : "\n\n## Neurônios relacionados";
+  return `${antes}${cabecalho}\n\n${itens.join("\n\n")}${conteudo.slice(fim)}`;
+}
+
+/** `soIrmas`: uma síntese existente que só seria republicada pelas ligações `proposta:N`. */
+type Preparada = PublicacaoWiki & { soIrmas?: boolean };
+
+/**
+ * Ligações entre propostas da mesma resposta (`proposta:N`): valem nos dois sentidos, só entre as que foram publicadas e
+ * só com vaga nas duas pontas. O texto ganha o link pelo caminho agora; os ids entram em `ligacoes` quando a fila grava as
+ * irmãs (`ligacoesComIrmas`). Uma síntese existente que só seria republicada por elas, sem nenhum link novo, sai da lista
+ * (`semEfeito`); as irmãs passam a ligá-la direto pelo id.
+ */
+function ligarIrmas(publicacoes: Preparada[], publicadaEm: Map<number, number>) {
+  const pares = publicacoes.map(() => new Set<number>());
+  const vagas = publicacoes.map((p) => LIMITE_DE_LIGACOES - p.ligacoes.length);
+  for (const [i, p] of publicacoes.entries()) for (const posicao of p.irmas ?? []) {
+    const j = publicadaEm.get(posicao);
+    if (j === undefined || j === i || pares[i].has(j) || vagas[i] <= 0 || vagas[j] <= 0) continue;
+    pares[i].add(j); pares[j].add(i); vagas[i]--; vagas[j]--;
+  }
+  const ligadas = publicacoes.map((p, i) => {
+    const irmas = [...pares[i]].sort((a, b) => a - b);
+    return { ...p, irmas, conteudo: comRelacionados(p.conteudo, irmas.map((j) => caminhoParaLigacao(publicacoes[j].pasta, publicacoes[j].titulo))) };
+  });
+  const semEfeito = ligadas.map((p, i) => Boolean(publicacoes[i].soIrmas) && p.conteudo === publicacoes[i].conteudo);
+  const novaPosicao = new Map<number, number>(); const ficam: typeof ligadas = [];
+  for (const [i, p] of ligadas.entries()) if (!semEfeito[i]) { novaPosicao.set(i, ficam.length); ficam.push(p); }
+  const publicadas = ficam.map((p): PublicacaoWiki => {
+    const irmas: number[] = []; const ligacoes = [...p.ligacoes]; const destinos = [...p.destinos];
+    for (const j of p.irmas) {
+      const k = novaPosicao.get(j);
+      if (k !== undefined) { irmas.push(k); continue; }
+      // A irmã que saiu é uma síntese existente (só ela pode não ter efeito): o id já é conhecido.
+      const fora = ligadas[j];
+      if (fora.alvo && !ligacoes.includes(fora.alvo.id)) { ligacoes.push(fora.alvo.id); destinos.push({ id: fora.alvo.id, titulo: fora.titulo, pasta: fora.pasta }); }
+    }
+    return { ...p, irmas, ligacoes, destinos };
+  });
+  return { publicadas, semEfeito: ligadas.filter((_, i) => semEfeito[i]).map((p) => p.alvo!.id) };
 }
 
 /** Cada proposta é validada sozinha: uma citação ruim não joga fora o resultado pago das outras. */
@@ -435,7 +507,9 @@ async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, br
     obsoletas: new Set(v.afirmacoes.filter((a) => "desatualizada" in a).map((a) => a.id)),
   }] as const] : []));
   const preparo: Preparo = { publicacoes: [], descartadas: [], tentadas: new Set(), ...(decisao?.semPublicacao ? { decisao: decisao.semPublicacao } : {}) };
-  for (const bruta of envelope.propostas) {
+  /** Posição da proposta na resposta → posição da publicação que ela gerou. */
+  const publicadaEm = new Map<number, number>();
+  for (const [posicao, bruta] of envelope.propostas.entries()) {
     const valida = (editorial ? esquemaDaPropostaEditorial : esquemaDaProposta).safeParse(bruta);
     if (!valida.success) { preparo.descartadas.push("estrutura"); continue; }
     const p = valida.data;
@@ -446,8 +520,13 @@ async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, br
     const identidade = resultado.alvo?.id ?? resultado.conceito!.chave;
     if (preparo.publicacoes.some((q) => (q.alvo?.id ?? q.conceito!.chave) === identidade)) { preparo.descartadas.push("repetida"); continue; }
     if (!resultado.alvo) ocupados.add(caminhoOcupado(resultado.pasta ?? null, resultado.titulo));
+    publicadaEm.set(posicao, preparo.publicacoes.length);
     preparo.publicacoes.push(resultado);
   }
+  const { publicadas, semEfeito } = ligarIrmas(preparo.publicacoes, publicadaEm);
+  preparo.publicacoes = publicadas;
+  // Republicar só para repetir links que o texto já tem seria uma revisão idêntica: vale como decisão "sem mudança".
+  for (const id of semEfeito) { preparo.descartadas.push("sem-mudanca"); preparo.tentadas.delete(id); }
   if (editorial && preparo.descartadas.some((v) => v !== "sem-mudanca")) {
     if (!preparo.publicacoes.length) {
       console.info("[wiki] Propostas descartadas na validação.", { quantidade: preparo.descartadas.length, motivos: [...new Set(preparo.descartadas)] });
@@ -502,10 +581,10 @@ export async function processarWiki(repo: RepositorioDeNotas, gerar: GeradorAuto
     for (let etapa = 0; etapa < 2; etapa++) {
       // O orçamento permanece igual. Quando há pouco saldo, reduzir contexto evita exigir a reserva máxima sem necessidade.
       const saldo = (await fila.energia(opcoes.tetoDiario)).restante;
-      limitarContexto(contexto, Math.min(65_000, saldo - 8192 - 4096), solicitadas);
+      limitarContexto(contexto, Math.min(65_000, saldo - SAIDA_MAXIMA_DA_WIKI), solicitadas);
       const tamanho = Buffer.byteLength(JSON.stringify(entradaDaDescoberta(contexto)), "utf8");
       if (tamanho > 65_000) throw new PropostaEditorialRecusada();
-      reserva = await fila.reservar(trabalho, tamanho + 8192 + 4096, opcoes.tetoDiario);
+      reserva = await fila.reservar(trabalho, tamanho + SAIDA_MAXIMA_DA_WIKI, opcoes.tetoDiario);
       contabilizada = false; chamou = false;
       if (!reserva) { await fila.falhar(trabalho, "orcamento"); return { tipo: "orcamento" as const }; }
       sinal.throwIfAborted(); chamou = true;

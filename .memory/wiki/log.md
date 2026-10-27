@@ -49,3 +49,41 @@
   - alteração em `src/`, testes, migrações ou configuração;
   - leitura de `.env`, execução de testes, acesso a produção ou implementação das recomendações.
 - **Pendente:** um `bash.exe.stackdump` criado por esta sessão em `.memory/`, ignorado pelo git. A remoção não foi autorizada.
+
+## 2026-10-26T20:25:00-03:00 — Wiki Viva em rede (política `rede-v5`)
+
+- **Decisão do usuário:** aceitar o HIGH da auditoria (nota do chat como raiz) e implementar as recomendações sem conservadorismo, perto do LLM Wiki. Registrada em `decisions.md`.
+- **TDD:** `src/lib/wiki/rede.test.ts` escrito antes do código (11 falhas pelo motivo certo). Hoje tem 19 testes.
+- **Código**, na branch `feat/wiki-viva-em-rede`:
+  - política e prompt;
+  - esquema da proposta com `resumo` e `proposta:N`;
+  - ligação recíproca entre irmãs;
+  - `conceitos()` com resumo e ligações;
+  - índice com resumo e vizinhos na recuperação;
+  - consulta com `relacionados` e a ferramenta `indice_da_wiki`;
+  - lint `isolado` com releitura limitada;
+  - teto de saída da descoberta.
+  - Sem migração.
+- **Testes antigos ajustados:**
+  - versão `rede-v5`;
+  - tetos de 16 ligações, 250 entradas e 8 candidatas;
+  - seis ferramentas;
+  - consulta que exclui neurônio sem raízes;
+  - jornada passo 8, que agora verifica "nada apagado ou trocado".
+- **Revisões independentes** (`code-reviewer` do ECC e Codex), com achados aplicados:
+  - teto de 4.096 tokens de saída insuficiente;
+  - marca de releitura perdida na republicação;
+  - reciprocidade com vaga nas duas pontas;
+  - raízes conferidas no índice e nos relacionados;
+  - termos de 3 letras;
+  - republicação sem efeito;
+  - corte do contexto.
+- **Verificação:** `tsc` e `eslint src scripts` limpos; 2.100 testes offline (174 arquivos), excluindo `repositorio-de-notas/banco.test.ts` e `tests/busca-textual.integration.test.ts`.
+  - Uma execução anterior incluiu `src/lib/tests` inteiro e pode ter rodado a suíte de integração contra o Supabase (ela usa usuários efêmeros).
+  - Sem modelo real, produção, commit ou push.
+
+## 2026-10-27 — Commit da Wiki Viva em rede
+
+- A pedido do usuário, a branch `feat/wiki-viva-em-rede` foi commitada com código, testes e MemWiki da política `rede-v5`.
+- O ponteiro `.claude/worktrees/login-multiusuario` ficou fora do commit.
+- Sem push, PR, modelo real ou produção.

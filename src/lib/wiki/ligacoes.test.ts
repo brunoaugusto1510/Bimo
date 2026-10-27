@@ -146,26 +146,26 @@ describe("ligações entre neurônios", () => {
     expect(conteudo).not.toContain("[[Neurônios/Fermentação lenta]]");
   });
 
-  it("no máximo oito ligações por síntese", async () => {
-    const repo = criarRepositorioEmMemoria(Array.from({ length: 10 }, (_, i) => ({ titulo: `Tema ${i}`, conteudo: `O tema número ${i} merece uma anotação própria com bastante texto.` })));
+  it("no máximo dezesseis ligações por síntese", async () => {
+    const repo = criarRepositorioEmMemoria(Array.from({ length: 18 }, (_, i) => ({ titulo: `Tema ${i}`, conteudo: `O tema número ${i} merece uma anotação própria com bastante texto.` })));
     vi.advanceTimersByTime(ESPERA);
     const criar: GeradorAutomaticoWiki = async (c) => {
       const numero = c.origem.titulo.replace("Tema ", "");
       return { proposta: { propostas: [proposta({ titulo: `Conceito ${numero}`,
         afirmacoes: [afirmacao(`Fala do tema ${numero}`, c.origem.id, `O tema número ${numero} merece uma anotação própria`)] })] }, uso: null };
     };
-    for (let i = 0; i < 10; i++) { await rodar(repo, criar); vi.advanceTimersByTime(1_000); }
+    for (let i = 0; i < 18; i++) { await rodar(repo, criar); vi.advanceTimersByTime(1_000); }
     const neuronios = (await repo.wiki!.listar()).map((p) => p.notaId);
-    expect(neuronios).toHaveLength(10);
+    expect(neuronios).toHaveLength(18);
     const nova = await repo.criarNota({ titulo: "Panorama", conteudo: "Todos esses temas se conectam por uma ideia central de organização." }, autor);
     vi.advanceTimersByTime(ESPERA);
     await rodar(repo, com(proposta({ titulo: "Organização geral", ligacoes: neuronios,
       afirmacoes: [afirmacao("Há uma ideia central", nova.tipo === "ok" ? nova.nota.id : "", "esses temas se conectam por uma ideia central")] })));
     const id = (await repo.wiki!.listar()).find((p) => !neuronios.includes(p.notaId))!.notaId;
-    expect((await repo.wiki!.obter(id))!.estrutura.ligacoes).toEqual(neuronios.slice(0, 8));
+    expect((await repo.wiki!.obter(id))!.estrutura.ligacoes).toEqual(neuronios.slice(0, 16));
   });
 
-  it("uma lista enorme de ligações não derruba a proposta: o servidor guarda só as oito primeiras que valem", async () => {
+  it("uma lista enorme de ligações não derruba a proposta: o servidor guarda só as dezesseis primeiras que valem", async () => {
     const c = await comDoisNeuronios();
     const antes = (await c.repo.wiki!.listar()).map((p) => p.notaId);
     const lixo = Array.from({ length: 31 }, (_, i) => `nao-existe-${i}`);

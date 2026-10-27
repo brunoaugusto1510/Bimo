@@ -86,17 +86,17 @@ describe("índice compacto de sínteses", () => {
     conceitos[250] = { ...conceitos[250], aliases: ["quorum de escrita", ...conceitos[250].aliases] };
     const indice = construirIndice(conceitos, resumos(300), pontuarTermos([{ termo: "quorum", peso: 2 }], new Map([["quorum", 1]]), 300));
     expect(indice.total).toBe(300);
-    expect(indice.entradas.length).toBeLessThanOrEqual(120);
-    expect(JSON.stringify(indice.entradas).length).toBeLessThanOrEqual(12_000);
+    expect(indice.entradas.length).toBeLessThanOrEqual(250);
+    expect(JSON.stringify(indice.entradas).length).toBeLessThanOrEqual(30_000);
     expect(indice.entradas[0].id).toBe("251");
     expect(indice.entradas.every((e) => e.aliases.length <= 6)).toBe(true);
   });
 
-  it("sem aliases longos, o teto é de 120 entradas; sem termos, as sínteses mais recentes vêm primeiro", () => {
+  it("sem aliases longos, o teto é de 250 entradas; sem termos, as sínteses mais recentes vêm primeiro", () => {
     const curtas = Array.from({ length: 300 }, (_, i) => ({ ...conceito(i + 1), protegida: false }));
     const indice = construirIndice(curtas, new Map(curtas.map((c) => [c.notaId, { titulo: `S${c.notaId}` }])), []);
     expect(indice.total).toBe(300);
-    expect(indice.entradas).toHaveLength(120);
+    expect(indice.entradas).toHaveLength(250);
     expect(indice.entradas[0].id).toBe("300");
   });
 
@@ -122,7 +122,9 @@ describe("o modelo recebe o índice e pode apontar qualquer síntese dele", () =
     let visto: ContextoWiki | undefined;
     await rodar(repo, async (c) => { visto = c; return vazio; });
     const enviado = entradaDaDescoberta(visto!);
-    expect(enviado.indice).toEqual({ total: 1, entradas: [{ id, titulo: "Consistência de caches", aliases: ["coerência de cache"], protegida: false }] });
+    // Sem resumo próprio, o índice mostra a primeira afirmação da síntese (nunca o texto da origem).
+    expect(enviado.indice).toEqual({ total: 1, entradas: [{ id, titulo: "Consistência de caches", aliases: ["coerência de cache"], protegida: false,
+      resumo: "Sobre Consistência de caches." }] });
     expect(JSON.stringify(enviado.indice)).not.toContain("cópias locais");
   });
 
@@ -236,7 +238,7 @@ describe("candidatas pelos termos característicos", () => {
     const titulos = visto!.candidatas.map((v) => v.nota.titulo);
     expect(titulos).toContain("Raft");
     expect(titulos.indexOf("Raft")).toBeLessThan(2);
-    expect(titulos.length).toBeLessThanOrEqual(6);
+    expect(titulos.length).toBeLessThanOrEqual(8);
   });
 
   it("termos exclusivos da própria nota não esgotam a lista: os seguintes ainda recuperam", async () => {

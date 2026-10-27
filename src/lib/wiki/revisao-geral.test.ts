@@ -24,8 +24,8 @@ function preparar(quantidade: number) {
   vi.advanceTimersByTime(91_000);
   return repo;
 }
-const conservar = { politica: "sintetica-v4", semPublicacao: { decisao: "conservar_origem", motivo: "Só uma anotação sem conhecimento a sintetizar.", condicao: null, tipoDePendencia: null, neuroniosALer: [] }, propostas: [] };
-const adiar = { politica: "sintetica-v4", semPublicacao: { decisao: "adiar", motivo: "Falta contexto para decidir sobre esta nota.", condicao: "Quando houver uma nota relacionada.", tipoDePendencia: "contexto_da_origem", neuroniosALer: [] }, propostas: [] };
+const conservar = { politica: "rede-v5", semPublicacao: { decisao: "conservar_origem", motivo: "Só uma anotação sem conhecimento a sintetizar.", condicao: null, tipoDePendencia: null, neuroniosALer: [] }, propostas: [] };
+const adiar = { politica: "rede-v5", semPublicacao: { decisao: "adiar", motivo: "Falta contexto para decidir sobre esta nota.", condicao: "Quando houver uma nota relacionada.", tipoDePendencia: "contexto_da_origem", neuroniosALer: [] }, propostas: [] };
 
 describe("orçamento diário e falhas do provedor", () => {
   it("erro 5xx do provedor não consome o teto do dia: nada foi gerado nem cobrado", async () => {
