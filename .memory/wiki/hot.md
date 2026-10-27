@@ -4,6 +4,8 @@
 
 ## Estado atual — 26/10/2026
 
+- **27/10: desenho da tensão entre neurônios (lacuna 8), estacionado pelo usuário** ("vejo isso depois"; há prioridades maiores). Não implementar sem novo pedido. Em [documentacao/Bimo - Desenho da Tensao entre Neuronios.md](documentacao/Bimo%20-%20Desenho%20da%20Tensao%20entre%20Neuronios.md). Nenhum código escrito. As quatro decisões pedidas ao usuário estão na entrada "desenho" do log de 27/10.
+
 - **27/10: primeira fonte de `.raw/` ingerida.** `.memory/.raw/llm-wiki.md` é o texto do padrão LLM Wiki, resumido em [fonte: LLM Wiki](fontes/llm-wiki-karpathy.md).
   - A referência de 23/10 e a auditoria de 26/10 conferem com a fonte; nada foi contradito.
   - Pontos novos (F1–F6): discutir a fonte com a pessoa antes de escrever, página de resumo por fonte, lint que sugere perguntas e fontes, índice suficiente até cerca de 100 fontes, frontmatter.

@@ -52,6 +52,7 @@ Os 25 documentos de `docs/` foram incorporados integralmente a `documentacao/`, 
 - [Plano de qualidade e critérios dos neurônios](documentacao/Bimo%20-%20Plano%20de%20Qualidade%20e%20Criterios%20dos%20Neuronios.md): critérios editoriais e avaliação.
 - [Análise da granularidade dos neurônios](documentacao/Bimo%20-%20Analise%20de%20Granularidade%20dos%20Neuronios.md): análise de utilidade, assunto e fontes.
 - [Modos de consolidação e energia](documentacao/Bimo%20-%20Modos%20de%20Consolidacao%20e%20Energia.md): propostas de produto, sem presumir implementação.
+- [Desenho: tensão entre neurônios — 27/10/2026](documentacao/Bimo%20-%20Desenho%20da%20Tensao%20entre%20Neuronios.md): proposta para a lacuna 8 (contradição entre neurônios diferentes), com armazenamento, validação, leitura, testes e o que fica fora; não implementada.
 
 ### Wiki Viva — avaliações e ensaios datados
 

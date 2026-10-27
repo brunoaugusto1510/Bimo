@@ -95,3 +95,11 @@
 - Atualizados `index.md` (seção "Fontes brutas ingeridas"), `dominios/wiki-viva.md` e `hot.md`.
 - Esta é a primeira entrada com o prefixo `## [data] operação | título` sugerido pela fonte; as anteriores ficam como estão.
 - Sem código, testes, commit ou push. `.raw/` segue fora do git.
+
+## [2026-10-27] desenho | Tensão entre neurônios (lacuna 8)
+
+- A pedido do usuário, desenho antes de codar: [documentação](documentacao/Bimo%20-%20Desenho%20da%20Tensao%20entre%20Neuronios.md).
+- Lido no código: divergência hoje só existe dentro de um neurônio (`automacao.ts:381-413`); o chat não recebe divergências (`consulta.ts`).
+- Proposta: `estrutura.tensoes` no neurônio que registra, outro lado derivado na leitura, sem escrever no outro neurônio e sem migração; tensão implica ligação; política `rede-v6`; chat passa a receber divergências e tensões.
+- Decisões pedidas ao usuário: guardar só de um lado; detectar só na descoberta (sem lint pago); ligação automática; política `rede-v6`.
+- Sem código, testes ou commit.
