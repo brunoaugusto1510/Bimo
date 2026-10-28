@@ -4,6 +4,15 @@
 
 ## Estado atual — 26/10/2026
 
+- **27/10: modos de consolidação e energia decididos (nada implementado).** Padrão contínuo; o lint divide o orçamento diário com chat e ingestão; autonomia é configuração da pessoa ("publicar direto" por padrão, "propor antes de publicar" opcional, que exige fila e tela de aprovação ainda inexistentes). Em aberto: prioridade dentro do orçamento, critérios do lint, orçamento padrão. Ver [modos de consolidação e energia](documentacao/Bimo%20-%20Modos%20de%20Consolidacao%20e%20Energia.md) e [decisões](decisions.md).
+
+- **27/10: plano completo da memória do aplicativo, com ECC.** [Plano do sistema de memória](documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md), revisão 1, proposto sobre `feat/wiki-viva-em-rede`, HEAD `e5d6394`.
+  - Recomenda manter Responses API com armazenamento de conversas/memórias no banco do Bimo; aproveitar notas e Wiki Viva `rede-v5` como conhecimento existente.
+  - Define contratos, dados, turnos idempotentes e recuperação, contexto limitado, extração/consolidação, correção/expiração/esquecimento, retenção e custo, além de fases F0–F8 e AC-001–030.
+  - Primeira fatia utilizável: histórico persistente e memória explícita; depois recuperação personalizada, captura seletiva e compactação opcional.
+  - Revisar D-01–D-08, especialmente retenção/backups, captura automática, dados sensíveis, dono único e orçamento antes das respectivas ativações. São propostas, não decisões aceitas.
+  - Só documentação/MemWiki; sem código, migração, teste de software, chamada de modelo, banco remoto, commit ou push. O ponteiro do worktree de login preexistente fica fora.
+
 - **27/10: desenho da tensão entre neurônios (lacuna 8), estacionado pelo usuário** ("vejo isso depois"; há prioridades maiores). Não implementar sem novo pedido. Em [documentacao/Bimo - Desenho da Tensao entre Neuronios.md](documentacao/Bimo%20-%20Desenho%20da%20Tensao%20entre%20Neuronios.md). Nenhum código escrito. As quatro decisões pedidas ao usuário estão na entrada "desenho" do log de 27/10.
 
 - **27/10: primeira fonte de `.raw/` ingerida.** `.memory/.raw/llm-wiki.md` é o texto do padrão LLM Wiki, resumido em [fonte: LLM Wiki](fontes/llm-wiki-karpathy.md).
@@ -50,6 +59,8 @@
 - Telas da Wiki Viva reescritas em 26/10 para seguir o artifact de design: cérebro em sobreposição com chips e cartão, diário "Enquanto você estava fora", neurônio aberto com sinapses e folha no celular, glifos de estado no grafo. Detalhes em [interface e grafo](dominios/interface-e-grafo.md). Testes, tipos e lint passam; nada commitado.
 
 ## Próximos passos
+
+- Revisar o [plano de memória do aplicativo](documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md), decidir as políticas da seção 17 e, quando solicitado, iniciar F0/F1. Planejamento não autoriza ativação nem substitui a integração futura de contas para memórias privadas por pessoa.
 
 - Revisar e commitar a branch `feat/wiki-viva-em-rede` (sem o ponteiro `.claude/worktrees/login-multiusuario`, que aparece modificado e não faz parte da mudança). *(Commit feito em 27/10; falta decidir push e PR.)*
 - Antes de ligar a política `rede-v5` em produção:

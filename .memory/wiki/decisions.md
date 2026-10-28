@@ -51,3 +51,21 @@ Decisões do usuário depois da [auditoria da estrutura](documentacao/Bimo%20-%2
 
 A ingestão distribui o conhecimento atual em cinco páginas de domínio, mantendo stack, padrões, decisões e problemas como portas de entrada. Os 25 documentos migrados conservam evidências e contexto histórico. O relatório de verificação registra divergências e limites da ingestão, sem reescrever resultados antigos como fatos atuais.
 
+## 27/10/2026 — Proposta de memória conversacional do aplicativo
+
+Criado o [plano do sistema de memória](documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md), a pedido de planejamento completo com ECC. **Estado: proposto; nenhuma escolha deste plano está registrada como aprovação de implementação ou retenção.**
+
+Recomendações para revisão: manter Responses API e `store: false`, armazenar conversas e memórias no banco do aplicativo, separar resumos de trabalho de lembranças duráveis e das evidências da Wiki Viva, capturar de forma seletiva e usar recuperação progressiva. Corrigir/esquecer deve invalidar resumos/checkpoints e bloquear reextração das mesmas origens por trabalhos atrasados. Recuperar turno interrompido exige identidade de operação e recibo transacional das escritas, sem repetição cega.
+
+As alternativas e consequências estão na seção 4; as decisões D-01–D-08, na seção 17. A autenticação web observada segue com senha única e dono configurado: preparar `user_id` não cria isolamento entre pessoas que compartilham a mesma sessão. O plano não altera as escolhas aceitas da Wiki Viva `rede-v5` nem a tarefa estacionada de tensões.
+
+## 27/10/2026 — Modos de consolidação e energia: padrão contínuo, orçamento único, autonomia configurável
+
+Decisões do usuário após comparar os modos com o texto do LLM Wiki. Detalhes em [modos de consolidação e energia](documentacao/Bimo%20-%20Modos%20de%20Consolidacao%20e%20Energia.md). **Estado: decididas; nada implementado.**
+
+- **Padrão: contínuo.** Corresponde ao comportamento que a documentação descreve hoje (estabilidade de 90 s, Cron, aceleração por atividade).
+- **O lint divide o orçamento diário** com o chat e a ingestão; o orçamento é o medidor universal. Sem cota separada.
+- **Autonomia como configuração da pessoa:** *publicar direto* (padrão) ou *propor antes de publicar*, para que cada pessoa controle o próprio gasto. A segunda opção gasta energia mesmo quando a proposta é rejeitada e exige fila e tela de aprovação, ainda inexistentes.
+
+Em aberto: prioridade entre chat, ingestão e lint dentro do orçamento único, orçamento padrão, critérios do lint, interface da fila de propostos.
+

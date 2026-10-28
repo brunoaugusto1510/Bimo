@@ -103,3 +103,20 @@
 - Proposta: `estrutura.tensoes` no neurônio que registra, outro lado derivado na leitura, sem escrever no outro neurônio e sem migração; tensão implica ligação; política `rede-v6`; chat passa a receber divergências e tensões.
 - Decisões pedidas ao usuário: guardar só de um lado; detectar só na descoberta (sem lint pago); ligação automática; política `rede-v6`.
 - Sem código, testes ou commit.
+
+## [2026-10-27T10:28:57-03:00] planejamento | Sistema de memória do aplicativo com ECC
+
+- Criado o [plano completo do sistema de memória](documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md), revisão 1, proposto sobre `feat/wiki-viva-em-rede`, HEAD `e5d6394`.
+- Aplicados os critérios do ECC `intent-driven-development`, alternativas arquiteturais, migrações do ECC `database-migrations` e autoavaliação do documento. Consultadas novamente referências oficiais da OpenAI e de RLS do Supabase, sem operar os serviços.
+- Plano: quatro camadas funcionais, dados e contratos, turnos idempotentes e recibos transacionais, recuperação progressiva, extração/consolidação, correção/expiração/esquecimento, retenção, orçamento, segurança, interface, fases F0–F8, AC-001–030 e decisões abertas D-01–D-08.
+- Recomenda manter Responses API e dados no banco do Bimo, integrados ao conhecimento da Wiki Viva `rede-v5`. Primeira entrega utilizável com histórico e memória explícita; captura automática e compactação em etapas posteriores. Nenhuma recomendação foi registrada como aprovação de implementação.
+- Atualizados índice, hot, decisões e domínio de agente. Preservados registros anteriores e a tarefa estacionada de tensões.
+- Verificação documental: contagem de critérios/fases/decisões, links locais, whitespace e `git diff --check`; nenhuma falha na primeira passagem (111 links em cinco páginas, antes de acrescentar esta entrada).
+- Sem alterações em código, dependências, migrações ou `.raw/`; sem leitura de `.env`, testes de software, modelo pago, banco remoto, commit ou push. O ponteiro preexistente `.claude/worktrees/login-multiusuario` permanece fora do escopo.
+
+## [2026-10-27] brainstorm | Modos de consolidação e energia vs LLM Wiki
+
+- A pedido do usuário, comparados os seis perfis do [documento de modos](documentacao/Bimo%20-%20Modos%20de%20Consolidacao%20e%20Energia.md) com o texto do padrão em `.raw/` (ingestão, lint, consulta). Os perfis misturam três eixos: quando, escopo e estado.
+- Decisões do usuário: padrão contínuo; o lint divide o orçamento diário com chat e ingestão; autonomia ("publicar direto" ou "propor antes de publicar") como configuração da pessoa, com publicação direta por padrão.
+- Registrado no documento de modos (nova seção), em `decisions.md`, no índice e no hot. Ordem de prioridade dentro do orçamento e gatilho do lint ficaram como sugestões não aceitas.
+- Só MemWiki; sem código, testes, modelo pago, banco remoto, commit ou push. Leitura do estado atual (Cron, 90 s, 200 mil tokens) vem da documentação, sem verificação de produção.

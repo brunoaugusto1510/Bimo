@@ -28,3 +28,11 @@ O processamento de uma fonte é explícito. Não há, por esta leitura, demonstr
 - [Rascunho](../../../src/lib/rascunho-do-bimo.ts) e [rota do editor](../../../src/app/api/bimo/rascunho/route.ts).
 - [Fontes](../../../src/lib/fontes.ts), [ingestão](../../../src/lib/ingestao.ts), [fachada de extração](../../../src/lib/extracao/index.ts) e [proveniência](../../../src/lib/proveniencia.ts).
 - [Registro histórico da Fase 3](../documentacao/Bimo%20-%20Sources%20%26%20Ingestion%20%28Fase%203%29.md) e [Wiki Viva atual](wiki-viva.md).
+
+## 27/10/2026 — Planejamento da memória do aplicativo
+
+O [plano completo de memória](../documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md) propõe conversas persistentes, preferências, decisões e pendências rastreáveis, contexto limitado, captura seletiva e esquecimento abrangendo os derivados. É uma proposta documental com fases F0–F8 e AC-001–030; não acrescenta essas funcionalidades ao código atual.
+
+A base foi conferida no checkout `feat/wiki-viva-em-rede`, HEAD `e5d6394`: o chat conserva mensagens no estado do componente, o transporte usa Responses diretamente com `store: false` e a Wiki Viva já oferece índice e vizinhos. O plano mantém esses mecanismos de conhecimento e separa memória pessoal, histórico e resumos. A capacidade `Memory` documentada pela OpenAI pertence a Sandbox Agents; não é uma opção já ligada no transporte do Bimo.
+
+As políticas de retenção, modo automático, informações sensíveis e uso sob dono único continuam para revisão. Nenhuma migração, teste de software ou validação remota foi executada neste planejamento.

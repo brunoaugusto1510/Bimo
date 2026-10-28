@@ -16,6 +16,7 @@ Diretório central do conhecimento de desenvolvimento. Leia `hot.md` primeiro; u
 - [Wiki Viva](dominios/wiki-viva.md): política editorial, fila, lotes, evidências, recuperação e observabilidade.
 - [Interface e grafo](dominios/interface-e-grafo.md): árvore estável, editor, autosave, simulação e design.
 - [Mobile](dominios/mobile.md): Expo, serviços simulados, estado e testes separados.
+- [Plano do sistema de memória do aplicativo](documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md): proposta de 27/10; conversas persistentes, preferências, decisões, pendências, recuperação, esquecimento, orçamento, fases F0–F8 e 30 critérios de aceite. Não implementado; distinto desta MemWiki.
 
 ## Fontes brutas ingeridas
 
@@ -51,7 +52,7 @@ Os 25 documentos de `docs/` foram incorporados integralmente a `documentacao/`, 
 - [LLM Wiki e referência no Obsidian](documentacao/Bimo%20-%20LLM%20Wiki%20-%20Funcionamento%20e%20Referencias%20Obsidian.md): pesquisa de 23/10 e matriz inicial para comparação.
 - [Plano de qualidade e critérios dos neurônios](documentacao/Bimo%20-%20Plano%20de%20Qualidade%20e%20Criterios%20dos%20Neuronios.md): critérios editoriais e avaliação.
 - [Análise da granularidade dos neurônios](documentacao/Bimo%20-%20Analise%20de%20Granularidade%20dos%20Neuronios.md): análise de utilidade, assunto e fontes.
-- [Modos de consolidação e energia](documentacao/Bimo%20-%20Modos%20de%20Consolidacao%20e%20Energia.md): propostas de produto, sem presumir implementação.
+- [Modos de consolidação e energia](documentacao/Bimo%20-%20Modos%20de%20Consolidacao%20e%20Energia.md): propostas de produto e, desde 27/10, as decisões do usuário (padrão contínuo, orçamento único, autonomia configurável); nada implementado.
 - [Desenho: tensão entre neurônios — 27/10/2026](documentacao/Bimo%20-%20Desenho%20da%20Tensao%20entre%20Neuronios.md): proposta para a lacuna 8 (contradição entre neurônios diferentes), com armazenamento, validação, leitura, testes e o que fica fora; não implementada.
 
 ### Wiki Viva — avaliações e ensaios datados
