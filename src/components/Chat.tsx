@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { dividirCaminho } from "@/lib/caminho-da-nota";
 import type { NotaParaArvore } from "@/lib/arvore-de-notas";
 import type { ClienteDeConversas } from "@/lib/conversas/cliente";
@@ -38,6 +39,11 @@ type Props = {
   tituloDaNota?: (id: IdDeNota) => string | undefined;
   /** Onde o histórico fica guardado. Sem ele a conversa vive só nesta tela, sem botões de histórico e de novo chat. */
   conversas?: ClienteDeConversas;
+  /**
+   * Onde os botões de histórico e novo chat aparecem (a barra "Cérebro / Diário" da página). `null`
+   * enquanto esse lugar ainda não existe; sem a prop eles ficam no alto do chat. Só aparecem com o chat à vista.
+   */
+  lugarDosBotoes?: HTMLElement | null;
 };
 
 /** O texto do turno que guarda uma escrita quando a resposta cai no meio. */
@@ -53,7 +59,7 @@ const SUGESTOES = [
   "Acrescenta um exemplo na minha nota sobre React",
 ];
 
-export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente, aoIniciarResposta, aoPassoDoAgente, aoEncerrarResposta, aoMostrarNoCerebro, tituloDaNota, conversas }: Props) {
+export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente, aoIniciarResposta, aoPassoDoAgente, aoEncerrarResposta, aoMostrarNoCerebro, tituloDaNota, conversas, lugarDosBotoes }: Props) {
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
   // Os passos do agente na pergunta atual, conforme chegam — viram as pílulas acima da resposta.
@@ -234,6 +240,20 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     }
   }
 
+  const barraDoHistorico = conversas && (
+    <HistoricoDeConversas
+      cliente={conversas}
+      antesDeListar={aguardarGravacoes}
+      idAtual={idDaConversa}
+      temMensagens={mensagens.length > 0}
+      ocupado={pensando || abrindo}
+      aoNovaConversa={novaConversa}
+      aoEscolher={abrirConversa}
+      aoExcluida={(id) => { if (id === idDaConversa) novaConversa(); }}
+      noCabecalho={lugarDosBotoes !== undefined}
+    />
+  );
+
   function aoTeclar(evento: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Enter envia; Shift+Enter quebra linha — como na maioria dos chats.
     if (evento.key === "Enter" && !evento.shiftKey) {
@@ -252,18 +272,8 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     // (renderizado atrás, no PaginaPrincipal) aparecer. A conversa fica embaixo e o
     // cérebro em cima (o grafo é enquadrado na parte de cima); as bolhas continuam opacas.
     <section className="flex h-full flex-col">
-      {conversas && (
-        <HistoricoDeConversas
-          cliente={conversas}
-          antesDeListar={aguardarGravacoes}
-          idAtual={idDaConversa}
-          temMensagens={mensagens.length > 0}
-          ocupado={pensando || abrindo}
-          aoNovaConversa={novaConversa}
-          aoEscolher={abrirConversa}
-          aoExcluida={(id) => { if (id === idDaConversa) novaConversa(); }}
-        />
-      )}
+      {barraDoHistorico && lugarDosBotoes === undefined && barraDoHistorico}
+      {barraDoHistorico && lugarDosBotoes && ativo && createPortal(barraDoHistorico, lugarDosBotoes)}
 
       {/* `relative`: o rótulo `sr-only` de cada mensagem é absoluto — sem um ancestral
           posicionado aqui, ele escapa do recorte do scroll e alonga o documento. A máscara

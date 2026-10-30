@@ -99,6 +99,15 @@ it("falha na atualização por API conserva conversa e grafo montados", async ()
 });
 
 const abaNotas = () => screen.getByRole("button", { name: "Notas" });
+it("os botões de histórico e novo chat ficam na barra Cérebro/Diário, junto das abas", async () => {
+  renderizar();
+
+  const barra = await screen.findByRole("navigation", { name: "Conhecimento do Bimo" });
+
+  expect(within(barra).getByRole("button", { name: "Histórico" })).toBeInTheDocument();
+  expect(within(barra).getByRole("button", { name: "Novo chat" })).toBeInTheDocument();
+});
+
 it("Cérebro e Diário preservam os mesmos elementos do Chat e do Grafo", async () => {
   const usuario = renderizar();
   const campo = campoDoChat(); const grafo = screen.getByTestId("grafo");

@@ -98,6 +98,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
 
   // No celular não cabem os dois painéis lado a lado, então a lista vira um menu.
   const [menuAberto, setMenuAberto] = useState(false);
+  // Onde o chat põe os botões de histórico e novo chat: a barra "Cérebro / Diário". Fica `null` até a barra existir.
+  const [lugarDoChat, definirLugarDoChat] = useState<HTMLElement | null>(null);
 
   // Incrementar isto é o sinal para o grafo dar um pulso de movimento — acontece a cada
   // resposta do agente.
@@ -365,6 +367,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
           <nav aria-label="Conhecimento do Bimo" className="flex shrink-0 gap-2 border-b border-borda bg-painel px-3 py-1.5">
             <button type="button" aria-pressed={painelWiki === "cerebro"} className={chip(painelWiki === "cerebro")} onClick={() => painelWiki === "cerebro" ? definirPainelWiki(null) : mostrarWiki("cerebro")}><span aria-hidden>◈</span>Cérebro</button>
             <button type="button" aria-pressed={painelWiki === "diario"} className={chip(painelWiki === "diario")} onClick={() => painelWiki === "diario" ? definirPainelWiki(null) : mostrarWiki("diario")}>Diário</button>
+            {/* Os botões de histórico e novo chat entram aqui (o `Chat` os põe, quando está à vista). */}
+            <div ref={definirLugarDoChat} className="ml-auto" />
           </nav>
           <EspacoDeTrabalho
             ativo={emNotas}
@@ -429,6 +433,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                 aoMostrarNoCerebro={mostrarNoCerebro}
                 tituloDaNota={tituloDaNota}
                 conversas={clienteDeConversas}
+                lugarDosBotoes={lugarDoChat}
               />
             </div>
 

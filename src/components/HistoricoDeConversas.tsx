@@ -18,6 +18,11 @@ type Props = {
   aoEscolher: (id: IdDeConversa) => void;
   /** A conversa já foi apagada no servidor. */
   aoExcluida: (id: IdDeConversa) => void;
+  /**
+   * Os botões moram na barra "Cérebro / Diário" (o `Chat` os põe lá): no celular só o ícone, para a
+   * barra caber; a lista abre embaixo, alinhada à direita. Sem isto eles ficam no alto do chat.
+   */
+  noCabecalho?: boolean;
 };
 
 const botaoDaBarra =
@@ -38,7 +43,9 @@ type Estado =
   | { tipo: "pronto"; conversas: ResumoDeConversa[] };
 
 /** Os dois botões do alto do chat — "Histórico" e "Novo chat" — e a lista que o primeiro abre. */
-export default function HistoricoDeConversas({ cliente, antesDeListar, idAtual, temMensagens, ocupado, aoNovaConversa, aoEscolher, aoExcluida }: Props) {
+export default function HistoricoDeConversas({ cliente, antesDeListar, idAtual, temMensagens, ocupado, aoNovaConversa, aoEscolher, aoExcluida, noCabecalho = false }: Props) {
+  // O rótulo é texto de verdade (é o nome acessível do botão); no cabeçalho do celular só esconde.
+  const rotulo = noCabecalho ? "sr-only md:not-sr-only" : "";
   const [aberto, setAberto] = useState(false);
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
   const [confirmando, setConfirmando] = useState<IdDeConversa | null>(null);
@@ -99,8 +106,8 @@ export default function HistoricoDeConversas({ cliente, antesDeListar, idAtual, 
   }
 
   return (
-    <div className="relative shrink-0 px-3 pt-3 md:px-4">
-      <div className="mx-auto flex max-w-2xl items-center justify-end gap-2">
+    <div className={noCabecalho ? "relative" : "relative shrink-0 px-3 pt-3 md:px-4"}>
+      <div className={noCabecalho ? "flex items-center gap-2" : "mx-auto flex max-w-2xl items-center justify-end gap-2"}>
         <button
           ref={botaoDoHistorico}
           type="button"
@@ -113,7 +120,7 @@ export default function HistoricoDeConversas({ cliente, antesDeListar, idAtual, 
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 2" />
           </svg>
-          Histórico
+          <span className={rotulo}>Histórico</span>
         </button>
         <button
           type="button"
@@ -124,7 +131,7 @@ export default function HistoricoDeConversas({ cliente, antesDeListar, idAtual, 
           <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-4">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          Novo chat
+          <span className={rotulo}>Novo chat</span>
         </button>
       </div>
 
@@ -132,7 +139,11 @@ export default function HistoricoDeConversas({ cliente, antesDeListar, idAtual, 
         <section
           id={idDoPainel}
           aria-label="Histórico de conversas"
-          className="absolute inset-x-3 top-14 z-20 mx-auto max-h-[min(24rem,70vh)] max-w-2xl overflow-y-auto rounded-painel border border-borda bg-painel p-2 motion-safe:animate-entrada md:inset-x-4"
+          className={`absolute z-30 max-h-[min(24rem,70vh)] overflow-y-auto rounded-painel border border-borda bg-painel p-2 motion-safe:animate-entrada ${
+            noCabecalho
+              ? "top-full right-0 mt-1.5 w-[min(24rem,calc(100vw-1.5rem))]"
+              : "inset-x-3 top-14 mx-auto max-w-2xl md:inset-x-4"
+          }`}
         >
           {estado.tipo === "carregando" && <p role="status" className="px-3 py-4 text-controle text-suave">Carregando…</p>}
           {estado.tipo === "erro" && <p role="alert" className="rounded-lg bg-erro-suave px-3 py-2 text-controle text-erro">{estado.mensagem}</p>}

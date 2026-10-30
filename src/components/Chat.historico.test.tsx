@@ -204,6 +204,29 @@ describe("Chat — novo chat e histórico", () => {
     expect(await screen.findByText(/Nenhuma conversa guardada ainda/)).toBeInTheDocument();
   });
 
+  it("com um lugar indicado, os botões aparecem nele e não no alto do chat", () => {
+    const barra = document.createElement("div");
+    document.body.append(barra);
+    const { container } = render(<ChatControlado conversas={clienteFalso()} lugarDosBotoes={barra} />);
+
+    expect(within(barra).getByRole("button", { name: "Histórico" })).toBeInTheDocument();
+    expect(within(barra).getByRole("button", { name: "Novo chat" })).toBeInTheDocument();
+    expect(within(container).queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
+    barra.remove();
+  });
+
+  it("some da barra quando o chat fica escondido e não aparece em lugar nenhum enquanto a barra não existe", () => {
+    const barra = document.createElement("div");
+    document.body.append(barra);
+    const { rerender } = render(<ChatControlado conversas={clienteFalso()} lugarDosBotoes={barra} ativo={false} />);
+    expect(within(barra).queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
+
+    rerender(<ChatControlado conversas={clienteFalso()} lugarDosBotoes={null} />);
+
+    expect(screen.queryByRole("button", { name: "Histórico" })).not.toBeInTheDocument();
+    barra.remove();
+  });
+
   it("Escape fecha a lista", async () => {
     const usuario = userEvent.setup();
     render(<ChatControlado conversas={clienteFalso()} />);
