@@ -85,6 +85,13 @@
       "when": 1792774952809,
       "tag": "0011_wiki_observabilidade",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793376726879,
+      "tag": "0012_conversas",
+      "breakpoints": true
     }
   ]
 }

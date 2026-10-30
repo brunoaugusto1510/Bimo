@@ -43,3 +43,9 @@ Desvios conscientes: o diário não oferece "Deixar como está/Devolver ao Bimo"
 - [Grafo de dados](../../../src/lib/grafo-de-notas.ts), [canvas](../../../src/components/GrafoDeFundo.tsx), [rastro](../../../src/lib/rastro-do-agente.ts), [telas da wiki](../../../src/components/wiki/PainelDaWiki.tsx), [tokens](../../../src/app/globals.css) e [guia de design](../../../DESIGN.md).
 
 Relacionadas: [notas](notas-e-autenticacao.md), [agente](agente-e-ingestao.md) e [Wiki Viva](wiki-viva.md).
+
+## Novo chat e histórico (30/10/2026)
+
+- O alto do [chat](../../src/components/Chat.tsx) tem "Histórico" e "Novo chat" ([HistoricoDeConversas](../../src/components/HistoricoDeConversas.tsx)), só quando o `Chat` recebe a prop `conversas`; `PaginaPrincipal` passa o cliente real. O `Chat` continua uma árvore estável: novo chat/abrir só trocam o estado interno.
+- "Novo chat" fica desabilitado com a conversa vazia ou enquanto o Bimo responde; abrir conversa também espera a resposta terminar.
+- Gravações em fila única (ordem das mensagens); o id da conversa nasce no cliente. Detalhes de dados e rotas em [agente e ingestão](agente-e-ingestao.md) e no [log](../log.md); migração `0012_conversas` precisa ser aplicada antes de o histórico funcionar com `NOTAS_FONTE=banco`.

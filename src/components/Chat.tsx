@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { dividirCaminho } from "@/lib/caminho-da-nota";
 import type { NotaParaArvore } from "@/lib/arvore-de-notas";
+import type { ClienteDeConversas } from "@/lib/conversas/cliente";
+import type { IdDeConversa } from "@/lib/conversas/tipos";
 import { lerRespostaDoChat, passoDoRastro, type LinhaDePasso } from "@/lib/fluxo-do-chat";
+import { janelaParaOAgente } from "@/lib/janela-do-historico";
 import type { PassoDoAgente } from "@/lib/rastro-do-agente";
+import HistoricoDeConversas from "./HistoricoDeConversas";
 import Mensagem, { TurnoDoBimo, type AbrirNotaDoChat, type MostrarNoCerebro } from "./Mensagem";
 import type { FonteDaResposta, IdDeNota, Mensagem as TipoMensagem, UsoDeFerramenta } from "@/lib/types";
 
@@ -32,6 +36,8 @@ type Props = {
   aoMostrarNoCerebro?: MostrarNoCerebro;
   /** O título atual de uma nota, para as fontes; sem ele, vale o caminho que o agente usou. */
   tituloDaNota?: (id: IdDeNota) => string | undefined;
+  /** Onde o histórico fica guardado. Sem ele a conversa vive só nesta tela, sem botões de histórico e de novo chat. */
+  conversas?: ClienteDeConversas;
 };
 
 /** O texto do turno que guarda uma escrita quando a resposta cai no meio. */
@@ -47,15 +53,70 @@ const SUGESTOES = [
   "Acrescenta um exemplo na minha nota sobre React",
 ];
 
-export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente, aoIniciarResposta, aoPassoDoAgente, aoEncerrarResposta, aoMostrarNoCerebro, tituloDaNota }: Props) {
+export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente, aoIniciarResposta, aoPassoDoAgente, aoEncerrarResposta, aoMostrarNoCerebro, tituloDaNota, conversas }: Props) {
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
   // Os passos do agente na pergunta atual, conforme chegam — viram as pílulas acima da resposta.
   const [passosAoVivo, setPassosAoVivo] = useState<LinhaDePasso[]>([]);
   const [erro, setErro] = useState<string | null>(null);
+  // O id nasce aqui: a conversa só existe no servidor a partir da primeira mensagem guardada.
+  const [idDaConversa, setIdDaConversa] = useState<IdDeConversa>(() => crypto.randomUUID());
+  const [abrindo, setAbrindo] = useState(false);
+  const [avisoDoHistorico, setAvisoDoHistorico] = useState<string | null>(null);
 
   const fimDaLista = useRef<HTMLDivElement>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
+  // Uma gravação de cada vez, na ordem: o histórico guarda as mensagens na ordem em que chegam.
+  const filaDeGravacao = useRef<Promise<void>>(Promise.resolve());
+  const ultimaAbertura = useRef(0);
+
+  /** Quem lista o histórico espera as gravações em andamento, senão a conversa de agora não aparece. */
+  function aguardarGravacoes(): Promise<void> {
+    return filaDeGravacao.current;
+  }
+
+  function guardar(id: IdDeConversa, novas: TipoMensagem[]) {
+    if (!conversas) return;
+    filaDeGravacao.current = filaDeGravacao.current
+      .then(() => conversas.acrescentar(id, novas))
+      .then(
+        () => setAvisoDoHistorico(null),
+        () => setAvisoDoHistorico("Não consegui guardar esta conversa no histórico. Ela continua aqui, mas pode não aparecer depois."),
+      );
+  }
+
+  function novaConversa() {
+    if (pensando) return;
+    ultimaAbertura.current += 1;
+    setAbrindo(false);
+    setMensagens([]);
+    setPassosAoVivo([]);
+    setErro(null);
+    setAvisoDoHistorico(null);
+    setIdDaConversa(crypto.randomUUID());
+    campo.current?.focus();
+  }
+
+  async function abrirConversa(id: IdDeConversa) {
+    if (!conversas || pensando) return;
+    const pedido = ++ultimaAbertura.current;
+    setAbrindo(true);
+    setErro(null);
+    try {
+      await filaDeGravacao.current;
+      const aberta = await conversas.abrir(id);
+      if (pedido !== ultimaAbertura.current) return;
+      setMensagens(aberta.mensagens);
+      setPassosAoVivo([]);
+      setAvisoDoHistorico(null);
+      setIdDaConversa(aberta.conversa.id);
+      campo.current?.focus();
+    } catch (falha) {
+      if (pedido === ultimaAbertura.current) setErro(falha instanceof Error ? falha.message : "Não consegui abrir a conversa.");
+    } finally {
+      if (pedido === ultimaAbertura.current) setAbrindo(false);
+    }
+  }
 
   // Rolar para o fim sempre que chegar mensagem nova, um passo ou o "pensando" — e
   // ao voltar de escondido, quando o que chegou nesse meio-tempo ficou fora da vista.
@@ -81,7 +142,9 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
 
   async function enviar() {
     const texto = rascunho.trim();
-    if (!texto || pensando) return;
+    if (!texto || pensando || abrindo) return;
+    // Uma conversa aberta do histórico no meio da resposta não pode receber o fim desta.
+    const idDestaConversa = idDaConversa;
 
     const doUsuario: TipoMensagem = {
       id: crypto.randomUUID(),
@@ -95,6 +158,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     const historico = [...mensagens, doUsuario];
 
     setMensagens(historico);
+    guardar(idDestaConversa, [doUsuario]);
     onRascunhoChange("");
     setPensando(true);
     setPassosAoVivo([]);
@@ -111,7 +175,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
         // NDJSON: cada ferramenta usada chega na hora, e o grafo mostra por onde o agente passa.
         headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
         body: JSON.stringify({
-          mensagens: historico.map((m) => ({ papel: m.papel, conteudo: m.conteudo })),
+          mensagens: janelaParaOAgente(historico),
         }),
       });
 
@@ -139,26 +203,24 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
         avisarEscrita(linha, true);
       });
 
-      setMensagens((anteriores) => [
-        ...anteriores,
-        {
-          id: crypto.randomUUID(),
-          papel: "agente",
-          conteudo: dados.resposta,
-          ferramentas: dados.ferramentas,
-          fontes: [...fontes.values()],
-        },
-      ]);
+      const doAgente: TipoMensagem = {
+        id: crypto.randomUUID(),
+        papel: "agente",
+        conteudo: dados.resposta,
+        ferramentas: dados.ferramentas,
+        fontes: [...fontes.values()],
+      };
+      setMensagens((anteriores) => [...anteriores, doAgente]);
+      guardar(idDestaConversa, [doAgente]);
       onRespostaAgente?.();
       for (const ferramenta of dados.ferramentas) avisarEscrita(ferramenta, false);
     } catch (falha) {
       // Falhou depois de gravar: a escrita aconteceu, então a conversa guarda os passos e o
       // "Abrir" da nota — sem isso a pessoa tentaria de novo e criaria a nota duas vezes.
       if (recebidos.some((linha) => !linha.erro && linha.notaId)) {
-        setMensagens((anteriores) => [
-          ...anteriores,
-          { id: crypto.randomUUID(), papel: "agente", conteudo: RESPOSTA_INTERROMPIDA, ferramentas: recebidos, fontes: [...fontes.values()] },
-        ]);
+        const interrompida: TipoMensagem = { id: crypto.randomUUID(), papel: "agente", conteudo: RESPOSTA_INTERROMPIDA, ferramentas: recebidos, fontes: [...fontes.values()] };
+        setMensagens((anteriores) => [...anteriores, interrompida]);
+        guardar(idDestaConversa, [interrompida]);
       }
       setErro(
         falha instanceof Error
@@ -190,6 +252,19 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     // (renderizado atrás, no PaginaPrincipal) aparecer. A conversa fica embaixo e o
     // cérebro em cima (o grafo é enquadrado na parte de cima); as bolhas continuam opacas.
     <section className="flex h-full flex-col">
+      {conversas && (
+        <HistoricoDeConversas
+          cliente={conversas}
+          antesDeListar={aguardarGravacoes}
+          idAtual={idDaConversa}
+          temMensagens={mensagens.length > 0}
+          ocupado={pensando || abrindo}
+          aoNovaConversa={novaConversa}
+          aoEscolher={abrirConversa}
+          aoExcluida={(id) => { if (id === idDaConversa) novaConversa(); }}
+        />
+      )}
+
       {/* `relative`: o rótulo `sr-only` de cada mensagem é absoluto — sem um ancestral
           posicionado aqui, ele escapa do recorte do scroll e alonga o documento. A máscara
           apaga o topo da conversa quando ela sobe por cima do cérebro. */}
@@ -216,6 +291,11 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
             {erro}
           </div>
         )}
+        {avisoDoHistorico && (
+          <p role="status" className="mx-auto mb-2 max-w-2xl rounded-lg bg-destaque-suave px-3 py-2 text-xs text-destaque-texto">
+            {avisoDoHistorico}
+          </p>
+        )}
 
         <div className="mx-auto flex max-w-2xl items-end gap-2">
           <label className="flex min-w-0 flex-1">
@@ -235,7 +315,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
           <button
             type="button"
             onClick={enviar}
-            disabled={rascunho.trim() === "" || pensando}
+            disabled={rascunho.trim() === "" || pensando || abrindo}
             className="h-11 shrink-0 rounded-full bg-destaque px-5 text-controle font-semibold text-sobre-destaque transition-[background-color,transform] hover:bg-destaque-hover disabled:cursor-not-allowed disabled:bg-desabilitado disabled:text-desabilitado-texto motion-safe:enabled:active:scale-[0.96] md:h-10"
           >
             Enviar

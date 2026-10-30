@@ -15,6 +15,7 @@ import Chat from "@/components/Chat";
 import EspacoDeTrabalho from "@/components/EspacoDeTrabalho";
 import GrafoDeFundo, { type ControleDoGrafo } from "@/components/GrafoDeFundo";
 import MarcaBimo from "@/components/MarcaBimo";
+import { clienteDeConversas } from "@/lib/conversas/cliente";
 import PaletaIrParaNota from "@/components/PaletaIrParaNota";
 import SeletorPill from "@/components/SeletorPill";
 import { construirArvore, indexarNotas } from "@/lib/arvore-de-notas";
@@ -427,6 +428,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
                 aoEncerrarResposta={encerrarRastroDoAgente}
                 aoMostrarNoCerebro={mostrarNoCerebro}
                 tituloDaNota={tituloDaNota}
+                conversas={clienteDeConversas}
               />
             </div>
 

@@ -15,3 +15,4 @@ export * from "./proveniencia";
 export * from "./versoes";
 export * from "./wiki";
 export * from "./wiki-automatica";
+export * from "./conversas";
