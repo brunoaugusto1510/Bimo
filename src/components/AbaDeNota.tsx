@@ -18,6 +18,7 @@ import { useTagsDasNotas } from "@/lib/espaco-de-trabalho/usar-tags-das-notas";
 import { sugerirParaGatilho } from "@/lib/edicao/sugestoes";
 
 import CampoDeTitulo from "./CampoDeTitulo";
+import Dialogo from "./Dialogo";
 import type { FocoPedido, ResultadoDaAbertura } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
 
 type Props = {
@@ -136,6 +137,8 @@ export default function AbaDeNota({
   const [descartes, setDescartes] = useState<{ id: IdDeNota; ids: ReadonlySet<IdDeNota> }>({ id, ids: SEM_DESCARTES });
   const sugestoesDescartadas = descartes.id === id ? descartes.ids : SEM_DESCARTES;
   const [aviso, setAviso] = useState<string | null>(null);
+  const [confirmacaoLixeira, confirmarLixeira] = useState<string | null>(null);
+  const [erroLixeira, definirErroLixeira] = useState("");
 
   const resolver = useMemo(() => criarResolvedor([...notas.values()]), [notas]);
   const resumo = notas.get(id);
@@ -271,7 +274,23 @@ export default function AbaDeNota({
             aoCopiarLigacao={copiarLigacao}
             aoAbrirEmNovaAba={() => aoAbrirNota(id, { novaAba: true })}
             aoPerguntarAoBimo={() => aoPerguntarAoBimo(id)}
+            aoMoverParaLixeira={() => {
+              if (edicao.ocupado) { avisarSobreOTitulo("Aguarde a atualização da nota terminar."); return; }
+              if (tituloPendente.current) { avisarSobreOTitulo("Confirme o título com Enter ou desfaça com Esc antes de mover a nota."); focarTitulo(); return; }
+              definirErroLixeira(""); confirmarLixeira(id);
+            }}
           />
+          {confirmacaoLixeira === id && <Dialogo titulo="Mover para a lixeira?" aoFechar={() => confirmarLixeira(null)} ocupado={edicao.ocupado}>
+            <p className="text-controle">A nota «{titulo}» sairá das suas notas. Você poderá restaurá-la pela Lixeira.</p>
+            {erroLixeira && <p role="alert" className="mt-3 text-controle">{erroLixeira}</p>}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button type="button" data-foco-inicial disabled={edicao.ocupado} onClick={() => confirmarLixeira(null)} className="min-h-10 rounded-full border border-borda px-4 hover:bg-painel-alt disabled:opacity-50">Cancelar</button>
+              <button type="button" disabled={edicao.ocupado} onClick={async () => {
+                try { await edicao.moverParaLixeira(); confirmarLixeira((atual) => atual === id ? null : atual); }
+                catch (erro) { definirErroLixeira(erro instanceof Error ? erro.message : "Não foi possível mover a nota."); }
+              }} className="min-h-10 rounded-full bg-destaque-suave px-4 text-destaque-texto disabled:opacity-50">{edicao.ocupado ? "Movendo…" : "Mover para a lixeira"}</button>
+            </div>
+          </Dialogo>}
         </div>
 
         {/* `tabIndex` 0: sem ele, as setas e o PageDown só rolam a nota se o foco já estiver dentro dela. */}

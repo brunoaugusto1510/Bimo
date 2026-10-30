@@ -56,6 +56,7 @@ function chaveDeTitulo(pasta: string | null, titulo: string): string {
 
 export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = []): RepositorioDeNotas {
   const notas = new Map<IdDeNota, NotaCompleta>();
+  const lixeira = new Map<IdDeNota, { nota: NotaCompleta; removidaEm: string }>();
   const paginas = new Map<string, MetadadosWiki>();
   const copiarWiki = (valor: MetadadosWiki) => JSON.parse(JSON.stringify(valor)) as MetadadosWiki;
   let proximoId = 1;
@@ -128,8 +129,8 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
     capacidades: { escrita: true, datas: true },
     wiki: {
       automacao: automacao.fila,
-      async listar() { return [...paginas.values()].map((pagina) => comGerencia(copiarWiki(pagina))); },
-      async obter(id) { const pagina = paginas.get(id); return pagina ? comGerencia(copiarWiki(pagina)) : null; },
+      async listar() { return [...paginas.values()].filter((p) => notas.has(p.notaId)).map((pagina) => comGerencia(copiarWiki(pagina))); },
+      async obter(id) { const pagina = notas.has(id) ? paginas.get(id) : undefined; return pagina ? comGerencia(copiarWiki(pagina)) : null; },
     },
 
     async marcaDeVersao() {
@@ -146,6 +147,38 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
 
     async listarResumos() {
       return [...notas.values()].map(paraResumo);
+    },
+
+    async listarLixeira() {
+      return [...lixeira.values()].sort((a, b) => b.removidaEm.localeCompare(a.removidaEm))
+        .map(({ nota, removidaEm }) => ({ ...paraResumo(nota), removidaEm }));
+    },
+    async moverParaLixeira(id, revisaoBase) {
+      const anterior = lixeira.get(id);
+      const nota = notas.get(id) ?? anterior?.nota;
+      if (!nota) return { tipo: "nao-encontrada" };
+      if (anterior && nota.revisao === revisaoBase + 1) return { tipo: "ok", nota: copiar(nota) };
+      if (anterior || nota.revisao !== revisaoBase) return { tipo: "conflito", atual: copiar(nota) };
+      const momento = agora();
+      const removida = { ...nota, revisao: nota.revisao + 1, atualizadoEm: momento };
+      automacao.registrar(removida, "organizacao"); automacao.cancelar(id);
+      lixeira.set(id, { nota: removida, removidaEm: momento });
+      notas.delete(id); versao++;
+      return { tipo: "ok", nota: copiar(removida) };
+    },
+    async restaurarNota(id, revisaoBase) {
+      const removida = lixeira.get(id);
+      const nota = removida?.nota ?? notas.get(id);
+      if (!nota) return { tipo: "nao-encontrada" };
+      if (!removida && nota.revisao === revisaoBase + 1) return { tipo: "ok", nota: copiar(nota) };
+      if (!removida || nota.revisao !== revisaoBase) return { tipo: "conflito", atual: copiar(nota) };
+      const existente = acharPorTitulo(nota.pasta, nota.titulo, id);
+      if (existente) return { tipo: "titulo-em-uso", idExistente: existente.id };
+      const restaurada = { ...nota, revisao: nota.revisao + 1, atualizadoEm: agora() };
+      notas.set(id, restaurada); lixeira.delete(id); versao++;
+      automacao.registrar(restaurada, "organizacao");
+      if (!paginas.has(id)) automacao.registrar(restaurada);
+      return { tipo: "ok", nota: copiar(restaurada) };
     },
 
     async listarComConteudo() {

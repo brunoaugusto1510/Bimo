@@ -16,6 +16,7 @@ type Props = {
   aoCopiarLigacao(): void;
   aoAbrirEmNovaAba(): void;
   aoPerguntarAoBimo(): void;
+  aoMoverParaLixeira?: () => void;
 };
 
 const interacao = "min-h-10 rounded-full transition-[color,background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96] aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
@@ -30,6 +31,7 @@ export default function BarraDeNavegacao(props: Props) {
     { rotulo: "Abrir em nova aba", acao: props.aoAbrirEmNovaAba },
     { rotulo: "Copiar ligação", acao: props.aoCopiarLigacao },
     { rotulo: "Perguntar ao Bimo", acao: props.aoPerguntarAoBimo },
+    ...(props.edicaoDisponivel && props.aoMoverParaLixeira ? [{ rotulo: "Mover para a lixeira", acao: props.aoMoverParaLixeira }] : []),
   ];
 
   useEffect(() => {

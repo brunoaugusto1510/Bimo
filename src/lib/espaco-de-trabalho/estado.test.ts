@@ -11,6 +11,18 @@ import {
   type EstadoDoEspaco,
 } from "./estado";
 
+it("remover explicitamente a última nota limpa abas e recentes, inclusive históricos de outras abas", () => {
+  let estado = reduzir(ESTADO_INICIAL, { tipo: "abrir-nota", id: "1" });
+  estado = reduzir(estado, { tipo: "remover-nota", id: "1" });
+  expect(estado.abas).toEqual([]); expect(estado.recentes).toEqual([]); expect(estado.ativa).toBe(ABA_DO_GRAFICO);
+  estado = reduzir(estado, { tipo: "abrir-nota", id: "2" });
+  estado = reduzir(estado, { tipo: "abrir-nota", id: "1" });
+  estado = reduzir(estado, { tipo: "abrir-nota", id: "3", novaAba: true });
+  estado = reduzir(estado, { tipo: "remover-nota", id: "1" });
+  expect(estado.abas.flatMap((aba) => aba.tipo === "nota" ? aba.historico.pilha : [])).toEqual(["2", "3"]);
+  expect(estado.recentes).not.toContain("1");
+});
+
 function aplicar(acoes: Acao[], inicial: EstadoDoEspaco = ESTADO_INICIAL): EstadoDoEspaco {
   return acoes.reduce(reduzir, inicial);
 }

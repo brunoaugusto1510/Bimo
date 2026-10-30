@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buscarNota, renomearNota, salvarNota, type RespostaDeNota, type ResultadoDoSalvamento } from "../cliente-de-notas";
+import { avisarLixeiraAlterada, buscarNota, mudarLixeira, renomearNota, salvarNota, type RespostaDeNota, type ResultadoDoSalvamento } from "../cliente-de-notas";
 import { criarSalvamentoAutomatico, type RetratoDaEdicao, type SalvamentoAutomatico } from "../edicao/salvamento-automatico";
 import { criarRascunhoLocal, decidirRascunho, type RascunhoLocal } from "../edicao/rascunho-local";
 import type { NotaCompleta } from "../repositorio-de-notas/tipos";
@@ -227,6 +227,22 @@ export function useEdicaoDeNota(id: string, dados: RespostaDeNota | undefined, e
   return {
     texto: retrato?.texto ?? dados?.nota.conteudo ?? "", nota: retrato?.nota ?? dados?.nota,
     estado: retrato?.estado ?? "salvo", ocupado, aoMudar, forcar, resolverConflito,
+    async moverParaLixeira() {
+      const atual = controle.current;
+      if (!escrita || !atual || atual.id !== id || recuperacao?.id === id) throw new Error("Resolva a recuperação do rascunho antes de mover a nota.");
+      marcarOcupada(id, 1);
+      try {
+        await atual.maquina.executarExclusivo(async (revisao) => {
+          const resultado = await mudarLixeira(id, revisao);
+          if (resultado.tipo !== "ok") {
+            if (resultado.tipo === "conflito") atual.maquina.recuperarConflito(atual.maquina.obter().texto, resultado.atual);
+            throw new Error(resultado.tipo === "erro" ? resultado.mensagem : "Não foi possível mover a nota. Atualize ou resolva o conflito e tente novamente.");
+          }
+          atual.maquina.destruir(); atual.copia.limpar();
+          avisarLixeiraAlterada(resultado.nota, true);
+        });
+      } finally { marcarOcupada(id, -1); }
+    },
     renomear: (titulo: string) => escreverExclusivo({
       verbo: "renomear", substantivo: "renomeação", falha: "Não foi possível renomear a nota.",
       chamar: (revisao) => renomearNota(id, titulo, revisao),

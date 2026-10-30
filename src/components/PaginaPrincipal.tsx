@@ -4,7 +4,9 @@ import { useCriacaoDeNota, type FocoPedido } from "@/lib/espaco-de-trabalho/usar
 import type { CapacidadesDoRepositorio } from "@/lib/repositorio-de-notas/tipos";
 import type { NotaParaArvore } from "@/lib/arvore-de-notas";
 import AtualizadorDasNotas from "./AtualizadorDasNotas";
-import { esquecerSemente } from "@/lib/cliente-de-notas";
+import { esquecerSemente, EVENTO_LIXEIRA_ALTERADA } from "@/lib/cliente-de-notas";
+import type { NotaCompleta } from "@/lib/repositorio-de-notas/tipos";
+import Lixeira from "./Lixeira";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AlternadorDeTema from "@/components/AlternadorDeTema";
@@ -64,7 +66,13 @@ const RESERVA_DA_CONVERSA = 0.45;
 
 export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais = SOMENTE_LEITURA }: Props) {
   const [atualizacao, definirAtualizacao] = useState<{ origem: Props["itens"]; dados: import("@/lib/servico-de-notas").DadosDaPagina } | null>(null);
-  const { itens, grafo, aviso, capacidades } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais };
+  const { itens: itensBase, grafo: grafoBase, aviso, capacidades } = atualizacao?.origem === itensIniciais ? atualizacao.dados : { itens: itensIniciais, grafo: grafoInicial, aviso: avisoInicial, capacidades: capacidadesIniciais };
+  // Uma resposta iniciada antes da remoção não pode fazer a nota reaparecer.
+  const [removidas, definirRemovidas] = useState<ReadonlyMap<string, number>>(new Map());
+  const [lixeiraAberta, abrirLixeira] = useState(false);
+  const [avisoLixeira, avisarLixeira] = useState("");
+  const itens = useMemo(() => removidas.size ? construirArvore([...indexarNotas(itensBase).values()].filter((n) => !removidas.has(n.id))) : itensBase, [itensBase, removidas]);
+  const grafo = useMemo(() => removidas.size ? { ...grafoBase, nos: grafoBase.nos.filter((n) => !removidas.has(n.id)), arestas: grafoBase.arestas.filter((a) => !removidas.has(a.de) && !removidas.has(a.para)) } : grafoBase, [grafoBase, removidas]);
   const [modo, setModo] = useState<Modo>("bimo");
   const [painelWiki, definirPainelWiki] = useState<"cerebro" | "diario" | null>(null);
   const [neuronioAberto, abrirNeuronioId] = useState<string | null>(null);
@@ -131,7 +139,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const [notasLocais, definirNotasLocais] = useState<NotasLocais>(new Map());
   const [idsComConfirmacaoAoSair, definirIdsComConfirmacaoAoSair] = useState<ReadonlySet<string>>(new Set());
   const [focoPedido, definirFocoPedido] = useState<FocoPedido | null>(null);
-  const notasPorId = useMemo(() => mesclarNotasLocais(indexarNotas(itens), notasLocais), [itens, notasLocais]);
+  const notasPorId = useMemo(() => new Map([...mesclarNotasLocais(indexarNotas(itens), notasLocais)].filter(([id]) => !removidas.has(id))), [itens, notasLocais, removidas]);
   const arvore = useMemo(() => construirArvore([...notasPorId.values()]), [notasPorId]);
   const idsExistentes = useMemo(() => new Set(indexarNotas(itens).keys()), [itens]);
   const idsLocais = useMemo(() => new Set(notasLocais.keys()), [notasLocais]);
@@ -190,6 +198,23 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
     const metadados = { id: resumo.id, titulo: resumo.titulo, pasta: resumo.pasta };
     definirNotasLocais((locais) => new Map(locais).set(resumo.id, { resumo: metadados, criadoEm }));
   }, []);
+  useEffect(() => {
+    function aoLixeira(evento: Event) {
+      const { nota, removida } = (evento as CustomEvent<{ nota: NotaCompleta; removida: boolean }>).detail;
+      const confirmadaEm = Date.now();
+      definirRemovidas((atuais) => { const novas = new Map(atuais); if (removida) novas.set(nota.id, confirmadaEm); else novas.delete(nota.id); return novas; });
+      if (removida) {
+        definirNotasLocais((atuais) => { const novas = new Map(atuais); novas.delete(nota.id); return novas; });
+        despachar({ tipo: "remover-nota", id: nota.id });
+        setNotaFocada((id) => id === nota.id ? null : id);
+        abrirNeuronioId((id) => id === nota.id ? null : id);
+        definirFocoPedido((foco) => foco?.id === nota.id ? null : foco);
+      } else registrarNota(nota);
+      avisarLixeira(removida ? `Nota «${nota.titulo}» movida para a lixeira.` : `Nota «${nota.titulo}» restaurada.`);
+    }
+    window.addEventListener(EVENTO_LIXEIRA_ALTERADA, aoLixeira);
+    return () => window.removeEventListener(EVENTO_LIXEIRA_ALTERADA, aoLixeira);
+  }, [despachar, registrarNota]);
   const criacao = useCriacaoDeNota({
     capacidades, notas: [...notasPorId.values()], registrar: registrarNota,
     abrir: (id, opcoes) => {
@@ -337,8 +362,12 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
           </button>
         </div>
       </header>
+      {lixeiraAberta && <Lixeira aoFechar={() => abrirLixeira(false)} />}
+      <p role="status" className="sr-only">{avisoLixeira}</p>
 
       <AtualizadorDasNotas aoAtualizar={(dados, iniciadoEm) => {
+        // Uma leitura posterior à confirmação já representa a lixeira no servidor (inclusive uma restauração em outra janela).
+        definirRemovidas((atuais) => new Map([...atuais].filter(([, em]) => iniciadoEm <= em)));
         definirNotasLocais((locais) => podarNotasLocais(locais, indexarNotas(dados.itens), iniciadoEm));
         definirAtualizacao({ origem: itensIniciais, dados });
       }} />
@@ -359,6 +388,7 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             notaSelecionada={emNotas && noGrafico ? notaFocada : idDaNotaAberta}
             onSelecionarNota={(nota) => escolherNoMenu(nota.id)}
             marcas={marcasNaLista}
+            aoAbrirLixeira={capacidades.escrita ? () => abrirLixeira(true) : undefined}
           />
         </div>
 

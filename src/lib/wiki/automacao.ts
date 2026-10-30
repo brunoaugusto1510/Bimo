@@ -9,6 +9,7 @@ import { citacaoInsuficiente, localizarCitacao } from "./citacoes";
 import { CANDIDATAS_POR_RODADA, comPalavrasDe, dependeDeRevisaoAnterior, palavrasEmComum, recuperarContexto, carregarCandidata } from "./recuperacao";
 import { verificarSinteses } from "./observabilidade";
 import { estruturaCompativel } from "./estrutura";
+import { identidadeDoTema } from "./identidade";
 import { camposDoEnvelopeEditorial, DecisaoEditorialAdiada, esquemaDoEnvelopeEditorial, esquemaEditorial, POLITICA_EDITORIAL, PROPOSTAS_POR_RESPOSTA, PropostaEditorialRecusada } from "./editorial";
 
 const esquemaDaAfirmacao = z.object({ texto: z.string().trim().min(1).max(2000),
@@ -200,12 +201,10 @@ async function ligacoesDaSintese(repo: RepositorioDeNotas, c: ContextoWiki, pedi
   return notas;
 }
 
-/** Identidade já existente para o título: a chave exata ou, sem ambiguidade, um alias. */
-function identidadeConhecida(conceitos: ConceitoWiki[], chave: string) {
-  const exata = conceitos.find((c) => c.chave === chave);
-  if (exata) return exata.notaId;
-  const porAlias = conceitos.filter((c) => c.aliases.some((a) => normalizarTexto(a) === chave));
-  return porAlias.length === 1 ? porAlias[0].notaId : undefined;
+/** Chave, aliases e título atual; a apresentação com “(síntese)” não muda a identidade. */
+function identidadesConhecidas(conceitos: ConceitoWiki[], chave: string, titulos: Map<string, string>) {
+  const tema = identidadeDoTema(chave);
+  return conceitos.filter((c) => [c.chave, ...c.aliases, titulos.get(c.notaId) ?? ""].some((v) => identidadeDoTema(v) === tema));
 }
 
 /**
@@ -257,7 +256,7 @@ function localizarEvidencia(e: { fonteId: string; citacao: string }, fontes: Map
 }
 
 async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: PropostaWiki,
-  conceitos: ConceitoWiki[], textos: Leituras, ocupados: Set<string>, visiveis: Visiveis): Promise<Preparada | Descarte> {
+  conceitos: ConceitoWiki[], textos: Leituras, ocupados: Set<string>, visiveis: Visiveis, titulos: Map<string, string>): Promise<Preparada | Descarte> {
   const titulo = validarTitulo(limparTitulo(p.titulo));
   if (!titulo.ok) return "titulo";
   const chave = normalizarTexto(titulo.titulo);
@@ -268,7 +267,10 @@ async function prepararProposta(repo: RepositorioDeNotas, c: ContextoWiki, p: Pr
     // e anexar afirmações a outra síntese a contaminaria.
     if (!doIndice || !palavrasEmComum(`${p.titulo} ${p.aliases.join(" ")}`, `${doIndice.titulo} ${doIndice.aliases.join(" ")}`)) return "alvo";
   }
-  const alvoId = p.alvoId ?? identidadeConhecida(conceitos, chave);
+  const conhecidas = identidadesConhecidas(conceitos, chave, titulos);
+  // Nem escolher arbitrariamente entre duplicatas legadas, nem abrir uma terceira página.
+  if (!p.alvoId && conhecidas.length > 1) return "alvo";
+  const alvoId = p.alvoId ?? conhecidas[0]?.notaId;
   const alvo = alvoId ? await repo.obterNota(alvoId) : null;
   const meta = alvoId ? await repo.wiki!.obter(alvoId) : null;
   if (meta && alvo) meta.estrutura = estruturaCompativel(meta.estrutura, alvo.conteudo);
@@ -499,7 +501,9 @@ async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, br
   const envelope = decisao ?? esquemaDoEnvelope.parse(bruto);
   if (decisao?.semPublicacao?.decisao === "adiar") throw new DecisaoEditorialAdiada(decisao.semPublicacao);
   const conceitos = await repo.wiki!.automacao!.conceitos();
-  const ocupados = new Set((await repo.listarResumos()).map((n) => caminhoOcupado(n.pasta, n.titulo)));
+  const resumos = await repo.listarResumos();
+  const titulos = new Map(resumos.map((n) => [n.id, n.titulo]));
+  const ocupados = new Set(resumos.map((n) => caminhoOcupado(n.pasta, n.titulo)));
   const textos = textosDasEntradas(c);
   // Os ids de afirmação que o modelo recebeu, por síntese: só com eles ele pode retirar ou substituir.
   const visiveis: Visiveis = new Map(entradaDaDescoberta(c).candidatas.flatMap((v) => v.afirmacoes ? [[v.id, {
@@ -513,12 +517,12 @@ async function prepararPublicacoes(repo: RepositorioDeNotas, c: ContextoWiki, br
     const valida = (editorial ? esquemaDaPropostaEditorial : esquemaDaProposta).safeParse(bruta);
     if (!valida.success) { preparo.descartadas.push("estrutura"); continue; }
     const p = valida.data;
-    const resultado = await prepararProposta(repo, c, p, conceitos, textos, ocupados, visiveis);
-    const tentada = p.alvoId ?? identidadeConhecida(conceitos, normalizarTexto(limparTitulo(p.titulo)));
-    if (tentada && resultado !== "sem-mudanca") preparo.tentadas.add(tentada);
+    const resultado = await prepararProposta(repo, c, p, conceitos, textos, ocupados, visiveis, titulos);
+    const tentadas = p.alvoId ? [p.alvoId] : identidadesConhecidas(conceitos, limparTitulo(p.titulo), titulos).map((v) => v.notaId);
+    if (resultado !== "sem-mudanca") for (const id of tentadas) preparo.tentadas.add(id);
     if (typeof resultado === "string") { preparo.descartadas.push(resultado); continue; }
-    const identidade = resultado.alvo?.id ?? resultado.conceito!.chave;
-    if (preparo.publicacoes.some((q) => (q.alvo?.id ?? q.conceito!.chave) === identidade)) { preparo.descartadas.push("repetida"); continue; }
+    const identidade = resultado.alvo?.id ?? identidadeDoTema(resultado.conceito!.chave);
+    if (preparo.publicacoes.some((q) => (q.alvo?.id ?? identidadeDoTema(q.conceito!.chave)) === identidade)) { preparo.descartadas.push("repetida"); continue; }
     if (!resultado.alvo) ocupados.add(caminhoOcupado(resultado.pasta ?? null, resultado.titulo));
     publicadaEm.set(posicao, preparo.publicacoes.length);
     preparo.publicacoes.push(resultado);

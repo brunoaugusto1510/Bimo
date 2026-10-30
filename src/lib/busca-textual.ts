@@ -101,7 +101,7 @@ export async function buscarNotasPorTexto(
       ),
     })
     .from(notas)
-    .where(and(eq(notas.userId, userId), sql`${notas.vetorBusca} @@ ${consultaTs}`))
+    .where(and(eq(notas.userId, userId), sql`${notas.removidaEm} is null`, sql`${notas.vetorBusca} @@ ${consultaTs}`))
     .orderBy(sql`pontuacao desc`, desc(notas.atualizadoEm))
     .limit(limite)
     .as("notas_candidatas");

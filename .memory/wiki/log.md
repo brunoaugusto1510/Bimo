@@ -120,3 +120,74 @@
 - Decisões do usuário: padrão contínuo; o lint divide o orçamento diário com chat e ingestão; autonomia ("publicar direto" ou "propor antes de publicar") como configuração da pessoa, com publicação direta por padrão.
 - Registrado no documento de modos (nova seção), em `decisions.md`, no índice e no hot. Ordem de prioridade dentro do orçamento e gatilho do lint ficaram como sugestões não aceitas.
 - Só MemWiki; sem código, testes, modelo pago, banco remoto, commit ou push. Leitura do estado atual (Cron, 90 s, 200 mil tokens) vem da documentação, sem verificação de produção.
+
+## [2026-10-29T09:17:28-03:00] diagnóstico | Leitura de neurônios pelo agente do chat
+
+- Pergunta do usuário: se o agente está lendo neurônios. Conferidos agente, instruções, ferramentas e consulta da Wiki em `main`, HEAD `9a50857`.
+- Confirmados os caminhos: contexto automático da Wiki ao executar `buscar_notas` (até quatro neurônios e seis vizinhos), navegação com `indice_da_wiki` e leitura completa com `ler_nota`. Síntese na busca limitada a 4.000 caracteres e condicionada ao estado atualizado.
+- O laço não força consulta antes da resposta; o recibo visível de busca não discrimina o contexto adicional da Wiki. Sem evidência de uma conversa específica ou produção.
+- Atualizados hot e domínio do agente. Sem alteração de código, teste de software, `.env`, banco remoto, modelo pago, commit ou push. Preservado o ponteiro preexistente `.claude/worktrees/login-multiusuario`.
+
+## [2026-10-29] análise | Consulta LLM Wiki no exemplo blockchain/tokenização
+
+- Lido o print do usuário e o texto local imutável `.memory/.raw/llm-wiki.md`; consultados o gist primário e a documentação PostgreSQL sobre `websearch_to_tsquery`.
+- O padrão descreve consulta começando pelo índice e leitura das páginas relevantes; sugerida adaptação priorizando os neurônios e usando as origens para evidências/detalhes. Nenhuma implementação autorizada ou realizada.
+- Busca normal exige os termos juntos (AND), possível explicação para o zero do print. Ausência de passo de índice confirmada apenas no print; contexto adicional da Wiki e estado real dos neurônios não verificados.
+- Atualizados hot e domínio. Sem testes, banco remoto, chamada de modelo, mudança no aplicativo, commit ou push.
+
+## [2026-10-29T10:46:07-03:00] implementação | Busca do chat por assuntos e índice de neurônios
+
+- Autorização direta do usuário após discutir o zero da consulta composta e a prioridade da Wiki. Mantido o contrato dos repositórios; mudanças concentradas nas ferramentas do agente, novo módulo de busca e instruções.
+- Consultas adicionais limitadas a quatro, ampliação limitada de buscas simples vazias, resultados deduplicados/intercalados e transparência sobre correspondência parcial. Índice relevante acompanha a busca mesmo com zero notas; filtro inclui aliases e recibo informa neurônios.
+- RED: 14 falhas e 5 testes passando em dois arquivos, antes de mudar produção. GREEN: 137 testes passaram em oito arquivos. Cobertura do novo módulo: 100% de linhas, instruções, funções e branches. Typecheck e lint dos arquivos alterados passaram.
+- Criada [evidência de TDD](verificacoes/2026-10-29-busca-do-chat.tdd.md), ligada no índice; atualizados hot e domínio. Sem leitura de `.env`, banco/modelo real, migração, commit, push ou deploy. Preservados o worktree de login e as alterações anteriores desta conversa.
+
+## [2026-10-30T08:52:56-03:00] revisão | Neurônios de blockchain/economia vs LLM Wiki
+
+- Pedido de leitura dos neurônios já criados. Consultado o Supabase Bimo somente com SELECT; lidos sete neurônios atuais, oito origens e dois apontadores de slides. Sem leitura de PPTX ou inferência paga.
+- Comparados com o texto integral local do padrão LLM Wiki: conformidade parcial. Confirmada duplicata 4872/4873; demais temas têm separação defensável. Síntese e contexto temporal limitados, referências cruzadas a melhorar; ausência de divergências registradas não foi tratada como prova de contradição omitida.
+- Conferidas 25 citações em 23 afirmações: correspondência literal e revisões corretas; oito origens não gerenciadas. Contadas apenas revisões atuais para evitar duplicar o snapshot de Criptoeconomia.
+- Criada [avaliação](verificacoes/2026-10-30-neuronios-blockchain-economia.md), ligados índice, hot e domínio. Nenhum neurônio, código ou dado remoto alterado; sem `.env`, teste de software, processamento, migração, commit ou push. Preservadas alterações preexistentes.
+
+## [2026-10-30T09:09:32-03:00] manutenção | Consolidação autorizada de blockchain/economia
+
+- Após “pode fazer”, enriquecidos seis temas no Supabase Bimo. A duplicata 4873 virou registro histórico que aponta a 4872, com proteção/pausa e caminho preservado. Nenhuma origem ou histórico apagado.
+- Backup/proposta/SQL/resultado privados em `.vercel/wiki-revisao-20261030/` (ignorado pelo Git). Ensaio PGlite confirmou rollback integral e recusa de reaplicação; escrita real transacional com lock por dono, revisão-base e recusa de trabalho ativo/edição concorrente.
+- Pós-escrita: sete revisões publicadas, 30 afirmações, 50 citações exatas, dez notas de origem/apontadores intactas, sete novas versões e sete eventos. Snapshots antes atuais preservados; 15 snapshots totais no recorte.
+- Código local previne duplicatas por sufixos e título atual, reconhece casos legados no diagnóstico, distingue o registro consolidado e melhora orientações de síntese/contexto/procedência. RED 5/32; GREEN inicial 41 testes; 313 testes da Wiki em 28 arquivos passaram antes do complemento da marca de consolidação. Tipos e lint iniciais limpos.
+- [Relatório e limites](verificacoes/2026-10-30-consolidacao-blockchain-economia.md); atualizados índice, hot, domínio e ponteiro na avaliação anterior. Sem `.env`, modelo pago, fila, migração, commit, push ou deploy. Alterações preexistentes preservadas; código hospedado ainda anterior.
+- Encerramento: **314 testes em 28 arquivos** passaram; oito testes de observabilidade passaram novamente após preservar o redirecionamento como destino legível. `tsc --noEmit`, ESLint e `git diff --check` limpos. Os quatro links locais do relatório de revisão e os links da entrega foram conferidos; snapshots privados confirmados fora do Git.
+
+## [2026-10-30T13:55:00-03:00] feature | Novo chat e histórico de conversas no chat
+
+- Pedido: "não temos botão de novo chat e historico, falta implementar". Escolha do usuário: histórico **no banco** (Supabase), não em localStorage.
+- Código local (sem commit/push/deploy): tabelas `conversas` e `mensagens_de_conversa` (`src/lib/db/schema/conversas.ts`, migração **`drizzle/0012_conversas.sql`, gerada e NÃO aplicada**); módulo `src/lib/conversas/` (tipos, memória, banco, índice, http, cliente) com suíte de contrato compartilhada; rotas `GET /api/conversas`, `GET|POST|DELETE /api/conversas/[id]`; componente `HistoricoDeConversas` com os botões "Histórico" e "Novo chat" no alto do `Chat`; `janelaParaOAgente` limita o que vai ao `/api/chat` (40 mensagens/80 mil caracteres).
+- Decisões: histórico só cresce (acrescentar idempotente pelo id da mensagem, id gerado no cliente); `/api/chat` segue sem estado; só `caminho` dos argumentos das ferramentas é guardado (nunca o texto de uma nota); reabrir traz as 200 mais recentes; salvar falha de forma suave (aviso, a conversa da tela segue). `POST` de acrescentar ficou em `/api/conversas/[id]` porque rotas aninhadas dão 404 no dev server do preview (também as de notas) — causa não investigada.
+- Verificação: tsc e eslint limpos; testes novos (contrato em memória 11, rotas 15, janela 4, Chat/histórico 11) passam; `src/components` + `src/app` 586 passam e `src/lib` 1633 passam, exceto 2 testes de `repositorio-de-notas/banco.test.ts` (banco real, timeout de 5 s, módulo não alterado). Fluxo conferido no navegador com `NOTAS_FONTE=memoria`: enviar, listar, Novo chat, reabrir.
+- **Não verificado:** a implementação `banco.ts` contra Postgres real (a suíte `conversas/banco.test.ts` se pula enquanto a migração 0012 não existir no banco); layout no celular/captura de tela (painel do navegador oculto); produção.
+
+## [2026-10-30T14:40:00-03:00] migração | 0012_conversas aplicada no banco real
+
+- Com autorização do usuário ("Aplicar e testar"), `npm run db:migrate` aplicou **só a 0012** (a 0011 já estava; 13 → 14 registros em `drizzle.__drizzle_migrations`). `conversas` e `mensagens_de_conversa` existem com RLS ligada.
+- A primeira tentativa falhou e fez rollback silencioso (exit 1): o drizzle-kit gerou a chave composta `mensagens_de_conversa → conversas(id,user_id)` **antes** do índice único que ela referencia. Corrigida a ordem no próprio `0012_conversas.sql` (nunca aplicada antes). Lição: após `db:generate` com FK composta, conferir a ordem dos comandos.
+- `conversas/banco.test.ts` agora roda contra o banco real: **11/11 passam** (usuários efêmeros, nunca o `USER_ID_PADRAO`); `memoria.test.ts` 11/11.
+
+## [2026-10-30T15:20:00-03:00] correção | Botões de histórico movidos para a barra Cérebro/Diário
+
+- Relato: os botões "Histórico"/"Novo chat" ficavam soltos sobre o grafo, no meio da tela. Agora o `Chat` os põe, por portal (`lugarDosBotoes`), na barra "Cérebro / Diário" da `PaginaPrincipal`, à direita; no celular só o ícone. Só aparecem com o chat à vista. Sem a prop, continuam no alto do chat.
+- Testes novos (Chat e PaginaPrincipal) e tipos/lint ok. **Não verificado visualmente**: já havia um servidor de desenvolvimento do usuário na porta 3000, que não foi derrubado.
+
+## [2026-10-30T17:18:00-03:00] diagnóstico | Ausência de exclusão de notas
+
+- Conferidos contrato do repositório, rota individual e componentes da nota: a aplicação não oferece apagar notas; a lacuna inclui backend e interface.
+- Sugerida lixeira restaurável, ainda sem decisão ou implementação. A entrega futura precisa coordenar autosave/abas, atualizar listagem/busca/grafo e tratar referências da Wiki Viva a fontes indisponíveis.
+- Só leitura de código e atualização da MemWiki. Sem testes de software, banco remoto, migração, commit ou deploy; alterações concorrentes preservadas.
+
+## [2026-10-30T17:48:00-03:00] implementação | Lixeira com restauração
+
+- Após a escolha explícita "lixeira com restauração", implementei operações nos repositórios de memória/Postgres, rotas protegidas e interface web (confirmação na nota e lixeira no rodapé da barra lateral).
+- O editor salva pendências antes de remover, preserva rascunho em falhas e invalida sua fila após sucesso. Remoção confirmada limpa abas/históricos/recentes, lista e grafo sem remontar o chat. Leituras antigas não fazem a nota reaparecer. Restauração preserva identidade/histórico e recusa colisão de título sem sobrescrever.
+- A Wiki ignora fontes removidas, cancela a posse em voo e preserva consumo, publicações e evidências para a restauração. Leituras legadas de notas/busca também filtram a lixeira.
+- Migração 0013 gerada sem credenciais/conexão remota e aplicada somente aos bancos efêmeros PGlite dos testes. **Aplicar a 0013 antes de usar/publicar o código com o banco real.** A tarefa não moveu notas reais, não rodou modelo pago, não alterou mobile e não fez commit/push/deploy.
+- Tipos, lint e testes focados passaram; [relatório da entrega](verificacoes/2026-10-30-lixeira.md) contém os comandos, os resultados finais e os limites da validação. Branch observada `feat/historico-de-conversas`, HEAD `6d108f5`, com alterações anteriores preservadas.
+- Fechamento às 17h50: segunda suíte ampla com **2.195 aprovados e um timeout** (185 arquivos, 2.196 testes). Recorte com timeout repetido sem mudanças com um worker: **10/10 aprovados**, cenário em 301 ms. Testes focados finais 90/90; recorte SQL após ajuste do dublê 39/39 (totais sobrepostos). Tipos/lint/diff limpos. A suíte ampla não teve uma execução integral verde; integrações remotas ficaram excluídas.

@@ -34,3 +34,17 @@ Falhas de configuração do armazenamento podem produzir a tela de configuraçã
 - [Plano histórico de contas](../documentacao/Bimo%20-%20Plano%20de%20Login%20Multiusuario.md) e [histórico das notas no banco](../documentacao/Bimo%20-%20Plano%20de%20Notas%20no%20Banco.md).
 
 Relacionadas: [interface](interface-e-grafo.md), [agente](agente-e-ingestao.md) e [Wiki Viva](wiki-viva.md).
+
+## Lacuna de exclusão de notas — 30/10/2026
+
+- Conferência estática após relato do usuário: `RepositorioDeNotas` oferece criação, atualização e renomeação, sem operação de exclusão; `/api/notas/[id]` exporta apenas `GET` e `PATCH`. A interface de nota examinada não oferece apagar.
+- Proposta ainda não aprovada: ação no menu da nota para mover à lixeira, com confirmação e restauração. Ao implementar, coordenar com autosave/abas, invalidar listagem/busca/grafo e tratar as evidências da Wiki Viva quando a origem deixar de estar disponível.
+- Somente diagnóstico local e documentação nesta tarefa; nenhum código funcional, dado remoto ou migração alterado. Não define ainda retenção, exclusão definitiva ou política de restauração.
+
+### Lixeira aceita e implementada localmente — 30/10/2026
+
+- Após o diagnóstico acima, o usuário escolheu "lixeira com restauração". O repositório agora oferece `listarLixeira`, `moverParaLixeira` e `restaurarNota`, implementados em memória e Postgres. As rotas são GET `/api/notas/lixeira` e POST `/api/notas/[id]/lixeira` ou `/restaurar`, com sessão, mesma origem nas escritas, capacidade de escrita e revisão-base.
+- `notas.removida_em` oculta a nota das leituras/escritas normais. O índice de título/pasta passa a ser parcial, somente sobre notas ativas. Restaurar preserva ID, conteúdo, pasta, tags, versões e publicações; recusa colisões de título sem sobrescrever nada. Não há purga nem expiração automática.
+- A interface web confirma a remoção no menu da nota e lista a lixeira no rodapé da barra lateral (menu de notas no celular). A fila do editor salva o texto pendente antes de remover e só limpa o rascunho após sucesso. Falhas/conflitos preservam o texto. A confirmação pertence ao ID da nota; navegar não a transfere.
+- Remoção confirmada limpa históricos/abas/recentes e protege a interface contra respostas anteriores à escrita. Leituras posteriores voltam a representar o estado do servidor. A Wiki deixa de processar fontes removidas, invalida posses em voo e oculta metadados de neurônios na lixeira; evidências e publicações históricas são preservadas para restauração.
+- A migração `0013_lixeira.sql` foi gerada e testada somente em PGlite, **não aplicada ao banco real**. Aplicá-la antes de rodar/publicar o novo código com persistência. [Entrega, validações e limites](../verificacoes/2026-10-30-lixeira.md).

@@ -7,7 +7,7 @@
 
 import type { LigacoesDaNota } from "./servico-de-notas";
 import { criarPrevia } from "./previa-de-nota";
-import type { CapacidadesDoRepositorio, IdDeNota, NotaCompleta, ResultadoDeBusca, MudancasDeNota, EntradaDeNota } from "./repositorio-de-notas/tipos";
+import type { CapacidadesDoRepositorio, IdDeNota, NotaCompleta, NotaNaLixeira, ResultadoDeBusca, MudancasDeNota, EntradaDeNota } from "./repositorio-de-notas/tipos";
 
 export type ResultadoDoSalvamento =
   | { tipo: "ok"; nota: NotaCompleta; notasReescritas?: number }
@@ -176,4 +176,17 @@ export async function criarNota(entrada: EntradaDeNota): Promise<ResultadoDaCria
 export async function renomearNota(id: IdDeNota, titulo: string, revisaoBase: number): Promise<ResultadoDoSalvamento | { tipo: "erro"; mensagem: string }> {
   esquecerSemente(id);
   return escreverNota(`/api/notas/${encodeURIComponent(id)}/renomear`, { titulo, revisaoBase });
+}
+
+export function listarLixeira(sinal?: AbortSignal): Promise<{ notas: NotaNaLixeira[] }> {
+  return pedir("/api/notas/lixeira", sinal);
+}
+export async function mudarLixeira(id: IdDeNota, revisaoBase: number, restaurar = false): Promise<ResultadoDoSalvamento | { tipo: "erro"; mensagem: string }> {
+  esquecerSemente(id);
+  return escreverNota(`/api/notas/${encodeURIComponent(id)}/${restaurar ? "restaurar" : "lixeira"}`, { revisaoBase });
+}
+export const EVENTO_LIXEIRA_ALTERADA = "bimo:lixeira-alterada";
+export function avisarLixeiraAlterada(nota: NotaCompleta, removida: boolean) {
+  esquecerSemente(nota.id); esquecerPrevias();
+  window.dispatchEvent(new CustomEvent(EVENTO_LIXEIRA_ALTERADA, { detail: { nota, removida } }));
 }

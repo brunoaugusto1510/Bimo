@@ -66,6 +66,15 @@ it("não aceita adiar sem condição nem misturar publicação com decisão vazi
   expect(esquemaDoEnvelopeEditorial.safeParse(envelope([{}], { decisao: "conservar_origem", motivo: "Já basta", condicao: null })).success).toBe(false);
 });
 
+it("não publica duas variantes de síntese para o mesmo tema na mesma resposta", async () => {
+  const repo = criarRepositorioEmMemoria([{ titulo: "Estudo", conteudo: frase }]); esperar();
+  const resultado = await rodar(repo, async (c) => ({ proposta: envelope([
+    proposta(c.origem.id), proposta(c.origem.id, { titulo: "Cache offline (síntese)" }),
+  ]), uso: null }));
+  expect(resultado).toMatchObject({ publicadas: 1, descartadas: 1 });
+  expect(await repo.wiki!.listar()).toHaveLength(1);
+});
+
 it("reforça evidência mantendo ID e inferência; repetição é idempotente", async () => {
   const repo = criarRepositorioEmMemoria([{ titulo: "Estudo", conteudo: frase }]); esperar();
   await rodar(repo, async (c) => ({ proposta: envelope([proposta(c.origem.id, {

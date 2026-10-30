@@ -26,7 +26,12 @@ Resumos das fontes em `.memory/.raw/` (imutáveis; a página resume e confronta,
 
 ## Verificações da memória
 
+- [Lixeira com restauração — 30/10/2026](verificacoes/2026-10-30-lixeira.md): implementação web, isolamento, autosave, restauração de evidências e migração 0013 validada localmente, ainda não aplicada ao banco real.
+
+- [Consolidação de blockchain/economia — 30/10/2026](verificacoes/2026-10-30-consolidacao-blockchain-economia.md): seis temas enriquecidos no banco real, duplicata preservada como redirecionamento, 50 citações conferidas e prevenção de duplicatas validada localmente; sem deploy.
+- [Neurônios de blockchain/economia vs LLM Wiki — 30/10/2026](verificacoes/2026-10-30-neuronios-blockchain-economia.md): sete páginas reais, fontes e citações conferidas; duplicata de mercados, síntese superficial e relações a melhorar. Sem alteração no aplicativo ou banco.
 - [Ingestão e lint — 26/10/2026](verificacoes/2026-10-26-ingest-lint.md): escopo, achados, correções e limites de evidência.
+- [Busca do chat por assuntos — 29/10/2026](verificacoes/2026-10-29-busca-do-chat.tdd.md): implementação, evidência RED/GREEN, 137 testes offline e limites de validação.
 
 ## Documentação migrada — 26/10/2026
 

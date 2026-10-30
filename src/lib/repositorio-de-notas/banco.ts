@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { adotarGrafiaDaPasta, normalizarPasta } from "../caminho-da-nota";
 import { db } from "../db/cliente";
-import { nos, notas, versoesNota, paginasWiki, conceitosWiki } from "../db/schema";
+import { nos, notas, versoesNota, paginasWiki, conceitosWiki, trabalhosWiki } from "../db/schema";
 import { conferirDestinos, conferirFontes, ErroWiki, type PublicacaoWiki } from "../wiki/tipos";
 import { automacaoWikiHabilitada } from "../wiki/configuracao";
 import { aquecerSondagemDaWiki, automacaoWikiDisponivel, sondarTabelasDaWiki } from "../wiki/disponibilidade";
@@ -51,7 +51,8 @@ function eTituloEmUso(erro: unknown): boolean {
 /** O filtro do dono é obrigatório mesmo conectando como proprietário do banco. */
 export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
   if (!REGEX_UUID.test(userId)) throw new Error("O UUID do usuário é inválido para o repositório de notas.");
-  const doUsuario = eq(notas.userId, userId);
+  const dono = eq(notas.userId, userId);
+  const doUsuario = and(dono, sql`${notas.removidaEm} is null`)!;
   const daNota = (id: string) => and(doUsuario, sql`${notas.id} = ${id}::bigint`);
 
   async function ler(id: string, conexao: Transacao | typeof db = db): Promise<NotaCompleta | null> {
@@ -126,6 +127,35 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     await versionar(tx, atual, autor, aberta, reaproveitar);
     await acompanharWiki(tx, atual, efeito);
     return { tipo: "ok" as const, nota: atual };
+  }
+
+  async function mudarLixeira(id: string, revisaoBase: number, remover: boolean): Promise<ResultadoDeEscrita> {
+    if (!idValido(id)) return { tipo: "nao-encontrada" };
+    return escrever<ResultadoDeEscrita>(async (tx, colisao) => {
+      const filtro = and(dono, sql`${notas.id} = ${id}::bigint`);
+      const [linha] = await tx.select({ ...colunasDaNota, removidaEm: notas.removidaEm }).from(notas).where(filtro).for("update");
+      if (!linha) return { tipo: "nao-encontrada" };
+      const nota = paraNota(linha);
+      const jaAplicada = remover === (linha.removidaEm !== null);
+      if (jaAplicada && nota.revisao === revisaoBase + 1) return { tipo: "ok", nota };
+      if (jaAplicada || nota.revisao !== revisaoBase) return { tipo: "conflito", atual: nota };
+      if (!remover) {
+        Object.assign(colisao, { pasta: nota.pasta, titulo: nota.titulo, ignorar: id });
+        const existente = await tituloEmUso(tx, nota.pasta, nota.titulo, id);
+        if (existente) return { tipo: "titulo-em-uso", idExistente: existente.id };
+      }
+      const [salva] = await tx.update(notas).set({ removidaEm: remover ? sql`clock_timestamp()` : null,
+        revisao: sql`${notas.revisao} + 1`, atualizadoEm: sql`clock_timestamp()` }).where(filtro).returning(colunasDaNota);
+      const atual = paraNota(salva);
+      await tx.update(versoesNota).set({ sessaoAberta: false }).where(and(eq(versoesNota.userId, userId), sql`${versoesNota.notaId} = ${id}::bigint`));
+      await acompanharWiki(tx, atual, "organizacao");
+      if (await automacaoWikiDisponivel(tx)) {
+        // Invalida também uma posse em voo; consumo e publicações anteriores permanecem preservados.
+        if (remover) await tx.delete(trabalhosWiki).where(and(eq(trabalhosWiki.userId, userId), sql`${trabalhosWiki.notaId} = ${id}::bigint`));
+        else await registrarAlteracaoWiki(tx, userId, id, atual.revisao);
+      }
+      return { tipo: "ok", nota: atual };
+    });
   }
 
   type Colisao = { pasta: string | null; titulo: string; ignorar?: string };
@@ -223,14 +253,15 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
       async listar() {
         if (!(await sondarTabelasDaWiki(db)).viva) return [];
         const paginas = await db.selectDistinctOn([paginasWiki.notaId], { notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes, estrutura: paginasWiki.estrutura })
-          .from(paginasWiki).where(eq(paginasWiki.userId, userId)).orderBy(paginasWiki.notaId, desc(paginasWiki.revisaoPublicada));
+          .from(paginasWiki).innerJoin(notas, eq(notas.id, paginasWiki.notaId)).where(and(eq(paginasWiki.userId, userId), doUsuario)).orderBy(paginasWiki.notaId, desc(paginasWiki.revisaoPublicada));
         const gerencias = await gerenciasDasSinteses();
         return paginas.map((pagina) => ({ ...pagina, ...(gerencias.has(pagina.notaId) ? { gerencia: gerencias.get(pagina.notaId) } : {}) }));
       },
       async obter(id) {
         if (!idValido(id) || !(await sondarTabelasDaWiki(db)).viva) return null;
         const [pagina] = await db.select({ notaId: sql<string>`${paginasWiki.notaId}::text`, revisaoPublicada: paginasWiki.revisaoPublicada, fontes: paginasWiki.fontes, afirmacoes: paginasWiki.afirmacoes, estrutura: paginasWiki.estrutura })
-          .from(paginasWiki).where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${id}::bigint`)).orderBy(desc(paginasWiki.revisaoPublicada)).limit(1);
+          .from(paginasWiki).innerJoin(notas, eq(notas.id, paginasWiki.notaId))
+          .where(and(eq(paginasWiki.userId, userId), sql`${paginasWiki.notaId} = ${id}::bigint`, doUsuario)).orderBy(desc(paginasWiki.revisaoPublicada)).limit(1);
         if (!pagina) return null;
         const gerencia = (await gerenciasDasSinteses(id)).get(id);
         return gerencia ? { ...pagina, gerencia } : pagina;
@@ -248,6 +279,13 @@ export function criarRepositorioDoBanco(userId: string): RepositorioDeNotas {
     async listarResumos() {
       return (await db.select(colunasDoResumo).from(notas).where(doUsuario).orderBy(asc(notas.id))).map(paraResumo);
     },
+    async listarLixeira() {
+      const linhas = await db.select({ ...colunasDoResumo, removidaEm: notas.removidaEm }).from(notas)
+        .where(and(dono, sql`${notas.removidaEm} is not null`)).orderBy(desc(notas.removidaEm), desc(notas.id));
+      return linhas.map((linha) => ({ ...paraResumo(linha), removidaEm: linha.removidaEm!.toISOString() }));
+    },
+    moverParaLixeira: (id, revisaoBase) => mudarLixeira(id, revisaoBase, true),
+    restaurarNota: (id, revisaoBase) => mudarLixeira(id, revisaoBase, false),
     async listarComConteudo() { return listar(db); },
     async obterNota(id) { return idValido(id) ? ler(id) : null; },
 

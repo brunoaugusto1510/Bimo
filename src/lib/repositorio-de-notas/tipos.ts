@@ -29,6 +29,7 @@ export type ResumoDeNota = {
 };
 
 export type NotaCompleta = ResumoDeNota & { conteudo: string };
+export type NotaNaLixeira = ResumoDeNota & { removidaEm: string };
 
 export type ResultadoDeBusca = {
   id: IdDeNota;
@@ -121,6 +122,9 @@ export interface RepositorioDeNotas {
   buscarIdsPorConteudo(consulta: string, limite: number): Promise<IdDeNota[]>;
 
   criarNota(entrada: EntradaDeNota, autor: AutorDaEscrita): Promise<ResultadoDeEscrita>;
+  listarLixeira(): Promise<NotaNaLixeira[]>;
+  moverParaLixeira(id: IdDeNota, revisaoBase: number): Promise<ResultadoDeEscrita>;
+  restaurarNota(id: IdDeNota, revisaoBase: number): Promise<ResultadoDeEscrita>;
   atualizarNota(id: IdDeNota, mudancas: MudancasDeNota, opcoes: OpcoesDeAtualizacao): Promise<ResultadoDeEscrita>;
   /**
    * Muda o título e reescreve, na mesma operação, as `[[ligações]]` das notas

@@ -1,4 +1,4 @@
-import { normalizarTexto } from "../caminho-da-nota";
+import { identidadeDoTema } from "./identidade";
 import type { RepositorioDeNotas, ResumoDeNota } from "../repositorio-de-notas/tipos";
 import type { ConceitoWiki } from "./automacao-tipos";
 import { pedeAtencao, type AlertaWiki, type EstadoDoNeuronio } from "./observabilidade-tipos";
@@ -6,6 +6,9 @@ import { compactarFontes, hashDoConteudo } from "./fontes";
 import { ordenarTermos } from "./recuperacao";
 import { exigirWiki } from "./servico";
 import type { MetadadosWiki } from "./tipos";
+
+/** Uma consolidação explícita deixa o caminho antigo legível, mas ele não é outro tema a manter no cérebro. */
+const consolidada = (p: MetadadosWiki) => p.estrutura.manutencao?.tipo === "consolidacao_autorizada" && Boolean(p.estrutura.manutencao.consolidadaEm);
 
 export function estadoDoNeuronio(meta: MetadadosWiki, conceito: ConceitoWiki | undefined, notas: Map<string, ResumoDeNota>): EstadoDoNeuronio {
   if (conceito?.pausada) return "em_pausa";
@@ -25,7 +28,7 @@ export async function obterCerebroWiki(repo: RepositorioDeNotas, teto: number | 
     wiki.listar(), wiki.automacao?.conceitos() ?? [], repo.listarResumos(), wiki.automacao?.cobertura(), teto === null ? undefined : wiki.automacao?.energia(teto),
   ]);
   const notas = new Map(resumos.map((n) => [n.id, n])); const porId = new Map(conceitos.map((c) => [c.notaId, c]));
-  const neuronios = paginas.flatMap((p) => {
+  const neuronios = paginas.filter((p) => !consolidada(p)).flatMap((p) => {
     const nota = notas.get(p.notaId); if (!nota) return [];
     const conceito = porId.get(p.notaId);
     return [{ ...nota, estado: estadoDoNeuronio(p, conceito, notas), alertas: conceito?.diagnostico?.alertas ?? [],
@@ -42,13 +45,16 @@ const RELEITURAS_POR_VERIFICACAO = 2;
 /** Verificação local em lotes, no máximo uma vez por dia por síntese; não chama o modelo (só reenfileira origens). */
 export async function verificarSinteses(repo: RepositorioDeNotas, limite = 20) {
   const fila = repo.wiki?.automacao; if (!fila) return 0;
-  const [paginas, conceitos, resumos] = await Promise.all([repo.wiki!.listar(), fila.conceitos(), repo.listarResumos()]);
+  const [publicadas, conceitos, resumos] = await Promise.all([repo.wiki!.listar(), fila.conceitos(), repo.listarResumos()]);
+  const paginas = publicadas.filter((p) => !consolidada(p));
   const notas = new Map(resumos.map((n) => [n.id, n])); const porId = new Map(conceitos.map((c) => [c.notaId, c]));
-  const derivadas = new Set(paginas.map((p) => p.notaId));
+  // Redirecionamentos continuam sendo páginas derivadas e destinos legíveis, mesmo fora da manutenção ativa.
+  const derivadas = new Set(publicadas.map((p) => p.notaId));
+  const ativas = new Set(paginas.map((p) => p.notaId));
   const identidades = new Map<string, Set<string>>();
-  for (const c of conceitos) for (const texto of [notas.get(c.notaId)?.titulo ?? c.chave, ...c.aliases]) {
+  for (const c of conceitos.filter((c) => ativas.has(c.notaId))) for (const texto of [notas.get(c.notaId)?.titulo ?? c.chave, ...c.aliases]) {
     // Ordenar palavras também encontra títulos que só trocaram a ordem, sem fundir conceitos automaticamente.
-    const chave = normalizarTexto(texto).match(/[\p{L}\p{N}]+/gu)?.sort().join(" ");
+    const chave = identidadeDoTema(texto).match(/[\p{L}\p{N}]+/gu)?.sort().join(" ");
     if (!chave) continue;
     const ids = identidades.get(chave) ?? new Set<string>(); ids.add(c.notaId); identidades.set(chave, ids);
   }

@@ -70,7 +70,7 @@ export function criarFilaWikiEmMemoria(acesso: {
       return registradas;
     },
     async reivindicar(notaId) {
-      const valores = [...trabalhos.values()];
+      const valores = [...trabalhos.values()].filter((t) => acesso.notas.has(t.notaId));
       if (valores.some((t) => t.estado === "configuracao" || t.ate > Date.now())) return null;
       for (const t of valores) if (t.estado === "pendente" && t.tentativas >= 3) t.estado = "temporario";
       const trabalho = valores.find((t) => (notaId === undefined || t.notaId === notaId) && t.estado === "pendente" && t.disponivel <= Date.now() && !acesso.paginas.has(t.notaId));
@@ -80,7 +80,7 @@ export function criarFilaWikiEmMemoria(acesso: {
         cursor: trabalho.cursor, posse: trabalho.posse, tentativas: trabalho.tentativas };
     },
     async conceitos() {
-      return [...conceitos.values()].map((c) => {
+      return [...conceitos.values()].filter((c) => acesso.notas.has(c.notaId)).map((c) => {
         const pagina = acesso.paginas.get(c.notaId);
         return { ...c, aliases: [...c.aliases], origens: { ...c.origens },
           resumo: pagina?.estrutura.resumo ?? pagina?.afirmacoes[0]?.texto ?? null, ligacoes: [...pagina?.estrutura.ligacoes ?? []],
@@ -207,5 +207,5 @@ export function criarFilaWikiEmMemoria(acesso: {
     const conceito = conceitos.get(id);
     return conceito && { revisao: conceito.revisaoGerenciada, protegida: conceito.protegida };
   }
-  return { fila, registrar, gerencia };
+  return { fila, registrar, gerencia, cancelar: (id: string) => { trabalhos.delete(id); } };
 }

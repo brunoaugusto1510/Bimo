@@ -23,13 +23,15 @@ import { caminhoDaNota, resolverNotaDoAgente } from "./resolver-nota-do-agente";
 import { escolherPortaDeEscrita } from "./porta-de-escrita-do-agente";
 import { consultarConhecimentoWiki, evidenciasDaWiki, indiceDaWiki } from "./wiki/consulta";
 import { descreverErro } from "./registro-de-erros";
+import { buscarNotasDoAgente, validarConsultasAdicionais } from "./busca-do-agente";
 
 export const declaracoesDeFerramentas: FunctionDeclaration[] = [
   {
     name: "buscar_notas",
     description:
       "Busca notas por palavras-chave no título e no conteúdo, também nas tags e no caminho. " +
-      "Use esta ferramenta PRIMEIRO, quase sempre, quando a pergunta for sobre o que o usuário estudou ou anotou. " +
+      "Consulte primeiro indice_da_wiki para aproveitar os neurônios existentes; esta busca também entrega um índice relevante. " +
+      "Para vários assuntos ou sinônimos, informe consultas separadas, sem exigir todos na mesma nota. " +
       "Devolve trechos, não a nota inteira — se um resultado parecer relevante, chame ler_nota para ver tudo.",
     parametersJsonSchema: {
       type: "object",
@@ -42,6 +44,11 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
         limite: {
           type: "integer",
           description: "Quantos resultados devolver (1 a 20). Padrão: 8.",
+        },
+        consultas: {
+          type: "array", maxItems: 4,
+          items: { type: "string", minLength: 1, maxLength: 160 },
+          description: "Até quatro buscas adicionais por assunto ou sinônimo. Ex.: ['blockchain', 'tokenização', 'token']. Cada busca mantém seus termos juntos; os resultados são reunidos sem duplicatas.",
         },
       },
       required: ["consulta"],
@@ -92,7 +99,7 @@ export const declaracoesDeFerramentas: FunctionDeclaration[] = [
       properties: {
         consulta: {
           type: "string",
-          description: "Termos para filtrar pelo caminho e pelo resumo. Omita para ver o mapa inteiro.",
+          description: "Termos para filtrar pelo caminho, aliases e resumo. Omita para ver o mapa inteiro.",
         },
       },
       required: [],
@@ -223,16 +230,27 @@ async function tentarWiki<T>(consultar: () => Promise<T>): Promise<T | undefined
 
 async function execBuscar(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
   const consulta = texto(args.consulta, "consulta");
+  const consultas = validarConsultasAdicionais(args.consultas);
   const limite = Math.min(Math.max(Math.floor(numero(args.limite) ?? 8), 1), 20);
 
-  const resultados = await repositorio.buscarPorConteudo(consulta, limite);
+  // O índice chega mesmo quando a busca textual falha: o modelo pode escolher um neurônio e abri-lo.
+  const consultaWiki = [consulta, ...consultas].join(" ");
+  const indice = await execIndiceDaWiki({ consulta: consultaWiki }, repositorio, 20);
+  const { resultados, ampliada, buscas } = await buscarNotasDoAgente(repositorio, consulta, limite, consultas);
   const aviso = await repositorio.obterAviso();
   // Sem pedir o processamento de cada resultado: a reconciliação da fila já alcança toda nota sem trabalho.
-  const conhecimento = await tentarWiki(() => consultarConhecimentoWiki(repositorio, consulta, resultados.map((r) => r.id)));
+  const conhecimento = await tentarWiki(() => consultarConhecimentoWiki(repositorio, consultaWiki, resultados.map((r) => r.id)));
+  const totalDeNeuronios = Number(indice.resposta.total) || 0;
+  const resumoDaBusca = resultados.length === 0
+    ? `Buscou "${consulta}" — nenhuma nota encontrada`
+    : `Buscou "${consulta}" — ${resultados.length} nota(s)`;
 
   return {
     resposta: {
       encontradas: resultados.length,
+      indiceWiki: indice.resposta,
+      buscas, ampliada,
+      ...(ampliada ? { avisoDaBusca: "Busca ampliada por consultas separadas: cada resultado não contém necessariamente todos os termos da consulta original. Confira os assuntos cobertos antes de concluir." } : {}),
       ...(conhecimento ? { conhecimento } : {}),
       ...(aviso ? { aviso } : {}),
       notas: resultados.map((r) => ({
@@ -241,11 +259,9 @@ async function execBuscar(args: Args, repositorio: RepositorioDeNotas): Promise<
         trecho: r.trecho,
       })),
     },
-    resumo:
-      resultados.length === 0
-        ? `Buscou "${consulta}" — nenhuma nota encontrada`
-        : `Buscou "${consulta}" — ${resultados.length} nota(s)`,
-    ids: resultados.map((r) => r.id),
+    resumo: resumoDaBusca + (ampliada ? " (busca ampliada)" : "")
+      + (totalDeNeuronios ? `; consultou o índice — ${totalDeNeuronios} neurônio(s)` : ""),
+    ids: [...new Set([...resultados.map((r) => r.id), ...(indice.ids ?? [])])],
   };
 }
 
@@ -316,7 +332,7 @@ async function execLer(args: Args, repositorio: RepositorioDeNotas, leituras?: L
   };
 }
 
-async function execIndiceDaWiki(args: Args, repositorio: RepositorioDeNotas): Promise<SaidaFerramenta> {
+async function execIndiceDaWiki(args: Args, repositorio: RepositorioDeNotas, limite = 150): Promise<SaidaFerramenta> {
   const consulta = typeof args.consulta === "string" ? args.consulta : undefined;
   const neuronios = await tentarWiki(() => indiceDaWiki(repositorio, consulta));
   if (!neuronios) {
@@ -326,7 +342,7 @@ async function execIndiceDaWiki(args: Args, repositorio: RepositorioDeNotas): Pr
     };
   }
   // O mapa inteiro de um acervo grande gastaria contexto à toa: acima do limite, filtre pela consulta.
-  const LIMITE = 150;
+  const LIMITE = limite;
   return {
     resposta: {
       total: neuronios.length,

@@ -23,7 +23,8 @@ export function useConsultaWiki<T>(url: string | null, revisao = 0) {
     void carregar();
     const intervalo = setInterval(() => void carregar(), 30_000);
     document.addEventListener("visibilitychange", carregar);
-    return () => { controle.abort(); clearInterval(intervalo); document.removeEventListener("visibilitychange", carregar); };
+    window.addEventListener("bimo:lixeira-alterada", carregar);
+    return () => { controle.abort(); clearInterval(intervalo); document.removeEventListener("visibilitychange", carregar); window.removeEventListener("bimo:lixeira-alterada", carregar); };
   }, [url, revisao]);
   return resposta?.url === url ? resposta : null;
 }

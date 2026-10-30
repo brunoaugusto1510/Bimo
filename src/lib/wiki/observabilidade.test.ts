@@ -65,6 +65,18 @@ it("diagnóstico aponta possíveis duplicatas sem fundir notas nem repetir o ale
   vi.advanceTimersByTime(86_400_001); await verificarSinteses(repo);
   expect(await contar()).toBe(2); expect(await repo.wiki!.listar()).toHaveLength(2);
 });
+it("diagnóstico reconhece duplicata legada com sufixos de síntese repetidos", async () => {
+  const repo = criarRepositorioEmMemoria([{ titulo: "A", conteudo: "A memória liga conceitos com evidência." }, { titulo: "B", conteudo: "Uma rede integra ideias com evidências de outras áreas." }]);
+  vi.advanceTimersByTime(91_000);
+  for (const titulo of ["Conhecimento", "Rede de ideias"]) await processarWiki(repo, async (c) => ({ proposta: { propostas: [{ titulo, alvoId: null, aliases: [], lacunas: [],
+    afirmacoes: [{ texto: c.origem.conteudo, natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: c.origem.conteudo }] }] }] }, uso: { entrada: 1, saida: 1 } }), { tetoDiario: 200_000 });
+  const paginas = await repo.wiki!.listar();
+  expect(await repo.renomearNota(paginas[1].notaId, "Conhecimento (síntese) (síntese)", { revisaoBase: 1, autor })).toMatchObject({ tipo: "ok" });
+  vi.advanceTimersByTime(86_400_001); await verificarSinteses(repo);
+  expect((await obterCerebroWiki(repo, 200_000)).neuronios.every((n) => n.alertas.includes("duplicata"))).toBe(true);
+  expect(await repo.wiki!.listar()).toHaveLength(2);
+});
+
 it("diagnóstico avisa sobre anotações relacionadas a um neurônio protegido, sem escrever nele", async () => {
   const { repo, id } = await preparar();
   await repo.atualizarNota(id, { conteudo: "Meu conhecimento pessoal." }, { revisaoBase: 1, autor });
@@ -73,6 +85,22 @@ it("diagnóstico avisa sobre anotações relacionadas a um neurônio protegido, 
   await verificarSinteses(repo);
   expect((await obterCerebroWiki(repo, 200_000)).neuronios[0]).toMatchObject({ estado: "seu", alertas: ["protegida_com_novidades"] });
   expect(await repo.obterNota(id)).toEqual(antes);
+});
+
+it("registro consolidado preserva leitura direta sem virar tema ativo ou alerta de falta de raízes", async () => {
+  const { repo, id } = await preparar();
+  const [pagina] = await repo.wiki!.listar();
+  const redirecionamento = { ...pagina, fontes: [], afirmacoes: [], estrutura: { ligacoes: ["principal"], lacunas: [],
+    manutencao: { tipo: "consolidacao_autorizada", data: "2026-10-30", consolidadaEm: "principal" } } };
+  vi.spyOn(repo.wiki!, "listar").mockResolvedValue([redirecionamento]);
+  vi.spyOn(repo.wiki!, "obter").mockResolvedValue(redirecionamento);
+  const registrar = vi.spyOn(repo.wiki!.automacao!, "registrarDiagnostico");
+  vi.advanceTimersByTime(86_400_001);
+  expect(await verificarSinteses(repo)).toBe(0);
+  expect(registrar).not.toHaveBeenCalled();
+  expect((await obterCerebroWiki(repo, 200_000)).resumo.neuronios).toBe(0);
+  expect((await repo.obterNota(id))!.conteudo).toBeTruthy();
+  expect(await repo.wiki!.obter(id)).toEqual(redirecionamento);
 });
 it("diagnóstico avisa quando um neurônio relacionado foi removido", async () => {
   const { repo, id } = await preparar(); const [meta] = await repo.wiki!.listar();

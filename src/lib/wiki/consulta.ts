@@ -31,11 +31,12 @@ export async function evidenciasDaWiki(repo: RepositorioDeNotas, id: string) {
 
 /**
  * O mapa da rede para o chat: cada neurônio com o resumo, a quem se liga e quem o cita (pelo caminho). É o índice que o
- * agente lê antes de escolher o que abrir. `consulta` filtra por termos no caminho e no resumo.
+ * agente lê antes de escolher o que abrir. `consulta` filtra por termos no caminho, nos aliases e no resumo.
  */
 export async function indiceDaWiki(repo: RepositorioDeNotas, consulta?: string) {
   const wiki = repo.wiki; if (!wiki) return null;
-  const [paginas, resumos] = await Promise.all([wiki.listar(), repo.listarResumos()]);
+  const [paginas, resumos, conceitos] = await Promise.all([wiki.listar(), repo.listarResumos(), wiki.automacao?.conceitos() ?? []]);
+  const aliases = new Map(conceitos.map((c) => [c.notaId, c.aliases.join(" ")]));
   const notas = new Map(resumos.map((n) => [n.id, n]));
   // Sem nenhuma origem disponível o neurônio fica fora, como nas respostas.
   const vivas = paginas.filter((p) => notas.has(p.notaId) && p.fontes.some((f) => notas.has(f.id)));
@@ -49,7 +50,7 @@ export async function indiceDaWiki(repo: RepositorioDeNotas, consulta?: string) 
   return vivas.map((p) => ({ id: p.notaId, caminho: caminho(p.notaId), resumo: p.estrutura.resumo ?? p.afirmacoes[0]?.texto ?? null,
     ligaA: p.estrutura.ligacoes.filter((id) => id !== p.notaId && notas.has(id)).map(caminho),
     citadoPor: (citadoPor.get(p.notaId) ?? []).map(caminho) }))
-    .filter((n) => !casa || casa(`${n.caminho} ${n.resumo ?? ""}`));
+    .filter((n) => !casa || casa(`${n.caminho} ${n.resumo ?? ""} ${aliases.get(n.id) ?? ""}`));
 }
 
 /** Neurônios lidos por inteiro numa consulta, e vizinhos deles mostrados só pelo caminho e resumo. */

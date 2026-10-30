@@ -12,6 +12,7 @@ type Props = {
   onSelecionarNota: (nota: { id: IdDeNota; nome: string }) => void;
   /** Por onde o Bimo passou na pergunta atual: a lista marca essas notas junto com o grafo. */
   marcas?: ReadonlyMap<IdDeNota, MarcaDoRastro>;
+  aoAbrirLixeira?: () => void;
 };
 
 /** Recuo por nível de pasta, em pixels. */
@@ -36,7 +37,7 @@ const SEM_MARCAS: ReadonlyMap<IdDeNota, MarcaDoRastro> = new Map();
  * rótulo de seção com o total, pastas com caret e contagem, e a nota
  * selecionada em azul.
  */
-export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota, marcas = SEM_MARCAS }: Props) {
+export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota, marcas = SEM_MARCAS, aoAbrirLixeira }: Props) {
   const [consulta, setConsulta] = useState("");
 
   const totalDeNotas = useMemo(() => contarNotas(itens), [itens]);
@@ -105,6 +106,7 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota,
           ))
         )}
       </nav>
+      {aoAbrirLixeira && <div className="shrink-0 border-t border-borda p-2"><button type="button" aria-label="Abrir lixeira" onClick={aoAbrirLixeira} className="flex min-h-10 w-full items-center gap-2 rounded-tag px-3 text-controle text-suave hover:bg-painel hover:text-texto"><svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="size-4"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg>Lixeira</button></div>}
     </aside>
   );
 }

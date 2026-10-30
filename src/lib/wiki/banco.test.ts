@@ -10,7 +10,7 @@ import { esquecerSondagemDaWiki } from "./disponibilidade";
 const dono = "4c6831c0-fdc6-4074-a832-5465b0cbb953";
 // A escrita da wiki só passa pela fila e é verificada no Postgres local (persistencia.test.ts); aqui ficam as leituras.
 function consulta(valor: unknown) {
-  const q = { from: vi.fn(() => q), where: vi.fn((f: SQL | undefined) => { void f; return q; }), orderBy: vi.fn(() => q), limit: vi.fn(() => q),
+  const q = { from: vi.fn(() => q), innerJoin: vi.fn(() => q), where: vi.fn((f: SQL | undefined) => { void f; return q; }), orderBy: vi.fn(() => q), limit: vi.fn(() => q),
     then: (ok: (v: unknown) => unknown, falha?: (e: unknown) => unknown) => Promise.resolve(valor).then(ok, falha) };
   return q;
 }
@@ -24,8 +24,12 @@ it("lista e lê metadados exclusivamente do dono com publicação mais recente",
   simulacao.db.selectDistinctOn.mockReturnValue(lista); simulacao.db.select.mockReturnValue(leitura);
   const repo = criarRepositorioDoBanco(dono);
   await repo.wiki!.listar(); await repo.wiki!.obter("9");
-  expect(new PgDialect().sqlToQuery(lista.where.mock.calls[0][0]!).params).toEqual([dono]);
-  expect(new PgDialect().sqlToQuery(leitura.where.mock.calls[0][0]!).params).toEqual([dono, "9"]);
+  const listagem = new PgDialect().sqlToQuery(lista.where.mock.calls[0][0]!);
+  const detalhe = new PgDialect().sqlToQuery(leitura.where.mock.calls[0][0]!);
+  expect(listagem.params).toEqual([dono, dono]);
+  expect(detalhe.params).toEqual([dono, "9", dono]);
+  expect(listagem.sql).toContain('"notas"."removida_em" is null');
+  expect(detalhe.sql).toContain('"notas"."removida_em" is null');
   expect(leitura.orderBy).toHaveBeenCalled(); expect(leitura.limit).toHaveBeenCalledWith(1);
 });
 it("não carrega tabela nova enquanto a wiki estiver desligada", () => {

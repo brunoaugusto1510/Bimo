@@ -20,6 +20,8 @@ export type AfirmacaoWiki = {
 export type DivergenciaWiki = { a: { afirmacaoId: string; contexto: string }; b: { afirmacaoId: string; contexto: string } };
 /** `resumo`: uma frase sobre o que o neurônio trata; é o que o índice mostra ao lado do título. */
 export type EstruturaWiki = { ligacoes: string[]; lacunas: string[]; divergencias?: DivergenciaWiki[]; resumo?: string;
+  /** Registro de manutenção explícita; um redirecionamento conserva snapshots anteriores, sem se tornar fonte. */
+  manutencao?: { tipo: string; data: string; consolidadaEm?: string; consolidacao?: { incorporou: string } };
   editorial?: import("./editorial").RegistroEditorial };
 export type MetadadosWiki = {
   notaId: string; revisaoPublicada: number; fontes: FontePersistidaWiki[]; afirmacoes: AfirmacaoWiki[]; estrutura: EstruturaWiki;

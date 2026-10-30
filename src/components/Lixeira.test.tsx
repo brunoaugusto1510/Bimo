@@ -1,0 +1,40 @@
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import Lixeira from "./Lixeira";
+const nota = { id: "1", titulo: "Minha nota", pasta: "Pasta", revisao: 2, tags: [], criadoEm: null, atualizadoEm: null, removidaEm: "2026-10-30T12:00:00Z" };
+afterEach(() => vi.unstubAllGlobals());
+it("carrega, restaura, anuncia e permite fechar com Escape devolvendo foco", async () => {
+  const fechar = vi.fn(), evento = vi.fn();
+  const origem = document.createElement("button"); document.body.append(origem); origem.focus();
+  window.addEventListener("bimo:lixeira-alterada", evento);
+  const fetch = vi.fn().mockResolvedValueOnce(Response.json({ notas: [nota] })).mockResolvedValueOnce(Response.json({ nota: { ...nota, conteudo: "texto", revisao: 3 } }));
+  vi.stubGlobal("fetch", fetch);
+  const { unmount } = render(<Lixeira aoFechar={fechar} />);
+  expect(await screen.findByRole("dialog", { name: "Lixeira" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Restaurar Minha nota" }));
+  expect(await screen.findByText("A lixeira está vazia.")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("restaurada");
+  expect(fetch.mock.calls[1][0]).toBe("/api/notas/1/restaurar");
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ revisaoBase: 2 });
+  expect(evento).toHaveBeenCalledOnce();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" }); expect(fechar).toHaveBeenCalledOnce();
+  unmount(); expect(origem).toHaveFocus(); origem.remove(); window.removeEventListener("bimo:lixeira-alterada", evento);
+});
+it("mantém a nota e explica colisão de título; bloqueia pedidos simultâneos", async () => {
+  let concluir!: (r: Response) => void;
+  const fetch = vi.fn().mockResolvedValueOnce(Response.json({ notas: [nota] })).mockImplementationOnce(() => new Promise((r) => concluir = r));
+  vi.stubGlobal("fetch", fetch); render(<Lixeira aoFechar={vi.fn()} />);
+  const botao = await screen.findByRole("button", { name: "Restaurar Minha nota" });
+  fireEvent.click(botao); fireEvent.click(botao);
+  expect(botao).toBeDisabled(); expect(screen.getByRole("button", { name: "Fechar" })).toBeDisabled();
+  await act(async () => concluir(Response.json({ tipo: "titulo-em-uso", idExistente: "2" }, { status: 409 })));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Renomeie ou mova a nota existente");
+  expect(screen.getByText("Minha nota")).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(2); expect(botao).toBeEnabled();
+});
+it("oferece nova tentativa após falha de leitura", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("rede")).mockResolvedValueOnce(Response.json({ notas: [] })));
+  render(<Lixeira aoFechar={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Atualizar lixeira" }));
+  await waitFor(() => expect(screen.getByText("A lixeira está vazia.")).toBeInTheDocument());
+});

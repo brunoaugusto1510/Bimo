@@ -50,6 +50,13 @@ export const gerarConhecimentoWiki: GeradorAutomaticoWiki = async (contexto, sin
       "Adie por contexto_da_origem apenas quando falta um referente ou informação necessária para uma decisão útil; não peça uma versão corrigida só para encerrar um exemplo avulso. " +
       "conteudoIgualAOrigem identifica outra nota pessoal com texto integral idêntico: use os mesmos critérios de conservar ou adiar, independentemente do título. " +
       "Notas complementares devem enriquecer o destino existente; assuntos próximos com funções diferentes continuam separados. " +
+      "Nunca recrie o mesmo assunto porque o neurônio existente está só no índice: solicite sua leitura ou conserve a origem se não há novidade. " +
+      "O sufixo (síntese), mesmo repetido, não distingue assuntos; não o acrescente ao título para contornar um destino existente. " +
+      "Ao reunir origens, explique as relações sustentadas entre conceitos, mecanismos e consequências, em vez de apenas justapor paráfrases. " +
+      "Uma relação que excede o texto explícito deve ser marcada como inferencia e sustentada pelas citações das partes relacionadas. " +
+      "Datas, previsões e números conjunturais precisam conservar o contexto temporal informado na origem; não transforme uma anotação antiga em medição atual. " +
+      "Registre em lacunas as perguntas úteis sobre escopo, data ou definição que as fontes não resolvem, sem inventar contradições ou preencher toda página com perguntas genéricas. " +
+      "Várias notas que remetem ao mesmo material não são confirmações independentes; preserve essa procedência quando ela for relevante. " +
       "Com propostas, semPublicacao é null. Sem propostas, preencha semPublicacao com decisao conservar_origem, motivo e condicao null, " +
       "ou decisao adiar, motivo e condicao objetiva para reavaliar após nova informação na origem. Não use adiar apenas porque não há novidade. " +
       "O motivo deve ser uma frase completa e curta, com até 240 caracteres; condicao, quando houver, tem até 200. " +

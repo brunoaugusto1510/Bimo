@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DadosDaPagina } from "@/lib/servico-de-notas";
 import { EVENTO_NOTA_SALVA } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
 import { EVENTO_NOTA_CRIADA } from "@/lib/espaco-de-trabalho/usar-criacao-de-nota";
+import { EVENTO_LIXEIRA_ALTERADA } from "@/lib/cliente-de-notas";
 
 /** Atualiza somente dados: falhas nunca substituem a árvore que contém a conversa e os editores. */
 export default function AtualizadorDasNotas({ aoAtualizar }: { aoAtualizar?: (dados: DadosDaPagina, iniciadoEm: number) => void }) {
@@ -39,9 +40,10 @@ export default function AtualizadorDasNotas({ aoAtualizar }: { aoAtualizar?: (da
       if (voo) urgente = true; else void atualizar();
     }
     window.addEventListener(EVENTO_NOTA_CRIADA, aoCriar);
+    window.addEventListener(EVENTO_LIXEIRA_ALTERADA, aoCriar);
     window.addEventListener(EVENTO_NOTA_SALVA, aoSalvar);
     window.addEventListener("bimo:nota-alterada-pelo-agente", aoSalvar);
-    return () => { montado = false; window.removeEventListener(EVENTO_NOTA_CRIADA, aoCriar); controle?.abort(); clearTimeout(timer); window.removeEventListener(EVENTO_NOTA_SALVA, aoSalvar); window.removeEventListener("bimo:nota-alterada-pelo-agente", aoSalvar); };
+    return () => { montado = false; window.removeEventListener(EVENTO_LIXEIRA_ALTERADA, aoCriar); window.removeEventListener(EVENTO_NOTA_CRIADA, aoCriar); controle?.abort(); clearTimeout(timer); window.removeEventListener(EVENTO_NOTA_SALVA, aoSalvar); window.removeEventListener("bimo:nota-alterada-pelo-agente", aoSalvar); };
   }, []);
   return <p role="status" className={aviso ? "border-b border-borda bg-painel px-4 py-2 text-meta text-texto" : "sr-only"}>{aviso}</p>;
 }

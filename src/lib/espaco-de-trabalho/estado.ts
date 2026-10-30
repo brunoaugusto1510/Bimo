@@ -38,6 +38,7 @@ export type EstadoDoEspaco = {
 export type Acao =
   | { tipo: "abrir-nota"; id: IdDeNota; novaAba?: boolean; modo?: ModoDaNota }
   | { tipo: "fechar-aba"; chave: string }
+  | { tipo: "remover-nota"; id: IdDeNota }
   | { tipo: "ativar-aba"; chave: string }
   | { tipo: "nova-aba-vazia" }
   | { tipo: "voltar" }
@@ -148,9 +149,9 @@ function limparAba(aba: AbaDeNota, existentes: ReadonlySet<IdDeNota>): AbaDeNota
   return { ...aba, historico: { pilha: nova, indice: Math.max(destinoDe[indice], 0) } };
 }
 
-function descartarInexistentes(estado: EstadoDoEspaco, base: ReadonlySet<IdDeNota>, protegidos?: ReadonlySet<IdDeNota>): EstadoDoEspaco {
+function descartarInexistentes(estado: EstadoDoEspaco, base: ReadonlySet<IdDeNota>, protegidos?: ReadonlySet<IdDeNota>, confirmado = false): EstadoDoEspaco {
   // Uma lista vazia quase sempre é "ainda não carregou" ou "falhou ao carregar", não "todas as notas sumiram".
-  if (base.size === 0) return estado;
+  if (base.size === 0 && !confirmado) return estado;
   const existentes = new Set([...base, ...(protegidos ?? [])]);
 
   const recentes = estado.recentes.filter((id) => existentes.has(id));
@@ -186,6 +187,12 @@ export function reduzir(estado: EstadoDoEspaco, acao: Acao): EstadoDoEspaco {
 
     case "fechar-aba":
       return fecharAba(estado, acao.chave);
+
+    case "remover-nota": {
+      const ids = new Set([...estado.recentes, ...estado.abas.flatMap((aba) => aba.tipo === "nota" ? aba.historico.pilha : [])]);
+      ids.delete(acao.id);
+      return descartarInexistentes(estado, ids, undefined, true);
+    }
 
     case "ativar-aba":
       if (acao.chave !== ABA_DO_GRAFICO && !estado.abas.some((aba) => aba.chave === acao.chave)) return estado;

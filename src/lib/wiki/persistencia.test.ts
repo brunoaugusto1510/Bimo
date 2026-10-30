@@ -40,7 +40,7 @@ beforeAll(async () => {
     create table versoes_nota (id bigint generated always as identity primary key, nota_id bigint references notas(id), user_id uuid not null,
       titulo text not null, conteudo text not null, pasta text, tags text[], criado_por text not null, criado_por_ferramenta text,
       sessao_aberta boolean not null default false, versionado_em timestamptz not null default now());`);
-  for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql", "drizzle/0009_wiki_ultimo_erro.sql", "drizzle/0010_wiki_estrutura.sql", "drizzle/0011_wiki_observabilidade.sql"]) await pg.exec(await readFile(caminho, "utf8"));
+  for (const caminho of ["drizzle/0007_wiki_viva.sql", "drizzle/0008_wiki_automatica.sql", "drizzle/0009_wiki_ultimo_erro.sql", "drizzle/0010_wiki_estrutura.sql", "drizzle/0011_wiki_observabilidade.sql", "drizzle/0013_lixeira.sql"]) await pg.exec(await readFile(caminho, "utf8"));
 }, 30_000);
 beforeEach(async () => {
   vi.stubEnv("WIKI_VIVA_ATIVA", "1"); vi.stubEnv("WIKI_AUTOMATICA_ATIVA", "1");
@@ -49,6 +49,53 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllEnvs());
 afterAll(async () => { await pg?.close(); });
+
+describe("lixeira no Postgres local", () => {
+  it("aplica a migração, isola o dono e preserva histórico na remoção e restauração", async () => {
+    const repo = criarRepositorioDoBanco(donoA), outro = criarRepositorioDoBanco(donoB);
+    const criada = await repo.criarNota({ titulo: "Privada", conteudo: "segredo pesquisável", tags: ["teste"] }, autor);
+    if (criada.tipo !== "ok") throw new Error("Preparação inválida");
+    const id = criada.nota.id;
+    expect(await outro.moverParaLixeira(id, 1)).toEqual({ tipo: "nao-encontrada" });
+    expect(await repo.moverParaLixeira(id, 99)).toMatchObject({ tipo: "conflito" });
+    const posse = await repo.wiki!.automacao!.reprocessar(id, 1);
+    expect(posse).toBe("ok");
+    const trabalho = (await repo.wiki!.automacao!.reivindicar(id))!;
+    expect(trabalho).not.toBeNull();
+    const marca = await repo.marcaDeVersao();
+    expect(await repo.moverParaLixeira(id, 1)).toMatchObject({ tipo: "ok", nota: { revisao: 2 } });
+    expect(await repo.moverParaLixeira(id, 1)).toMatchObject({ tipo: "ok", nota: { revisao: 2 } });
+    expect(await repo.marcaDeVersao()).not.toBe(marca);
+    expect(await repo.obterNota(id)).toBeNull();
+    expect(await repo.listarResumos()).toEqual([]);
+    expect(await repo.listarComConteudo()).toEqual([]);
+    expect(await repo.buscarPorConteudo("segredo", 10)).toEqual([]);
+    expect(await repo.buscarIdsPorConteudo("segredo", 10)).toEqual([]);
+    expect(await repo.atualizarNota(id, { conteudo: "atrasado" }, { revisaoBase: 1, autor })).toEqual({ tipo: "nao-encontrada" });
+    expect(await repo.renomearNota(id, "Outra", { revisaoBase: 1, autor })).toEqual({ tipo: "nao-encontrada" });
+    expect(await outro.listarLixeira()).toEqual([]);
+    expect(await outro.restaurarNota(id, 2)).toEqual({ tipo: "nao-encontrada" });
+    expect(await repo.listarLixeira()).toMatchObject([{ id, removidaEm: expect.any(String), revisao: 2 }]);
+    expect(await repo.wiki!.automacao!.reconciliar(10)).toBe(0);
+    expect(await repo.wiki!.automacao!.reivindicar(id)).toBeNull();
+    await expect(repo.wiki!.automacao!.concluir(trabalho, [], null)).rejects.toThrow();
+    expect(await repo.restaurarNota(id, 1)).toMatchObject({ tipo: "conflito" });
+    expect(await repo.restaurarNota(id, 2)).toMatchObject({ tipo: "ok", nota: { id, conteudo: "segredo pesquisável", tags: ["teste"], revisao: 3 } });
+    expect(await repo.restaurarNota(id, 2)).toMatchObject({ tipo: "ok", nota: { revisao: 3 } });
+    expect(await repo.listarLixeira()).toEqual([]);
+    expect(await repo.buscarIdsPorConteudo("segredo", 10)).toEqual([id]);
+    expect((await pg.query("select count(*)::int as n from versoes_nota")).rows).toEqual([{ n: 1 }]);
+  });
+  it("o índice libera o título e um conflito de restauração conserva a nota na lixeira", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Título", pasta: "Pasta" }, autor);
+    await repo.moverParaLixeira("1", 1);
+    expect((await repo.criarNota({ titulo: "título", pasta: "Pasta" }, autor)).tipo).toBe("ok");
+    expect(await repo.restaurarNota("1", 2)).toMatchObject({ tipo: "titulo-em-uso" });
+    expect(await repo.listarLixeira()).toHaveLength(1);
+    expect(await repo.obterNota("1")).toBeNull();
+  });
+});
 
 describe("persistência local da Wiki Viva", () => {
   it("reprocessa somente a origem pedida sem alterar sua revisão e recusa posse, revisão e dono diferentes", async () => {
@@ -83,6 +130,29 @@ describe("persistência local da Wiki Viva", () => {
     destino: { avaliacao: "suficiente", justificativa: "O mesmo assunto está neste destino." } });
   const novaResposta = (c: ContextoWiki, extras: Record<string, unknown> = {}) => ({ proposta: { politica: "rede-v5", semPublicacao: null,
     propostas: [{ ...resposta(c).proposta.propostas[0], editorial: editorial("criar"), ...extras }] }, uso: { entrada: 100, saida: 100 } });
+
+  it("a lixeira retira evidências indisponíveis e restaura fontes e neurônios com suas publicações intactas", async () => {
+    const repo = criarRepositorioDoBanco(donoA);
+    await repo.criarNota({ titulo: "Origem", conteudo: "As cópias precisam ser atualizadas." }, autor); await liberar();
+    await processarWiki(repo, async (c) => novaResposta(c), { tetoDiario: 200_000 });
+    const [meta] = await repo.wiki!.listar();
+    expect((await evidenciasDaWiki(repo, meta.notaId))!.afirmacoes).toHaveLength(1);
+    await repo.moverParaLixeira("1", 1);
+    expect(await estadoDaPagina(repo, (await repo.wiki!.obter(meta.notaId))!)).toBe("desatualizada");
+    expect((await evidenciasDaWiki(repo, meta.notaId))!.afirmacoes).toEqual([]);
+    await repo.restaurarNota("1", 2);
+    expect(await estadoDaPagina(repo, (await repo.wiki!.obter(meta.notaId))!)).toBe("atualizada");
+    expect((await evidenciasDaWiki(repo, meta.notaId))!.afirmacoes).toHaveLength(1);
+    const sintese = (await repo.obterNota(meta.notaId))!;
+    await repo.moverParaLixeira(sintese.id, sintese.revisao);
+    expect(await repo.wiki!.listar()).toEqual([]);
+    expect(await repo.wiki!.obter(sintese.id)).toBeNull();
+    expect(await repo.wiki!.automacao!.conceitos()).toEqual([]);
+    await repo.restaurarNota(sintese.id, sintese.revisao + 1);
+    expect((await repo.wiki!.listar())[0].afirmacoes).toEqual(meta.afirmacoes);
+    expect(await estadoDaPagina(repo, (await repo.wiki!.obter(sintese.id))!)).toBe("atualizada");
+    expect((await pg.query("select count(*)::int as n from paginas_wiki")).rows).toEqual([{ n: 1 }]);
+  });
 
   it("divergência inválida bloqueia no SQL sem publicar versão, preservando consumo e origem", async () => {
     const repo = criarRepositorioDoBanco(donoA);

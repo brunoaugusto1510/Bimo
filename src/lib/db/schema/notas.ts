@@ -35,6 +35,7 @@ export const notas = pgTable(
     /** Nome da ferramenta que criou/editou, quando `criadoPor = 'agente'`. */
     criadoPorFerramenta: text("criado_por_ferramenta"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    removidaEm: timestamp("removida_em", { withTimezone: true }),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -53,7 +54,7 @@ export const notas = pgTable(
   (tabela) => [
     index("notas_user_id_idx").on(tabela.userId),
     uniqueIndex("notas_id_dono_unico").on(tabela.id, tabela.userId),
-    uniqueIndex("notas_usuario_pasta_titulo_unico").on(tabela.userId, sql`coalesce(${tabela.pasta}, '')`, sql`lower(${tabela.titulo})`),
+    uniqueIndex("notas_usuario_pasta_titulo_unico").on(tabela.userId, sql`coalesce(${tabela.pasta}, '')`, sql`lower(${tabela.titulo})`).where(sql`${tabela.removidaEm} is null`),
     index("notas_vetor_busca_idx").using("gin", tabela.vetorBusca),
     pgPolicy("notas_dono_policy", {
       for: "all",

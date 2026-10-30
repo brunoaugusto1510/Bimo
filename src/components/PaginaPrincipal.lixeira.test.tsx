@@ -1,0 +1,35 @@
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import PaginaPrincipal from "./PaginaPrincipal";
+import { avisarLixeiraAlterada } from "@/lib/cliente-de-notas";
+import { CONFIGURACAO_PADRAO } from "@/lib/fisica-do-grafo";
+const nota = { id: "1", titulo: "Minha nota", pasta: null, tags: [], conteudo: "texto", revisao: 1, criadoEm: null, atualizadoEm: null };
+const itens = [{ tipo: "nota" as const, id: "1", nome: "Minha nota", pasta: null }];
+const grafo = { nos: [{ tipo: "nota" as const, id: "1", titulo: "Minha nota", grupo: "Raiz" }], arestas: [], configuracao: CONFIGURACAO_PADRAO };
+const capacidades = { escrita: true, datas: true };
+vi.mock("./GrafoDeFundo", () => ({ default: ({ nos, onAbrirNota }: { nos: { id: string }[]; onAbrirNota(id: string): void }) => <div data-testid="grafo" data-ids={nos.map((n) => n.id).join(",")}><button onClick={() => onAbrirNota("1")}>Abrir nó</button></div> }));
+vi.mock("./Chat", () => ({ default: () => <textarea aria-label="Conversa preservada" defaultValue="pergunta" /> }));
+afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
+it("retira a última nota de abas/lista/grafo, resiste à resposta antiga e restaura sem remontar chat", async () => {
+  let concluir!: (r: Response) => void;
+  const fetch = vi.fn((url: string) => {
+    if (url.includes("grafo")) return new Promise<Response>((r) => { concluir = r; });
+    if (url.includes("ligacoes")) return Promise.resolve(Response.json({ ligacoes: { entrada: [], saida: [] }, mencoesSemLigacao: [] }));
+    return Promise.resolve(Response.json({ nota, capacidades }));
+  }); vi.stubGlobal("fetch", fetch);
+  render(<PaginaPrincipal itens={itens} grafo={grafo} capacidades={capacidades} />);
+  const conversa = screen.getByRole("textbox", { name: "Conversa preservada" });
+  fireEvent.click(screen.getByRole("button", { name: "Abrir nó" }));
+  expect(await screen.findByRole("tab", { name: "Minha nota" })).toBeInTheDocument();
+  await act(async () => window.dispatchEvent(new Event("bimo:nota-salva")));
+  await act(async () => avisarLixeiraAlterada({ ...nota, revisao: 2 }, true));
+  expect(screen.queryByRole("tab", { name: "Minha nota" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Minha nota" })).not.toBeInTheDocument();
+  expect(screen.getByTestId("grafo")).toHaveAttribute("data-ids", "");
+  await act(async () => concluir(Response.json({ itens, grafo, capacidades })));
+  expect(screen.getByTestId("grafo")).toHaveAttribute("data-ids", "");
+  expect(screen.queryByRole("button", { name: "Minha nota" })).not.toBeInTheDocument();
+  await act(async () => avisarLixeiraAlterada({ ...nota, revisao: 3 }, false));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Minha nota" })).toBeInTheDocument());
+  expect(screen.getByRole("textbox", { name: "Conversa preservada", hidden: true })).toBe(conversa);
+});

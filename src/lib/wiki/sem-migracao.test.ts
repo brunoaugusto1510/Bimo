@@ -30,6 +30,7 @@ beforeAll(async () => {
     create table versoes_nota (id bigint generated always as identity primary key, nota_id bigint references notas(id), user_id uuid not null,
       titulo text not null, conteudo text not null, pasta text, tags text[], criado_por text not null, criado_por_ferramenta text,
       sessao_aberta boolean not null default false, versionado_em timestamptz not null default now());`);
+  await pg.exec(await readFile("drizzle/0013_lixeira.sql", "utf8"));
 }, 30_000);
 beforeEach(async () => {
   esquecerSondagemDaWiki();

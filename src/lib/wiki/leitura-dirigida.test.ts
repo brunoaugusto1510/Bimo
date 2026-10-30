@@ -87,6 +87,29 @@ it("não aceita pedir como neurônio uma nota pessoal nem repetir uma leitura j�
   expect(gerar).toHaveBeenCalledTimes(1);
 });
 
+it.each(["Cache offline (síntese)", "Cache offline (síntese) (síntese)"])("recusa recriar o neurônio só do índice usando o título %s", async (titulo) => {
+  const { repo, pagina } = await preparar();
+  const antes = (await repo.obterNota(pagina.notaId))!;
+  const resultado = await rodar(repo, async (c) => ({ proposta: envelope([{ ...operacao(c.origem.id), titulo,
+    afirmacoes: [{ texto: c.origem.conteudo, natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: c.origem.conteudo }] }],
+  }]), uso: { entrada: 20, saida: 10 } }));
+  expect(resultado).toMatchObject({ tipo: "adiado", motivo: "revisar" });
+  expect(await repo.wiki!.listar()).toHaveLength(1);
+  expect(await repo.obterNota(pagina.notaId)).toEqual(antes);
+});
+
+it("reconhece o título atual após renomear, sem recriar pela chave antiga", async () => {
+  const { repo, pagina } = await preparar();
+  expect(await repo.renomearNota(pagina.notaId, "Consulta durante indisponibilidade", { revisaoBase: 1, autor })).toMatchObject({ tipo: "ok" });
+  const antes = (await repo.obterNota(pagina.notaId))!;
+  const resultado = await rodar(repo, async (c) => ({ proposta: envelope([{ ...operacao(c.origem.id), titulo: "Consulta durante indisponibilidade (síntese)",
+    afirmacoes: [{ texto: c.origem.conteudo, natureza: "explicita", evidencias: [{ fonteId: c.origem.id, citacao: c.origem.conteudo }] }],
+  }]), uso: { entrada: 20, saida: 10 } }));
+  expect(resultado).toMatchObject({ tipo: "adiado", motivo: "revisar" });
+  expect(await repo.wiki!.listar()).toHaveLength(1);
+  expect(await repo.obterNota(pagina.notaId)).toEqual(antes);
+});
+
 it("nega a continuação sem saldo, conservando o custo da primeira chamada e sem declarar conclusão", async () => {
   const { repo, pagina } = await preparar();
   const fila = repo.wiki!.automacao!;

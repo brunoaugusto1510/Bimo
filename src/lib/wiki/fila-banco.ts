@@ -23,6 +23,7 @@ function lerIds(texto: string | null): string[] {
 
 
 export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWiki, entrada: PublicacaoWiki) => Promise<string>): AutomacaoWiki {
+  const notaAtiva = and(eq(notas.userId, userId), sql`${notas.removidaEm} is null`);
   async function evento(tx: TransacaoWiki, chave: string, dados: Omit<EventoWiki, "id" | "criadoEm">) {
     await tx.insert(eventosWiki).values({ userId, chave, ...dados }).onConflictDoNothing({ target: [eventosWiki.userId, eventosWiki.chave] });
   }
@@ -45,7 +46,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async solicitar(id) {
       if (!idValido(id)) return;
       await transacao(async (tx) => {
-        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`));
+        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${id}::bigint`));
         if (nota) await registrarAlteracaoWiki(tx, userId, id, nota.revisao);
       });
     },
@@ -53,7 +54,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
       if (!idValido(id)) return "nao-encontrada";
       return transacao(async (tx) => {
         const [nota] = await tx.select({ revisao: notas.revisao }).from(notas)
-          .where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`)).for("share");
+          .where(and(notaAtiva, sql`${notas.id} = ${id}::bigint`)).for("share");
         if (!nota) return "nao-encontrada" as const;
         if (nota.revisao !== revisao) return "conflito" as const;
         const [pagina] = await tx.select({ id: paginasWiki.notaId }).from(paginasWiki)
@@ -73,7 +74,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async reconciliar(limite) {
       return transacao(async (tx) => {
         const linhas = await tx.select({ id: sql<string>`${notas.id}::text`, revisao: notas.revisao }).from(notas)
-          .where(and(eq(notas.userId, userId), sql`not exists (select 1 from ${paginasWiki} p where p.user_id = ${userId}::uuid and p.nota_id = ${notas.id})`,
+          .where(and(notaAtiva, sql`not exists (select 1 from ${paginasWiki} p where p.user_id = ${userId}::uuid and p.nota_id = ${notas.id})`,
             sql`not exists (select 1 from ${trabalhosWiki} t where t.user_id = ${userId}::uuid and t.nota_id = ${notas.id} and t.revisao = ${notas.revisao})`))
           .orderBy(asc(notas.id)).limit(Math.max(1, Math.min(limite, 100)));
         for (const nota of linhas) await registrarAlteracaoWiki(tx, userId, nota.id, nota.revisao);
@@ -90,6 +91,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         await tx.update(trabalhosWiki).set({ estado: "temporario", ultimoErro: "PosseExpirada" }).where(and(eq(trabalhosWiki.userId, userId), eq(trabalhosWiki.estado, "pendente"),
           sql`${trabalhosWiki.tentativas} >= 3`, sql`(${trabalhosWiki.posseAte} is null or ${trabalhosWiki.posseAte} <= clock_timestamp())`));
         const [proximo] = await tx.select(colunas).from(trabalhosWiki).where(and(eq(trabalhosWiki.userId, userId),
+          sql`exists (select 1 from ${notas} n where n.id = ${trabalhosWiki.notaId} and n.user_id = ${userId}::uuid and n.removida_em is null)`,
           notaId === undefined ? undefined : sql`${trabalhosWiki.notaId} = ${notaId}::bigint`,
           eq(trabalhosWiki.estado, "pendente"), sql`${trabalhosWiki.disponivelEm} <= clock_timestamp()`,
           sql`(${trabalhosWiki.posseAte} is null or ${trabalhosWiki.posseAte} <= clock_timestamp())`,
@@ -111,7 +113,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         origens: conceitosWiki.origens, revisaoGerenciada: conceitosWiki.revisaoGerenciada, pausada: conceitosWiki.pausada, diagnostico: conceitosWiki.diagnostico,
         resumo: sql<string | null>`(select coalesce(p.estrutura->>'resumo', p.afirmacoes->0->>'texto') ${ultima})`,
         ligacoes: sql<string | null>`(select (p.estrutura->'ligacoes')::text ${ultima})` })
-        .from(conceitosWiki).innerJoin(notas, and(eq(notas.userId, userId), eq(notas.id, conceitosWiki.notaId)))
+        .from(conceitosWiki).innerJoin(notas, and(notaAtiva, eq(notas.id, conceitosWiki.notaId)))
         .where(eq(conceitosWiki.userId, userId)).orderBy(asc(conceitosWiki.notaId));
       return linhas.map((c) => ({ ...c, ligacoes: lerIds(c.ligacoes) }));
     },
@@ -123,7 +125,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         concluidos: sql<number>`count(*) filter (where not ${semRegistroAtual} and ${trabalhosWiki.estado} = 'concluido')::int`,
         impedidos: sql<number>`count(*) filter (where not ${semRegistroAtual} and ${trabalhosWiki.estado} not in ('pendente', 'concluido'))::int` })
         .from(notas).leftJoin(trabalhosWiki, and(eq(trabalhosWiki.userId, userId), eq(trabalhosWiki.notaId, notas.id)))
-        .where(and(eq(notas.userId, userId), sql`not exists (select 1 from ${paginasWiki} p where p.user_id = ${userId}::uuid and p.nota_id = ${notas.id})`));
+        .where(and(notaAtiva, sql`not exists (select 1 from ${paginasWiki} p where p.user_id = ${userId}::uuid and p.nota_id = ${notas.id})`));
       return contagem;
     },
     async reservar(trabalho, quantidade, teto) {
@@ -147,7 +149,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
       await transacao(async (tx) => {
         await exigirPosse(tx, trabalho);
         const [origem] = await tx.select({ revisao: notas.revisao }).from(notas)
-          .where(and(eq(notas.userId, userId), sql`${notas.id} = ${trabalho.notaId}::bigint`)).for("share");
+          .where(and(notaAtiva, sql`${notas.id} = ${trabalho.notaId}::bigint`)).for("share");
         if (!origem || origem.revisao !== trabalho.revisao) throw new ErroWiki("Origem superada.", 409);
         const publicadas: { id: string; revisao: number }[] = [];
         for (const p of publicacoes) {
@@ -159,7 +161,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
           if (existente && (existente.protegida || existente.pausada)) throw new ErroWiki("O neurônio foi protegido ou pausado durante a leitura.", 409);
           if (existente && existente.id !== p.alvo?.id) throw new ErroWiki("Conceito protegido ou existente.", 422);
           const id = await publicar(tx, p);
-          const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`));
+          const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${id}::bigint`));
           const origens = Object.fromEntries(p.fontes.map((f) => [f.id, f.revisao]));
           await tx.insert(conceitosWiki).values({ userId, notaId: sql`${id}::bigint`, ...p.conceito, origens, revisaoGerenciada: nota.revisao })
             // Republicar zera o diagnóstico, mas não a marca de releitura de um neurônio isolado: sem ela, cada republicação
@@ -222,7 +224,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async gerenciar(id, revisaoBase, gerenciada) {
       if (!idValido(id)) return "nao-encontrada";
       return transacao(async (tx) => {
-        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`)).for("update");
+        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${id}::bigint`)).for("update");
         const [conceito] = await tx.select({ origens: conceitosWiki.origens }).from(conceitosWiki)
           .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`));
         if (!nota || !conceito) return "nao-encontrada" as const;
@@ -230,7 +232,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
         await tx.update(conceitosWiki).set({ protegida: !gerenciada, revisaoGerenciada: nota.revisao })
           .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`));
         if (gerenciada) for (const raiz of Object.keys(conceito.origens)) {
-          const [origem] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${raiz}::bigint`));
+          const [origem] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${raiz}::bigint`));
           if (!origem) continue;
           await registrarAlteracaoWiki(tx, userId, raiz, origem.revisao);
           await tx.update(trabalhosWiki).set({ geracao: sql`${trabalhosWiki.geracao} + 1`, cursor: 0, estado: "pendente",
@@ -242,14 +244,14 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async pausar(id, revisaoBase, pausada) {
       if (!idValido(id)) return "nao-encontrada";
       return transacao(async (tx) => {
-        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`)).for("update");
+        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${id}::bigint`)).for("update");
         const [conceito] = await tx.select({ origens: conceitosWiki.origens, protegida: conceitosWiki.protegida }).from(conceitosWiki)
           .where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`));
         if (!nota || !conceito) return "nao-encontrada" as const;
         if (nota.revisao !== revisaoBase) return "conflito" as const;
         await tx.update(conceitosWiki).set({ pausada }).where(and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`));
         if (!pausada && !conceito.protegida) for (const raiz of Object.keys(conceito.origens).filter(idValido)) {
-          const [origem] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${raiz}::bigint`));
+          const [origem] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${raiz}::bigint`));
           if (!origem) continue;
           await registrarAlteracaoWiki(tx, userId, raiz, origem.revisao);
           await tx.update(trabalhosWiki).set({ geracao: sql`${trabalhosWiki.geracao} + 1`, cursor: 0, estado: "pendente", tentativas: 0,
@@ -276,7 +278,7 @@ export function criarFilaWikiDoBanco(userId: string, publicar: (tx: TransacaoWik
     async registrarDiagnostico(id, revisao, diagnostico) {
       if (!idValido(id)) return;
       await transacao(async (tx) => {
-        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(eq(notas.userId, userId), sql`${notas.id} = ${id}::bigint`)).for("share");
+        const [nota] = await tx.select({ revisao: notas.revisao }).from(notas).where(and(notaAtiva, sql`${notas.id} = ${id}::bigint`)).for("share");
         if (!nota || nota.revisao !== revisao) return;
         const filtro = and(eq(conceitosWiki.userId, userId), sql`${conceitosWiki.notaId} = ${id}::bigint`);
         const [c] = await tx.select({ diagnostico: conceitosWiki.diagnostico }).from(conceitosWiki).where(filtro).for("update");

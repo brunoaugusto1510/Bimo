@@ -130,7 +130,7 @@ beforeAll(async () => {
     create table versoes_nota (id bigint generated always as identity primary key, nota_id bigint references notas(id), user_id uuid not null,
       titulo text not null, conteudo text not null, pasta text, tags text[], criado_por text not null, criado_por_ferramenta text,
       sessao_aberta boolean not null default false, versionado_em timestamptz not null default now());`);
-  for (const f of ["0007_wiki_viva", "0008_wiki_automatica", "0009_wiki_ultimo_erro", "0010_wiki_estrutura", "0011_wiki_observabilidade"]) await pg.exec(await readFile(`drizzle/${f}.sql`, "utf8"));
+  for (const f of ["0007_wiki_viva", "0008_wiki_automatica", "0009_wiki_ultimo_erro", "0010_wiki_estrutura", "0011_wiki_observabilidade", "0013_lixeira"]) await pg.exec(await readFile(`drizzle/${f}.sql`, "utf8"));
 }, 120_000);
 afterAll(async () => { await pg?.close(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 

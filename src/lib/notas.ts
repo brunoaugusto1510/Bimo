@@ -24,7 +24,7 @@ import { registrarAlteracaoWiki } from "./wiki/eventos-banco";
  * aplicação — por isso as leituras abaixo usam projeção explícita em vez de
  * `db.select()` genérico.
  */
-export type Nota = Omit<typeof notas.$inferSelect, "vetorBusca">;
+export type Nota = Omit<typeof notas.$inferSelect, "vetorBusca" | "removidaEm">;
 
 const colunasDaNota = {
   id: notas.id,
@@ -131,7 +131,7 @@ export async function atualizarNota(
     const [linha] = await tx
       .update(notas)
       .set(valores)
-      .where(and(eq(notas.id, id), eq(notas.userId, userId)))
+      .where(and(eq(notas.id, id), eq(notas.userId, userId), sql`${notas.removidaEm} is null`))
       .returning(colunasDaNota);
 
     if (!linha) {
@@ -165,7 +165,7 @@ export async function obterNota(userId: string, id: number): Promise<Nota | unde
   const [linha] = await db
     .select(colunasDaNota)
     .from(notas)
-    .where(and(eq(notas.id, id), eq(notas.userId, userId)));
+    .where(and(eq(notas.id, id), eq(notas.userId, userId), sql`${notas.removidaEm} is null`));
   return linha;
 }
 
@@ -174,6 +174,6 @@ export async function listarNotas(userId: string): Promise<Nota[]> {
   return db
     .select(colunasDaNota)
     .from(notas)
-    .where(eq(notas.userId, userId))
+    .where(and(eq(notas.userId, userId), sql`${notas.removidaEm} is null`))
     .orderBy(desc(notas.criadoEm));
 }

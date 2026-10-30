@@ -10,4 +10,7 @@ it("declara as seis ferramentas com schemas estritos e campos opcionais anuláve
   }
   expect(ferramentasOpenAI[0].parameters.properties.limite).toMatchObject({ type: ["integer", "null"] });
   expect(ferramentasOpenAI[1].parameters.properties.pasta).toMatchObject({ type: ["string", "null"] });
+  expect(ferramentasOpenAI[0].parameters.properties.consultas).toMatchObject({
+    type: ["array", "null"], maxItems: 4, items: { type: "string", minLength: 1, maxLength: 160 },
+  });
 });
