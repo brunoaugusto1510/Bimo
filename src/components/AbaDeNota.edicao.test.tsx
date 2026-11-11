@@ -16,6 +16,23 @@ beforeEach(() => {
   mocks.recarregar.mockClear(); mocks.tags.mockReset().mockResolvedValue([{ nome: "estudo", quantidade: 2 }]);
 });
 afterEach(() => vi.useRealTimers());
+it("abre a edição só com título e texto; propriedades ficam no menu e Escape devolve o foco", async () => {
+ render(<AbaDeNota aba={aba} {...props} />);
+ expect(screen.getByRole("textbox", { name: "Título da nota" })).toBeInTheDocument();
+ expect(screen.getByRole("textbox", { name: /Texto da nota/ })).toBeInTheDocument();
+ expect(screen.queryByRole("region", { name: "Propriedades" })).not.toBeInTheDocument();
+ expect(screen.queryByRole("region", { name: "Estrutura" })).not.toBeInTheDocument();
+ expect(screen.queryByRole("button", { name: "Continuar" })).not.toBeInTheDocument();
+ expect(screen.queryByRole("button", { name: "Salvar agora" })).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+ fireEvent.click(screen.getByRole("menuitem", { name: "Propriedades da nota" }));
+ const dialogo = screen.getByRole("dialog", { name: "Propriedades da nota" });
+ expect(screen.getByRole("combobox", { name: "Pasta" })).toBeInTheDocument();
+ fireEvent.keyDown(dialogo, { key: "Escape" });
+ expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+ expect(screen.getByRole("button", { name: "Mais opções" })).toHaveFocus();
+ await act(async () => {});
+});
 it("digitar salva após 3s, anuncia status e refaz ligações; Leitura mantém texto", async () => {
   const { rerender } = render(<AbaDeNota aba={aba} {...props} />);
   fireEvent.change(screen.getByRole("textbox", { name: /Texto da nota/ }), { target: { value: "novo texto" } });
@@ -129,6 +146,8 @@ it("em Edição, mover a nota de pasta salva como checkpoint, registra a nota e 
  mocks.salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, pasta: "Ideias", revisao: 2 }, notasReescritas: 2 });
  const registrar = vi.fn();
  render(<AbaDeNota aba={aba} {...props} notas={new Map([["9", { id: "9", titulo: "Outra", pasta: "Ideias", tags: [] }]])} aoRenomear={registrar} />);
+ fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+ fireEvent.click(screen.getByRole("menuitem", { name: "Propriedades da nota" }));
  const campo = screen.getByRole("combobox", { name: "Pasta" });
  expect(campo).toHaveValue("Raiz");
  campo.focus(); fireEvent.change(campo, { target: { value: "Ideias" } });
@@ -141,6 +160,8 @@ it("em Edição, adicionar uma tag salva só as tags e sugere as de outras notas
  mocks.salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, tags: ["estudo"], revisao: 2 } });
  const { container } = render(<AbaDeNota aba={aba} {...props} />);
  await act(async () => {});
+ fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+ fireEvent.click(screen.getByRole("menuitem", { name: "Propriedades da nota" }));
  expect([...container.querySelectorAll("datalist option")].map((o) => o.getAttribute("value"))).toContain("estudo");
  const campo = screen.getByRole("combobox", { name: "Adicionar tag" });
  fireEvent.change(campo, { target: { value: "#estudo" } });
@@ -151,6 +172,8 @@ it("em Edição, adicionar uma tag salva só as tags e sugere as de outras notas
 it("depois de mover, o caminho da nota mostra a pasta nova", async () => {
  mocks.salvar.mockResolvedValueOnce({ tipo: "ok", nota: { ...nota, pasta: "Ideias", revisao: 2 }, notasReescritas: 0 });
  render(<AbaDeNota aba={aba} {...props} />);
+ fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+ fireEvent.click(screen.getByRole("menuitem", { name: "Propriedades da nota" }));
  const campo = screen.getByRole("combobox", { name: "Pasta" });
  campo.focus(); fireEvent.change(campo, { target: { value: "Ideias" } });
  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Mover" })); });
@@ -158,10 +181,15 @@ it("depois de mover, o caminho da nota mostra a pasta nova", async () => {
 });
 it("ao navegar para outra nota na mesma aba, pasta e tags recomeçam do zero", async () => {
  const { rerender } = render(<AbaDeNota aba={aba} {...props} />);
+ fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+ fireEvent.click(screen.getByRole("menuitem", { name: "Propriedades da nota" }));
  fireEvent.change(screen.getByRole("combobox", { name: "Pasta" }), { target: { value: "Rascunho" } });
  fireEvent.change(screen.getByRole("combobox", { name: "Adicionar tag" }), { target: { value: "pendente" } });
  rerender(<AbaDeNota aba={{ ...aba, historico: { pilha: ["1", "2"], indice: 1 } }} {...props} />);
  await act(async () => {});
+ expect(screen.queryByRole("dialog", { name: "Propriedades da nota" })).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+ fireEvent.click(screen.getByRole("menuitem", { name: "Propriedades da nota" }));
  expect(screen.getByRole("combobox", { name: "Pasta" })).toHaveValue("Raiz");
  expect(screen.getByRole("combobox", { name: "Adicionar tag" })).toHaveValue("");
 });

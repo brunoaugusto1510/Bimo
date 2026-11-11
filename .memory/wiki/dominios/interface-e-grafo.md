@@ -49,3 +49,20 @@ Relacionadas: [notas](notas-e-autenticacao.md), [agente](agente-e-ingestao.md) e
 - O alto do [chat](../../src/components/Chat.tsx) tem "Histórico" e "Novo chat" ([HistoricoDeConversas](../../src/components/HistoricoDeConversas.tsx)), só quando o `Chat` recebe a prop `conversas`; `PaginaPrincipal` passa o cliente real. O `Chat` continua uma árvore estável: novo chat/abrir só trocam o estado interno.
 - "Novo chat" fica desabilitado com a conversa vazia ou enquanto o Bimo responde; abrir conversa também espera a resposta terminar.
 - Gravações em fila única (ordem das mensagens); o id da conversa nasce no cliente. Detalhes de dados e rotas em [agente e ingestão](agente-e-ingestao.md) e no [log](../log.md); migração `0012_conversas` precisa ser aplicada antes de o histórico funcionar com `NOTAS_FONTE=banco`.
+
+## 11/11/2026 — interface da lixeira refinada
+
+- Tela existente em Lixeira.tsx recebeu busca por título/pasta sem acentos, contagem, cartões com pasta/data, botão de restaurar destacado, carregamento visual, estado vazio, busca vazia e mensagens de erro/sucesso. Texto esclarece preservação do histórico e ausência de descarte automático. Mantido Dialogo com Escape/foco e bloqueio durante restauração.
+- Menu da nota destaca Mover para a lixeira em cor de erro e separado das demais ações. Nenhuma mudança no contrato ou exclusão permanente.
+- Verificação: 29 testes em quatro arquivos passam (Lixeira, AbaDeNota.lixeira, BarraDeNavegacao, BarraLateral). Nova cobertura funcional da busca e limpar filtro. Página autenticada local HTTP 200 após alteração. Sem excluir notas reais.
+- Checagem global tsc encontra referência gerada obsoleta em .next/types/validator.ts à rota [...caminho] e dependência @electric-sql/pglite ausente em três testes da Wiki; nenhum erro reportado nos componentes alterados. Sem revisão visual automatizada nesta sessão.
+- Próximo passo: revisar a tela pelo botão Lixeira no rodapé da barra lateral. Código apenas local, sem commit/deploy.
+
+## 11/11/2026 — editor mínimo implementado (opção 1)
+
+- Usuário escolheu a primeira proposta e pediu DESIGN.md como base. Criação e edição usam a coluna central de título e texto sem bordas; título azul 26px, corpo 15px desktop/16px mobile, fonte do sistema e tokens existentes. Navegação das notas preservada.
+- AbaDeNota deixa de mostrar painel lateral/contagens durante edição. Propriedades editáveis (pasta/tags) passam ao diálogo em Mais opções; Salvar agora também vai ao menu, mantendo Ctrl+S e salvamento automático. Barra permanente do Bimo oculta; comandos por / continuam disponíveis. Recuperação, conflitos e erros mantêm avisos. Leitura preserva propriedades e conexões.
+- VisaoDaNota evita extrair tags quando propriedades estão fechadas; AbaDeNota só extrai estrutura em Leitura, reduzindo trabalho durante digitação. Sem alteração no banco ou no contrato de notas.
+- Verificação: 130 testes em dez arquivos passaram; após os últimos ajustes, 44 testes relevantes repetidos passam. Lint dos sete arquivos alterados limpo. tsc global segue com problemas preexistentes de referência gerada a rota removida em .next e @electric-sql/pglite ausente em três testes. Há avisos act/NaN de jsdom em testes existentes; nenhum erro no console do navegador observado.
+- Revisão autenticada no IAB de edição de notas existentes, menu, propriedades e Escape; temas claro/escuro em 1488×1058 e mobile 390×844. Nenhuma nota real criada/editada/apagada durante revisão. Tema automático e viewport padrão restaurados. design-qa.md registra comparação e resultado passed. Evidências em C:/Users/bruno/.codex/visualizations/2026/11/11/01a1cc50-bbb8-7f90-9fab-a7f90940d703/ (editor-desktop-claro.png, editor-desktop.png, editor-mobile.png, editor-comparacao.png).
+- Código apenas local, sem commit/deploy. Alterações anteriores da lixeira, AGENTS e MemWiki preservadas. Próximo passo: usuário revisar a edição local; publicação depende de pedido posterior.

@@ -68,6 +68,7 @@ export default function AbaDeNota({
   aoMudarPendencia, focoPedido, aoConsumirFoco, confirmarTituloAoSair = false, aoSairDoTitulo, aoRenomear, escritaDisponivel,
 }: Props) {
   const id = idAtual(aba);
+  const [propriedadesDaNota, abrirPropriedades] = useState<string | null>(null);
   const pendenciaAtual = useRef(false);
   const tituloPendente = useRef(false);
   // O contador faz o leitor de tela repetir o aviso a cada tentativa, mesmo com o mesmo texto.
@@ -147,7 +148,7 @@ export default function AbaDeNota({
   const carregada = nota.dados !== undefined;
 
   const conteudo = edicao.texto;
-  const estrutura = useMemo(() => extrairTitulos(conteudo), [conteudo]);
+  const estrutura = useMemo(() => aba.modo === "leitura" ? extrairTitulos(conteudo) : [], [conteudo, aba.modo]);
   const entradas = ligacoes.dados?.ligacoes.entrada ?? [];
   const saidas = ligacoes.dados?.ligacoes.saida ?? [];
   const sugestao = ligacoes.dados?.mencoesSemLigacao.find((mencao) => !sugestoesDescartadas.has(mencao.id)) ?? null;
@@ -251,11 +252,12 @@ export default function AbaDeNota({
       </p>
 
       {/*
-        Em tela larga: a nota e o painel lateral rolam cada um no seu lado. Em tela estreita: tudo
+        A edição ocupa a largura disponível. Na leitura, nota e painel lateral rolam separados
+        em tela larga. Em tela estreita, tudo
         é uma coluna só que rola junto — a navegação fica grudada no topo e o painel (ligações,
         estrutura) vem depois da nota, em vez de sumir.
       */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className={`grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden ${editandoPropriedades ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]"}`}>
         <div ref={navegacao} className="sticky top-0 z-10 bg-painel lg:static">
           <BarraDeNavegacao
             pasta={pasta}
@@ -274,6 +276,8 @@ export default function AbaDeNota({
             aoCopiarLigacao={copiarLigacao}
             aoAbrirEmNovaAba={() => aoAbrirNota(id, { novaAba: true })}
             aoPerguntarAoBimo={() => aoPerguntarAoBimo(id)}
+            aoAbrirPropriedades={editandoPropriedades ? () => abrirPropriedades(id) : undefined}
+            aoSalvar={editandoPropriedades && !edicao.ocupado && !edicao.rascunhoRecuperado && !["conflito", "recusado"].includes(edicao.estado) ? () => { void salvarAgora(); } : undefined}
             aoMoverParaLixeira={() => {
               if (edicao.ocupado) { avisarSobreOTitulo("Aguarde a atualização da nota terminar."); return; }
               if (tituloPendente.current) { avisarSobreOTitulo("Confirme o título com Enter ou desfaça com Esc antes de mover a nota."); focarTitulo(); return; }
@@ -332,6 +336,7 @@ export default function AbaDeNota({
           )}
 
           <ControlesDaEdicao conflito={edicao.estado === "conflito"} recuperado={edicao.rascunhoRecuperado}
+            discreto
             recusado={edicao.estado === "recusado"} mensagem={edicao.mensagem} idAviso={idRecuperacao} ativo={ativa}
             editando={ativa && escrita && aba.modo === "edicao"} salvar={salvarAgora}
             resolver={edicao.resolverConflito} aoResolver={() => {
@@ -343,6 +348,8 @@ export default function AbaDeNota({
           {nota.dados && (
             <VisaoDaNota
               ref={artigo}
+              propriedadesAbertas={propriedadesDaNota === id}
+              aoFecharPropriedades={() => abrirPropriedades(null)}
               nota={{ ...(edicao.nota ?? nota.dados.nota), conteudo }}
               campoDeTitulo={escrita && aba.modo === "edicao" ? <CampoDeTitulo key={id} titulo={titulo} confirmarAoSair={confirmarTituloAoSair}
                 aoMudarPendencia={(pendente) => { tituloPendente.current = pendente; if (!pendente) definirAvisoDeTitulo((atual) => ({ ...atual, texto: "" })); }}
@@ -366,12 +373,12 @@ export default function AbaDeNota({
               aoAbrirNota={aoAbrirNota}
               aoCriarNota={aoCriarNota}
             >
-              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerir={(gatilho) => sugerirParaGatilho(gatilho, { notas: listaDeNotas, idAtual: id, pastaAtual: pasta, resolver, tagsDasNotas: sugestoesDeTags, tagsDaNota: edicao.nota?.tags ?? [], comBimo: true })} rascunhoDoBimo texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
+              {ativa && escrita && aba.modo === "edicao" ? <EditorDeNota ocupado={edicao.ocupado} sugerir={(gatilho) => sugerirParaGatilho(gatilho, { notas: listaDeNotas, idAtual: id, pastaAtual: pasta, resolver, tagsDasNotas: sugestoesDeTags, tagsDaNota: edicao.nota?.tags ?? [], comBimo: true })} rascunhoDoBimo mostrarBarraDoBimo={false} texto={conteudo} titulo={titulo} focarAoEntrar={focarAoEntrar} descricaoRecuperacao={idRecuperacao} aguardandoRecuperacao={edicao.rascunhoRecuperado} aoMudar={edicao.aoMudar} forcar={salvarAgora} /> : undefined}
             </VisaoDaNota>
           )}
         </div>
 
-        <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-borda">
+        {!editandoPropriedades && <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-borda">
           <PainelLateralDaNota
             estado={ligacoes.estado}
             sugestao={sugestao ? { id: sugestao.id, titulo: sugestao.titulo } : null}
@@ -388,12 +395,12 @@ export default function AbaDeNota({
             }}
             aoPerguntarAoBimo={() => aoPerguntarAoBimo(id)}
           />
-        </div>
+        </div>}
       </div>
 
       <BarraDeStatus
         estado={escrita ? edicao.estado : undefined} anuncioManual={anuncioManual}
-        itens={[
+        itens={editandoPropriedades ? [] : [
           ...(conexoes === null ? [] : [`${formatar(conexoes)} ${conexoes === 1 ? "conexão" : "conexões"}`]),
           ...(carregada ? [`${formatar(contarPalavras(conteudo))} palavras`, `${formatar(conteudo.length)} caracteres`] : []),
         ]}

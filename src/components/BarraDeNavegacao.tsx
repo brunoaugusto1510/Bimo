@@ -17,6 +17,8 @@ type Props = {
   aoAbrirEmNovaAba(): void;
   aoPerguntarAoBimo(): void;
   aoMoverParaLixeira?: () => void;
+  aoAbrirPropriedades?: () => void;
+  aoSalvar?: () => void;
 };
 
 const interacao = "min-h-10 rounded-full transition-[color,background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96] aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
@@ -28,6 +30,8 @@ export default function BarraDeNavegacao(props: Props) {
   const menu = useRef<HTMLDivElement>(null);
   const id = useId();
   const opcoes = [
+    ...(props.aoSalvar ? [{ rotulo: "Salvar agora", acao: props.aoSalvar }] : []),
+    ...(props.aoAbrirPropriedades ? [{ rotulo: "Propriedades da nota", acao: props.aoAbrirPropriedades }] : []),
     { rotulo: "Abrir em nova aba", acao: props.aoAbrirEmNovaAba },
     { rotulo: "Copiar ligação", acao: props.aoCopiarLigacao },
     { rotulo: "Perguntar ao Bimo", acao: props.aoPerguntarAoBimo },
@@ -67,7 +71,7 @@ export default function BarraDeNavegacao(props: Props) {
         const destinos: Record<string, number> = { ArrowDown: (atual + 1) % itens.length, ArrowUp: (atual - 1 + itens.length) % itens.length, Home: 0, End: itens.length - 1 };
         if (evento.key in destinos) { evento.preventDefault(); itens[destinos[evento.key]]?.focus(); }
       }} className="absolute top-full right-2 z-20 min-w-52 rounded-bloco border border-borda bg-painel p-1 shadow-foco motion-safe:animate-entrada">
-        {opcoes.map(({ rotulo, acao }) => <button key={rotulo} type="button" role="menuitem" tabIndex={-1} onClick={() => { fecharMenu(); acao(); }} className={`block w-full px-3 text-left ${interacao}`}>{rotulo}</button>)}
+        {opcoes.map(({ rotulo, acao }) => <button key={rotulo} type="button" role="menuitem" tabIndex={-1} onClick={() => { fecharMenu(); acao(); }} className={`block w-full px-3 text-left ${interacao} ${rotulo === "Mover para a lixeira" ? "mt-1 border-t border-borda text-erro" : ""}`}>{rotulo}</button>)}
       </div>}
     </div>
   );

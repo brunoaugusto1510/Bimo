@@ -2,7 +2,11 @@
 
 *This file is read first by agents to get immediate context. Agents must update this at the end of every session.*
 
-## Estado atual — 26/10/2026
+## Estado atual — 10/11/2026
+
+- **10/11, resumo para LinkedIn:** inventário e texto de publicação preparados a partir do código em `feat/historico-de-conversas`, HEAD `959cbdf`, da documentação e da gravação anterior. O recorte distingue funções implementadas, ingestão no backend, protótipo mobile com serviços simulados e planos de memória pessoal/multiusuário. Estado do deploy atual não verificado. Próximo passo: revisão da publicação pelo usuário.
+
+- **09/11, mídia para LinkedIn:** dois MP4 (18,5 s e 6,6 s) e quatro PNG da interface web em [Bimo - Midia para LinkedIn](C:/Users/bruno/.codex/visualizations/2026/11/09/01a1c087-1ef0-7702-a563-0cbc12729d2a/Bimo%20-%20Midia%20para%20LinkedIn). A passagem **Notas → Bimo** produz a forma de cérebro. A busca **Ctrl+O** mostra título e conteúdo e abre “Atlas das marés”. Captura em cópia local com `NOTAS_FONTE=memoria`, 126 notas e quatro neurônios fictícios; servidor encerrado. Próximo passo: a pessoa pode revisar os arquivos para a publicação.
 
 - **30/10, lixeira com restauração implementada localmente:** usuário escolheu lixeira após o diagnóstico da falta de exclusão. Menu da nota confirma e salva pendências antes de mover; rodapé da barra lateral abre a lixeira com restauração. Preserva ID, conteúdo e histórico; colisão de título recusa restauração sem sobrescrever. Wiki deixa de ler fontes na lixeira e invalida posses em voo. Checkout observado: `feat/historico-de-conversas`, HEAD `6d108f5`, alterações anteriores preservadas. **Migração `0013_lixeira.sql` testada somente em PGlite, não aplicada ao banco real: aplicar antes de executar/publicar este código com banco.** Tipos/lint e testes focados passam; [evidências e resultado da regressão](verificacoes/2026-10-30-lixeira.md). Sem commit/deploy. Próximo passo: revisar o diff e aplicar/testar a migração no ambiente persistente quando solicitado.
 
@@ -98,3 +102,59 @@
 - Para continuar uma funcionalidade, leia o documento correspondente no índice e confira o código atual antes de reutilizar afirmações históricas.
 - Alinhar a descrição operacional dos limites do chat após conferir os valores aprovados no agente e na rota; preservar relatórios históricos.
 - Registre novos aprendizados nas páginas de domínio e mantenha `index.md`, `hot.md` e `log.md` atualizados. Diferencie leitura de código, teste local e evidência de produção.
+
+## 11/11/2026 — diagnóstico das credenciais locais
+
+- Pedido: sincronizar credenciais do Vercel para resolver a entrada local; usuário autorizou consultar Supabase também.
+- Vercel `bimo` identificado; variáveis sensíveis não retornam valores, inclusive na consulta individual. Nenhuma credencial de produção foi recuperada ou alterada.
+- Credenciais existentes no `.env` verificadas por conexão real (`SELECT 1`) e consulta administrativa do usuário configurado: ambas OK. Criado `.env.local` ignorado pelo Git com sete variáveis existentes (banco/runtime/migrações, Supabase, dono, senha e sessão). Segredos não registrados na wiki.
+- Servidor já existente em localhost:3000 recarregou `.env.local`; página autenticada ainda mostra erro. Causa confirmada por SELECT sem dados: Postgres 42703, coluna `notas.removida_em` ausente. A mensagem genérica lista DATABASE_URL/USER_ID_PADRAO mesmo em falha de consulta.
+- Próximo passo: obter autorização para aplicar `drizzle/0013_lixeira.sql` no banco compartilhado com produção; revisar histórico/índice e aplicar transacionalmente, depois validar a página. Nenhuma migração aplicada nesta sessão. OpenAI/Gemini continuam ausentes no arquivo local original e suas chaves sensíveis não podem ser recuperadas do Vercel.
+
+## 11/11/2026 — migração da lixeira aplicada e local validado
+
+- Usuário autorizou aplicar a 0013 após confirmar que ela habilita exclusão/restauração de notas.
+- Pré-verificação: 14 registros Drizzle, último timestamp da 0012; somente 0013 pendente; coluna removida_em ausente e índice antigo sem predicado. Hash atual do arquivo 0012 difere do último hash registrado (divergência preexistente; migração antiga não foi reaplicada nem histórico corrigido).
+- Aplicada somente `drizzle/0013_lixeira.sql` pela conexão session pooler, em uma transação com lock_timeout de 5 s, statement_timeout de 30 s e bloqueio do histórico; inserido hash/timestamp calculados pelo leitor de migrações do Drizzle. Histórico agora tem 15 registros.
+- Confirmados coluna nullable timestamptz `notas.removida_em` e índice único parcial `WHERE removida_em IS NULL`. Nenhuma nota criada, excluída ou editada; nenhum deploy.
+- Validação real da página autenticada em http://localhost:3000: HTTP 200, interface carregada e ausência das mensagens de erro de configuração/carregamento. A pendência da 0013 citada nas entradas históricas acima está resolvida.
+- Próximo passo: usuário atualizar a página; teste interativo de mover/restaurar uma nota pode ser feito com nota descartável quando desejado. Chaves locais OpenAI/Gemini continuam fora desta correção.
+
+## 11/11/2026 — cérebro local habilitado
+
+- Usuário reportou ausência de neurônios e mensagem de cérebro não habilitado. `.env.local` não tinha WIKI_VIVA_ATIVA; configurado `WIKI_VIVA_ATIVA=1`.
+- Reload do env não bastou: repositório global é cacheado por fonte/dono, não pelas flags. Reiniciado somente o Next local deste checkout para recriar o repositório.
+- Verificação autenticada real: GET /api/wiki/cerebro HTTP 200, 58 neurônios e 365 sinapses; GET /api/grafo HTTP 200, 59 nós marcados como neurônio (inclui registro histórico consolidado excluído pelo resumo do cérebro); página principal HTTP 200 sem erro.
+- Nenhum dado remoto alterado. Automação não habilitada; OPENAI_API_KEY ausente impede geração/manutenção local. Neurônios existentes estão disponíveis. Próximo passo: atualizar navegador; para geração local, configurar chave OpenAI válida e flags/executor apropriados.
+
+## 11/11/2026 — interface da lixeira refinada
+
+- Tela existente em Lixeira.tsx recebeu busca por título/pasta sem acentos, contagem, cartões com pasta/data, botão de restaurar destacado, carregamento visual, estado vazio, busca vazia e mensagens de erro/sucesso. Texto esclarece preservação do histórico e ausência de descarte automático. Mantido Dialogo com Escape/foco e bloqueio durante restauração.
+- Menu da nota destaca Mover para a lixeira em cor de erro e separado das demais ações. Nenhuma mudança no contrato ou exclusão permanente.
+- Verificação: 29 testes em quatro arquivos passam (Lixeira, AbaDeNota.lixeira, BarraDeNavegacao, BarraLateral). Nova cobertura funcional da busca e limpar filtro. Página autenticada local HTTP 200 após alteração. Sem excluir notas reais.
+- Checagem global tsc encontra referência gerada obsoleta em .next/types/validator.ts à rota [...caminho] e dependência @electric-sql/pglite ausente em três testes da Wiki; nenhum erro reportado nos componentes alterados. Sem revisão visual automatizada nesta sessão.
+- Próximo passo: revisar a tela pelo botão Lixeira no rodapé da barra lateral. Código apenas local, sem commit/deploy.
+
+## 11/11/2026 — propostas para editor mínimo de notas
+
+- Usuário invocou Product Design e pediu criação/edição como Obsidian: apenas título e texto livre, limpa e rápida.
+- Lidos EditorDeNota, VisaoDaNota, AbaDeNota e tokens de globals.css. Hoje propriedades aparecem entre título/texto e painel lateral ocupa coluna própria.
+- Três propostas visuais geradas, na ordem exibida: 1 sidebar de notas com coluna central; 2 foco total com navegação recolhida; 3 trilho compacto com aba e texto mais próximo do topo. Imagens em C:/Users/bruno/.codex/generated_images/01a1cc50-bbb8-7f90-9fab-a7f90940d703/ (exec-698c0056-7a4a-422c-8170-1ca01eff1bdd.png; exec-9c4bb4b4-9322-4e96-afac-89d7552a23e8.png; exec-54218726-4a8d-45aa-a654-61c53266dd45.png).
+- Nenhum componente alterado. Fluxo ideate do plugin exige escolha antes de implementação. Próximo passo: receber escolha 1/2/3 e implementar no projeto existente, preservando salvamento, recuperação e atalhos.
+- Prévia IAB abriu /login, sem inspeção visual do editor atual. Propostas baseadas no código/tokens; sem screenshot anexado. Preflight Python indisponível; arquivo padrão de contexto do Product Design não existe. Alterações preexistentes preservadas.
+
+## 11/11/2026 — editor mínimo implementado (opção 1)
+
+- Usuário escolheu a primeira proposta e pediu DESIGN.md como base. Criação e edição usam a coluna central de título e texto sem bordas; título azul 26px, corpo 15px desktop/16px mobile, fonte do sistema e tokens existentes. Navegação das notas preservada.
+- AbaDeNota deixa de mostrar painel lateral/contagens durante edição. Propriedades editáveis (pasta/tags) passam ao diálogo em Mais opções; Salvar agora também vai ao menu, mantendo Ctrl+S e salvamento automático. Barra permanente do Bimo oculta; comandos por / continuam disponíveis. Recuperação, conflitos e erros mantêm avisos. Leitura preserva propriedades e conexões.
+- VisaoDaNota evita extrair tags quando propriedades estão fechadas; AbaDeNota só extrai estrutura em Leitura, reduzindo trabalho durante digitação. Sem alteração no banco ou no contrato de notas.
+- Verificação: 130 testes em dez arquivos passaram; após os últimos ajustes, 44 testes relevantes repetidos passam. Lint dos sete arquivos alterados limpo. tsc global segue com problemas preexistentes de referência gerada a rota removida em .next e @electric-sql/pglite ausente em três testes. Há avisos act/NaN de jsdom em testes existentes; nenhum erro no console do navegador observado.
+- Revisão autenticada no IAB de edição de notas existentes, menu, propriedades e Escape; temas claro/escuro em 1488×1058 e mobile 390×844. Nenhuma nota real criada/editada/apagada durante revisão. Tema automático e viewport padrão restaurados. design-qa.md registra comparação e resultado passed. Evidências em C:/Users/bruno/.codex/visualizations/2026/11/11/01a1cc50-bbb8-7f90-9fab-a7f90940d703/ (editor-desktop-claro.png, editor-desktop.png, editor-mobile.png, editor-comparacao.png).
+- Código apenas local, sem commit/deploy. Alterações anteriores da lixeira, AGENTS e MemWiki preservadas. Próximo passo: usuário revisar a edição local; publicação depende de pedido posterior.
+
+## 11/11/2026 — consolidação das branches iniciada
+
+- Pedido explícito do usuário: reunir todas as pendências na main, incluindo alterações locais da sessão. Origin atualizado por fetch.
+- Inventário: main/origin/main em 9a50857; feat/historico-de-conversas em 959cbdf com três commits pendentes (conversas e lixeira). feature/Front tem apenas o merge a2d65f8 ainda não ancestral da main. Simulação git merge-tree com histórico retorna árvore 00e80e85, idêntica à HEAD: integração do merge antigo não altera arquivos.
+- Todas as demais refs locais/remotas já são ancestrais da main; não é necessário reaplicar mudanças antigas. Sem stashes. Um único worktree Git registrado; diretório .claude/worktrees/login-multiusuario é ponteiro histórico sem checkout Git independente, não uma branch pendente.
+- Próximo passo: registrar alterações locais do editor/lixeira/wiki/AGENTS, integrar histórico e Front preservando commits, verificar testes offline/tipagem/lint. Nenhum push ou deploy solicitado.

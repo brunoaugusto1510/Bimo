@@ -89,7 +89,7 @@ export default function CampoDeTitulo({ titulo, focar = false, confirmarAoSair =
     }
     void confirmar(false);
   }
-  return <div className="mb-4">
+  return <div className="mb-6">
     <input ref={campo} aria-label="Título da nota" aria-invalid={!!erro} aria-describedby={`${id}-dica${erro ? ` ${id}` : ""}`} aria-busy={salvando} readOnly={salvando}
       enterKeyHint="next" autoComplete="off"
       value={texto} onChange={(evento) => { cancelado.current = false; definirTexto(evento.target.value); aoMudarPendencia?.(evento.target.value !== titulo); }}
@@ -102,11 +102,11 @@ export default function CampoDeTitulo({ titulo, focar = false, confirmarAoSair =
           if (texto !== titulo) falar("Título restaurado");
           restaurar(); aoTexto();
         }
-      }} className="min-h-10 w-full rounded-bloco border border-borda bg-painel px-2 text-titulo-nota font-semibold text-destaque-texto focus-visible:border-destaque" />
+      }} className="min-h-10 w-full rounded-tag border-0 bg-transparent px-0 text-titulo-nota font-semibold text-destaque-texto outline-offset-4 focus-visible:outline-2 focus-visible:outline-destaque" />
     <span id={`${id}-dica`} className="sr-only">{confirmarAoSair
       ? "Enter confirma e vai ao texto. Esc desfaz. Ao sair, o título é confirmado."
       : "Enter confirma e vai ao texto. Esc desfaz. Ao sair sem confirmar, o título volta ao anterior."}</span>
-    <p id={id} role="alert" className="mt-2 text-meta text-erro"><span key={tentativa}>{erro}</span></p>
+    <p id={id} role="alert" className={erro ? "mt-2 text-meta text-erro" : "sr-only"}><span key={tentativa}>{erro}</span></p>
     <p role="status" className="sr-only"><span key={anuncio.id}>{anuncio.texto}</span></p>
   </div>;
 }

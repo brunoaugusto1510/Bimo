@@ -81,3 +81,6 @@ Fontes de navegação: [tipos](../../../src/lib/wiki/tipos.ts), [política edito
 Histórico e operação: [entrega consolidada](../documentacao/Bimo%20-%20Entrega%20Consolidada%20da%20Wiki%20Viva%20-%202026-10-26.md), [operação](../documentacao/Bimo%20-%20Wiki%20Viva%20-%20Operacao.md), [pendências](../documentacao/Bimo%20-%20Wiki%20Viva%20-%20Pendencias.md) e [referência histórica de Obsidian](../documentacao/Bimo%20-%20LLM%20Wiki%20-%20Funcionamento%20e%20Referencias%20Obsidian.md).
 
 Padrão de referência: o texto do LLM Wiki está em `.memory/.raw/` desde 27/10, resumido em [fonte: LLM Wiki](../fontes/llm-wiki-karpathy.md). A página lista onde a Wiki Viva diverge por desenho: ingestão sem conversa com a pessoa, nenhuma página de resumo por nota e metadados no banco em vez de frontmatter.
+
+### 11/11/2026 — ativação e cache local
+A leitura de neurônios requer WIKI_VIVA_ATIVA=1 mesmo com tabelas/dados existentes. O repositório global é cacheado por fonte/dono; ao mudar flags no env, reiniciar Next para recriar capacidades e invalidar o cache do serviço. Habilitar apenas a Wiki permite visualizar neurônios; manutenção exige também WIKI_AUTOMATICA_ATIVA=1 e chave OpenAI. Validação real local: cérebro 58 neurônios/365 sinapses, grafo 59 nós incluindo registro consolidado histórico.

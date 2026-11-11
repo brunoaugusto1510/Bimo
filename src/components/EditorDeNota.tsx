@@ -15,10 +15,10 @@ type Props = {
   /** As opções para o que foi digitado (`[[nota`, `#tag`, `/comando`); sem ela, o autocompletar fica desligado. */
   sugerir?: (gatilho: Gatilho) => Sugestao[];
   /** Mostra o "Bimo sugere" (Continuar, Resumir e Melhorar a seleção) e aceita o `/continuar`. */
-  rascunhoDoBimo?: boolean;
+  rascunhoDoBimo?: boolean; mostrarBarraDoBimo?: boolean;
   aoMudar(texto: string): void; forcar(opcoes: { checkpoint: boolean }): unknown;
 };
-export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false, descricaoRecuperacao, aoMudar, forcar, sugerir, rascunhoDoBimo = false, aguardandoRecuperacao = false, ocupado = false }: Props) {
+export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false, descricaoRecuperacao, aoMudar, forcar, sugerir, rascunhoDoBimo = false, mostrarBarraDoBimo = true, aguardandoRecuperacao = false, ocupado = false }: Props) {
   const campo = useRef<HTMLTextAreaElement>(null);
   const idOcupado = useId();
   const bloqueado = aguardandoRecuperacao || ocupado;
@@ -47,7 +47,7 @@ export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false
   return <>
     {/* Enquanto renomear ou mover a nota reescreve ligações o texto não aceita digitação: o aviso explica por quê. */}
     <p id={idOcupado} role="status" className={ocupado ? "mb-2 text-meta text-texto" : "sr-only"}>{ocupado ? "Atualizando a nota…" : ""}</p>
-    {rascunhoDoBimo && <BarraDoBimo desabilitado={bloqueado || rascunho.estado.tipo === "gerando"} aoPedir={(acao) => { void rascunho.pedir(acao); }} />}
+    {rascunhoDoBimo && mostrarBarraDoBimo && <BarraDoBimo desabilitado={bloqueado || rascunho.estado.tipo === "gerando"} aoPedir={(acao) => { void rascunho.pedir(acao); }} />}
     <textarea ref={campo} value={texto} maxLength={1_000_000} readOnly={aguardandoRecuperacao || ocupado} aria-busy={ocupado}
       aria-describedby={ocupado ? idOcupado : aguardandoRecuperacao ? descricaoRecuperacao : undefined}
       aria-autocomplete={sugerir ? "list" : undefined} aria-controls={sugestoes.aberto ? sugestoes.idLista : undefined}
@@ -61,7 +61,7 @@ export default function EditorDeNota({ texto, titulo = "", focarAoEntrar = false
         // Esc cancela o pedido em andamento (com a lista de sugestões fechada, que já tratou o Esc dela acima).
         if (evento.key === "Escape" && rascunho.estado.tipo === "gerando") { evento.preventDefault(); rascunho.cancelar(); return; }
         if (combinaAtalho(evento.nativeEvent, "mod+s")) { evento.preventDefault(); evento.stopPropagation(); if (!aguardandoRecuperacao) void forcar({ checkpoint: true }); }
-      }} className="block min-h-64 w-full resize-none overflow-hidden rounded-bloco border border-borda bg-painel p-2 text-base leading-relaxed text-texto outline-offset-2 [field-sizing:content] read-only:bg-painel-alt focus-visible:border-destaque md:text-corpo" />
+      }} className="block min-h-[50dvh] w-full resize-none overflow-hidden rounded-tag border-0 bg-transparent p-0 text-base leading-relaxed text-texto outline-none [field-sizing:content] read-only:cursor-wait md:text-corpo" />
     {sugestoes.aberto && <SugestoesDoEditor id={sugestoes.idLista} rotulo={rotuloDaLista(sugestoes.aberto.gatilho.tipo)} itens={sugestoes.aberto.sugestoes.map(paraItemDaLista)}
       indiceAtivo={sugestoes.aberto.indice} posicao={sugestoes.aberto.posicao} aoEscolher={sugestoes.escolher} />}
     <p role="status" className="sr-only"><span key={sugestoes.aviso.id}>{sugestoes.aviso.texto}</span></p>

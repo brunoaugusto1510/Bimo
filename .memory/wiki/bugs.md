@@ -27,3 +27,9 @@ Correção proposta: alinhar README e demais descrições operacionais com os li
 - A migração anterior corrigiu a referência da extração para `src/lib/extracao/index.ts`. Na checagem inicial desta ingestão, não havia link local quebrado na MemWiki.
 
 Fontes: [agente](../../src/lib/agente.ts), [README](../../README.md), [recuperação da wiki](../../src/lib/wiki/recuperacao.ts), [consulta da wiki](../../src/lib/wiki/consulta.ts), [serviços mobile](../../mobile/src/servicos/ProvedorDeServicos.tsx) e [relatório de ingestão/lint](verificacoes/2026-10-26-ingest-lint.md).
+## 11/11/2026 — tela genérica confunde falha SQL com credenciais
+ConfiguracaoNecessaria lista DATABASE_URL e USER_ID_PADRAO quando não recebe variaveis. A página captura falhas SQL genéricas e usa esse fallback. No servidor local, conexão e usuário foram validados; causa real: Postgres 42703 por notas.removida_em ausente, migração 0013 pendente. Configuração local preparada; banco não alterado. Próximo passo: autorização para migração no banco compartilhado e posterior validação da página.
+
+
+### Resolvido em 11/11/2026 — ausência de notas.removida_em
+Migração 0013 aplicada com autorização no banco compartilhado; coluna e índice parcial verificados. Página local autenticada voltou a carregar com HTTP 200. A apresentação genérica de erros em ConfiguracaoNecessaria não foi alterada.

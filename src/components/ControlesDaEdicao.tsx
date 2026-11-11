@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 import { useEffect, useId, useRef, useState } from "react";
 import type { EscolhaDaEdicao } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
 
-type Props = { conflito: boolean; recuperado: boolean; recusado?: boolean; mensagem?: string; editando?: boolean; ativo?: boolean; idAviso?: string; salvar?(): unknown; resolver(escolha: EscolhaDaEdicao): Promise<void>; aoResolver?(): void };
+type Props = { conflito: boolean; recuperado: boolean; recusado?: boolean; mensagem?: string; editando?: boolean; discreto?: boolean; ativo?: boolean; idAviso?: string; salvar?(): unknown; resolver(escolha: EscolhaDaEdicao): Promise<void>; aoResolver?(): void };
 const botao = "min-h-10 rounded-full border border-borda bg-painel px-4 text-controle font-semibold transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]";
-export default function ControlesDaEdicao({ conflito, recuperado, recusado = false, mensagem, editando = false, ativo = true, idAviso, salvar, resolver, aoResolver }: Props) {
+export default function ControlesDaEdicao({ conflito, recuperado, recusado = false, mensagem, editando = false, discreto = false, ativo = true, idAviso, salvar, resolver, aoResolver }: Props) {
   const [erro, definirErro] = useState<string | null>(null);
   const [ocupado, definirOcupado] = useState(false);
   const [anuncio, definirAnuncio] = useState("");
@@ -49,6 +49,6 @@ export default function ControlesDaEdicao({ conflito, recuperado, recusado = fal
         {erro && <p role="alert" className="mt-3">{erro}</p>}
       </div>
     </div>}
-    {editando && <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-3 px-5 pt-4 text-meta text-texto md:px-8"><button type="button" className={botao} aria-disabled={conflito || recuperado || recusado} onClick={() => { if (!conflito && !recuperado && !recusado) void salvar?.(); }}>Salvar agora</button><span>Ctrl+S / ⌘S para salvar agora</span></div>}
+    {editando && !discreto && <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-3 px-5 pt-4 text-meta text-texto md:px-8"><button type="button" className={botao} aria-disabled={conflito || recuperado || recusado} onClick={() => { if (!conflito && !recuperado && !recusado) void salvar?.(); }}>Salvar agora</button><span>Ctrl+S / ⌘S para salvar agora</span></div>}
   </>;
 }

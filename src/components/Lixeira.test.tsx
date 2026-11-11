@@ -3,6 +3,20 @@ import { afterEach, expect, it, vi } from "vitest";
 import Lixeira from "./Lixeira";
 const nota = { id: "1", titulo: "Minha nota", pasta: "Pasta", revisao: 2, tags: [], criadoEm: null, atualizadoEm: null, removidaEm: "2026-10-30T12:00:00Z" };
 afterEach(() => vi.unstubAllGlobals());
+it("busca por título ou pasta sem exigir acentos e permite limpar uma busca vazia", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ notas: [nota, { ...nota, id: "2", titulo: "Memórias", pasta: "Leituras" }] })));
+  render(<Lixeira aoFechar={vi.fn()} />);
+  const busca = await screen.findByRole("searchbox", { name: "Buscar na lixeira" });
+  fireEvent.change(busca, { target: { value: "memorias" } });
+  expect(screen.getByRole("button", { name: "Restaurar Memórias" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Restaurar Minha nota" })).not.toBeInTheDocument();
+  fireEvent.change(busca, { target: { value: "pasta" } });
+  expect(screen.getByRole("button", { name: "Restaurar Minha nota" })).toBeInTheDocument();
+  fireEvent.change(busca, { target: { value: "inexistente" } });
+  expect(screen.getByText("Nenhuma nota encontrada")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+  expect(screen.getAllByRole("button", { name: /^Restaurar / })).toHaveLength(2);
+});
 it("carrega, restaura, anuncia e permite fechar com Escape devolvendo foco", async () => {
   const fechar = vi.fn(), evento = vi.fn();
   const origem = document.createElement("button"); document.body.append(origem); origem.focus();
