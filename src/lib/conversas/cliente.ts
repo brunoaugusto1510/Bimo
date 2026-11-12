@@ -7,6 +7,7 @@ import type { Mensagem } from "../types";
 import type { ConversaCompleta, IdDeConversa, ResumoDeConversa } from "./tipos";
 
 export type ClienteDeConversas = {
+  atualizarContexto(id: IdDeConversa, notasDeContexto: string[]): Promise<void>;
   listar(): Promise<ResumoDeConversa[]>;
   abrir(id: IdDeConversa): Promise<ConversaCompleta>;
   acrescentar(id: IdDeConversa, mensagens: Mensagem[]): Promise<void>;
@@ -21,6 +22,11 @@ async function conferir(resposta: Response, falha: string): Promise<Response> {
 }
 
 export const clienteDeConversas: ClienteDeConversas = {
+  async atualizarContexto(id, notasDeContexto) {
+    await conferir(await fetch(`/api/conversas/${encodeURIComponent(id)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notasDeContexto }),
+    }), "Não consegui guardar as notas de contexto. Tente novamente.");
+  },
   async listar() {
     const resposta = await conferir(await fetch("/api/conversas"), "Não consegui carregar o histórico.");
     return ((await resposta.json()) as { conversas: ResumoDeConversa[] }).conversas;
@@ -37,7 +43,7 @@ export const clienteDeConversas: ClienteDeConversas = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mensagens: mensagens.map(({ id: idDaMensagem, papel, conteudo, ferramentas, fontes }) => ({ id: idDaMensagem, papel, conteudo, ferramentas, fontes })),
+          mensagens: mensagens.map(({ id: idDaMensagem, papel, conteudo, ferramentas, fontes, anexos }) => ({ id: idDaMensagem, papel, conteudo, ferramentas, fontes, anexos })),
         }),
       }),
       "Não consegui guardar a conversa no histórico.",

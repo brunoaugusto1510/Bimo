@@ -8,6 +8,9 @@ import { responder, type PassoDoServidor } from "@/lib/agente";
 import { ErroDeConfiguracao } from "@/lib/repositorio-de-notas/config";
 import { NOME_DO_COOKIE, criarTokenDeSessao } from "@/lib/sessao";
 import { POST } from "./route";
+import { obterRepositorio } from "@/lib/repositorio-de-notas";
+import { criarRepositorioEmMemoria } from "@/lib/repositorio-de-notas/memoria";
+vi.mock("@/lib/repositorio-de-notas", () => ({ obterRepositorio: vi.fn() }));
 
 const SEGREDO = "um-segredo-de-testes-com-mais-de-32-caracteres";
 
@@ -42,6 +45,40 @@ afterEach(() => {
 });
 
 describe("POST /api/chat", () => {
+  it("carrega anexos no servidor e devolve recibo JSON sem conteúdo no recibo", async () => {
+    const repo = criarRepositorioEmMemoria([{ titulo: "Plano", conteudo: "Conteúdo integral", pasta: "Projeto" }]);
+    const [nota] = await repo.listarResumos();
+    vi.mocked(obterRepositorio).mockResolvedValue(repo);
+    vi.mocked(responder).mockResolvedValue({ resposta: "Pronto", ferramentas: [] });
+    const res = await POST(requisicao({ mensagens: [{ papel: "usuario", conteudo: "Resuma" }], notasDeContexto: [nota.id] }));
+    expect(res.status).toBe(200);
+    expect(vi.mocked(responder).mock.calls[0][1]?.contextoDeNotas).toContain("Conteúdo integral");
+    expect((await res.json()).anexos).toEqual([{ id: nota.id, titulo: "Plano", pasta: "Projeto", revisao: nota.revisao }]);
+  });
+  it("envia evento de contexto antes do resultado NDJSON", async () => {
+    const repo = criarRepositorioEmMemoria([{ titulo: "Plano", conteudo: "texto" }]);
+    const [nota] = await repo.listarResumos();
+    vi.mocked(obterRepositorio).mockResolvedValue(repo);
+    vi.mocked(responder).mockResolvedValue({ resposta: "Pronto", ferramentas: [] });
+    const req = requisicao({ mensagens: [{ papel: "usuario", conteudo: "Resuma" }], notasDeContexto: [nota.id] });
+    req.headers.set("Accept", "application/x-ndjson");
+    const linhas = (await (await POST(req)).text()).trim().split("\n").map((linha) => JSON.parse(linha));
+    expect(linhas.map((l) => l.tipo)).toEqual(["contexto", "resposta"]);
+    expect(linhas[0].anexos[0].id).toBe(nota.id);
+  });
+  it("recusa anexos indisponíveis ou grandes antes de chamar o modelo", async () => {
+    const repo = criarRepositorioEmMemoria([{ titulo: "Grande", conteudo: "x".repeat(60_000) }]);
+    const [nota] = await repo.listarResumos();
+    vi.mocked(obterRepositorio).mockResolvedValue(repo);
+    const corpo = { mensagens: [{ papel: "usuario", conteudo: "Resuma" }] };
+    const inexistente = await POST(requisicao({ ...corpo, notasDeContexto: ["outra-pessoa"] }));
+    expect(inexistente.status).toBe(409);
+    expect((await inexistente.json()).indisponiveis).toEqual(["outra-pessoa"]);
+    expect((await POST(requisicao({ ...corpo, notasDeContexto: [nota.id] }))).status).toBe(413);
+    expect((await POST(requisicao({ ...corpo, notasDeContexto: [42] }))).status).toBe(400);
+    expect((await POST(requisicao({ ...corpo, notasDeContexto: null }))).status).toBe(400);
+    expect(responder).not.toHaveBeenCalled();
+  });
   it("chama responder() com o histórico e devolve 200 com o resultado", async () => {
     vi.mocked(responder).mockResolvedValue({ resposta: "Oi!", ferramentas: [] });
 

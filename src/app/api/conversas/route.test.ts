@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { esquecerRepositorioDeConversasEmCache } from "@/lib/conversas";
 import { NOME_DO_COOKIE, criarTokenDeSessao } from "@/lib/sessao";
 import { GET as listar } from "./route";
-import { DELETE as excluir, GET as abrir, POST as acrescentar } from "./[id]/route";
+import { DELETE as excluir, GET as abrir, POST as acrescentar, PATCH as atualizarContexto } from "./[id]/route";
 
 
 const SEGREDO = "um-segredo-de-testes-com-mais-de-32-caracteres";
@@ -39,6 +39,17 @@ afterEach(() => {
 });
 
 describe("/api/conversas", () => {
+  it("PATCH salva e limpa a seleção sem precisar enviar uma mensagem", async () => {
+    const id = randomUUID();
+    const pedido = (ids: unknown, autenticado = true, origem?: string) => new Request(`${URL_BASE}/${id}`, { method: "PATCH", headers: { ...cabecalhos(autenticado), ...(origem ? { origin: origem } : {}) }, body: JSON.stringify({ notasDeContexto: ids }) });
+    expect((await atualizarContexto(pedido(["n1"]), contexto(id))).status).toBe(204);
+    expect((await (await abrir(new Request(`${URL_BASE}/${id}`, { headers: cabecalhos() }), contexto(id))).json()).notasDeContexto).toEqual(["n1"]);
+    expect((await atualizarContexto(pedido([]), contexto(id))).status).toBe(204);
+    expect((await (await abrir(new Request(`${URL_BASE}/${id}`, { headers: cabecalhos() }), contexto(id))).json()).notasDeContexto).toEqual([]);
+    expect((await atualizarContexto(pedido([42]), contexto(id))).status).toBe(400);
+    expect((await atualizarContexto(pedido([], false), contexto(id))).status).toBe(401);
+    expect((await atualizarContexto(pedido([], true, "https://outro.example"), contexto(id))).status).toBe(403);
+  });
   it("guarda mensagens, lista a conversa e a reabre com as mensagens", async () => {
     const id = randomUUID();
     const primeira = pergunta();

@@ -1,6 +1,8 @@
 /** O que as rotas de `/api/conversas` têm em comum: validação do corpo e a tradução dos erros em resposta HTTP. */
 
 import { z } from "zod";
+import { esquemaDeAnexos, esquemaDeNotasDeContexto } from "../contexto-de-notas";
+export const esquemaDeContexto = z.object({ notasDeContexto: esquemaDeNotasDeContexto });
 import { respostaDeErro, tratarErroDeRepositorio } from "../http-de-notas";
 import { ErroDeConversa, MAXIMO_DE_CARACTERES_DA_MENSAGEM, MAXIMO_DE_MENSAGENS_POR_PEDIDO } from "./tipos";
 
@@ -20,6 +22,7 @@ const esquemaDeMensagem = z.object({
   conteudo: z.string().min(1).max(MAXIMO_DE_CARACTERES_DA_MENSAGEM),
   ferramentas: z.array(esquemaDeFerramenta).max(100).optional(),
   fontes: z.array(esquemaDeFonte).max(100).optional(),
+  anexos: esquemaDeAnexos.optional(),
 });
 
 export const esquemaDeAcrescentar = z.object({

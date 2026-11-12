@@ -6,14 +6,22 @@ import { dividirCaminho } from "@/lib/caminho-da-nota";
 import type { NotaParaArvore } from "@/lib/arvore-de-notas";
 import type { ClienteDeConversas } from "@/lib/conversas/cliente";
 import type { IdDeConversa } from "@/lib/conversas/tipos";
-import { lerRespostaDoChat, passoDoRastro, type LinhaDePasso } from "@/lib/fluxo-do-chat";
+import { ErroDaRespostaDoChat, lerRespostaDoChat, passoDoRastro, type LinhaDePasso } from "@/lib/fluxo-do-chat";
+import ContextoDoChat from "./ContextoDoChat";
 import { janelaParaOAgente } from "@/lib/janela-do-historico";
 import type { PassoDoAgente } from "@/lib/rastro-do-agente";
 import HistoricoDeConversas from "./HistoricoDeConversas";
 import Mensagem, { TurnoDoBimo, type AbrirNotaDoChat, type MostrarNoCerebro } from "./Mensagem";
-import type { FonteDaResposta, IdDeNota, Mensagem as TipoMensagem, UsoDeFerramenta } from "@/lib/types";
+import type { AnexoDeNota, FonteDaResposta, IdDeNota, Mensagem as TipoMensagem, UsoDeFerramenta } from "@/lib/types";
 
 type Props = {
+  aoMudarOcupacao?: (ocupado: boolean) => void;
+  avisoDeContexto?: string;
+  notasDeContexto?: string[];
+  aoMudarContexto?: (ids: string[]) => void;
+  notasDisponiveis?: NotaParaArvore[];
+  notasAbertas?: string[];
+  pedidoDeFoco?: number;
   /** O texto do campo vive no componente pai, porque clicar numa nota da barra lateral também escreve nele. */
   rascunho: string;
   onRascunhoChange: (texto: string) => void;
@@ -59,7 +67,11 @@ const SUGESTOES = [
   "Acrescenta um exemplo na minha nota sobre React",
 ];
 
-export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente, aoIniciarResposta, aoPassoDoAgente, aoEncerrarResposta, aoMostrarNoCerebro, tituloDaNota, conversas, lugarDosBotoes }: Props) {
+export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ativo = true, aoAbrirNota, aoNotaDoAgente, aoIniciarResposta, aoPassoDoAgente, aoEncerrarResposta, aoMostrarNoCerebro, tituloDaNota, conversas, lugarDosBotoes, notasDeContexto, aoMudarContexto, notasDisponiveis, notasAbertas, pedidoDeFoco, aoMudarOcupacao, avisoDeContexto }: Props) {
+  const [contextoLocal, definirContextoLocal] = useState<string[]>([]);
+  const idsDeContexto = notasDeContexto ?? contextoLocal;
+  const mudarContexto = aoMudarContexto ?? definirContextoLocal;
+  const [indisponiveis, definirIndisponiveis] = useState<string[]>([]);
   const [mensagens, setMensagens] = useState<TipoMensagem[]>([]);
   const [pensando, setPensando] = useState(false);
   // Os passos do agente na pergunta atual, conforme chegam — viram as pílulas acima da resposta.
@@ -75,19 +87,92 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
   // Uma gravação de cada vez, na ordem: o histórico guarda as mensagens na ordem em que chegam.
   const filaDeGravacao = useRef<Promise<void>>(Promise.resolve());
   const ultimaAbertura = useRef(0);
+  const contextoGravado = useRef("[]");
+  const falhasDeGravacao = useRef(new Set<string>());
+  const mensagensPendentes = useRef(new Map<IdDeConversa, TipoMensagem[]>());
+  const rascunhoAtual = useRef(rascunho);
+  useEffect(() => { rascunhoAtual.current = rascunho; }, [rascunho]);
+  useEffect(() => { aoMudarOcupacao?.(pensando || abrindo); }, [pensando, abrindo, aoMudarOcupacao]);
+
+  useEffect(() => {
+    const assinatura = JSON.stringify(idsDeContexto);
+    if (assinatura === contextoGravado.current) return;
+    contextoGravado.current = assinatura;
+    if (!conversas) return;
+    const chave = `${idDaConversa}:contexto`;
+    filaDeGravacao.current = filaDeGravacao.current
+      .then(() => conversas.atualizarContexto(idDaConversa, idsDeContexto))
+      .then(() => {
+        falhasDeGravacao.current.delete(chave);
+        if (!falhasDeGravacao.current.size) setAvisoDoHistorico(null);
+      }, () => {
+        falhasDeGravacao.current.add(chave);
+        setAvisoDoHistorico("Não consegui guardar as notas de contexto. Elas continuam aqui. Use Tentar guardar novamente.");
+      });
+  }, [idsDeContexto, conversas, idDaConversa]);
+
+  useEffect(() => {
+    if (ativo && pedidoDeFoco) campo.current?.focus();
+  }, [ativo, pedidoDeFoco]);
+
+  useEffect(() => {
+    if (!ativo || !idsDeContexto.length) return;
+    const controle = new AbortController();
+    const verificar = async () => {
+      const resultados = await Promise.all(idsDeContexto.map(async (id) => {
+        try {
+          const resposta = await fetch(`/api/notas/${encodeURIComponent(id)}`, { signal: controle.signal });
+          return resposta.status === 404 || resposta.status === 410 ? id : null;
+        } catch { return null; }
+      }));
+      if (!controle.signal.aborted) definirIndisponiveis(resultados.filter((id) => id !== null));
+    };
+    void verificar();
+    window.addEventListener("bimo:lixeira-alterada", verificar);
+    return () => { controle.abort(); window.removeEventListener("bimo:lixeira-alterada", verificar); };
+  }, [ativo, idsDeContexto, notasDisponiveis]);
+
+  function tentarGuardarNovamente() {
+    if (!conversas) return;
+    const id = idDaConversa;
+    const ids = [...idsDeContexto];
+    filaDeGravacao.current = filaDeGravacao.current.then(async () => {
+      await conversas.atualizarContexto(id, ids);
+      await gravarMensagensPendentes(id);
+    }).then(() => {
+      for (const chave of falhasDeGravacao.current) if (chave.startsWith(`${id}:`)) falhasDeGravacao.current.delete(chave);
+      setAvisoDoHistorico(null);
+    }, () => setAvisoDoHistorico("Não consegui guardar esta conversa. Tente novamente."));
+  }
 
   /** Quem lista o histórico espera as gravações em andamento, senão a conversa de agora não aparece. */
   function aguardarGravacoes(): Promise<void> {
     return filaDeGravacao.current;
   }
 
+  /** Uma pergunta que falhou precisa entrar antes da resposta, inclusive ao repetir uma gravação. */
+  async function gravarMensagensPendentes(id: IdDeConversa) {
+    if (!conversas) return;
+    for (;;) {
+      const lote = (mensagensPendentes.current.get(id) ?? []).slice(0, 10);
+      if (!lote.length) break;
+      await conversas.acrescentar(id, lote);
+      const gravadas = new Set(lote.map((m) => m.id));
+      mensagensPendentes.current.set(id, (mensagensPendentes.current.get(id) ?? []).filter((m) => !gravadas.has(m.id)));
+    }
+    mensagensPendentes.current.delete(id);
+  }
+
   function guardar(id: IdDeConversa, novas: TipoMensagem[]) {
     if (!conversas) return;
+    const chave = `${id}:mensagens`;
+    const pendentes = mensagensPendentes.current.get(id) ?? [];
+    mensagensPendentes.current.set(id, [...pendentes, ...novas.filter((m) => !pendentes.some((p) => p.id === m.id))]);
     filaDeGravacao.current = filaDeGravacao.current
-      .then(() => conversas.acrescentar(id, novas))
+      .then(() => gravarMensagensPendentes(id))
       .then(
-        () => setAvisoDoHistorico(null),
-        () => setAvisoDoHistorico("Não consegui guardar esta conversa no histórico. Ela continua aqui, mas pode não aparecer depois."),
+        () => { falhasDeGravacao.current.delete(chave); if (!falhasDeGravacao.current.size) setAvisoDoHistorico(null); },
+        () => { falhasDeGravacao.current.add(chave); setAvisoDoHistorico("Não consegui guardar esta conversa no histórico. Ela continua aqui, mas pode não aparecer depois."); },
       );
   }
 
@@ -100,6 +185,10 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     setErro(null);
     setAvisoDoHistorico(null);
     setIdDaConversa(crypto.randomUUID());
+    contextoGravado.current = "[]";
+    mudarContexto([]);
+    definirIndisponiveis([]);
+    onRascunhoChange("");
     campo.current?.focus();
   }
 
@@ -112,10 +201,16 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
       await filaDeGravacao.current;
       const aberta = await conversas.abrir(id);
       if (pedido !== ultimaAbertura.current) return;
-      setMensagens(aberta.mensagens);
+      const idsGuardados = new Set(aberta.mensagens.map((m) => m.id));
+      const pendentes = (mensagensPendentes.current.get(id) ?? []).filter((m) => !idsGuardados.has(m.id));
+      setMensagens([...aberta.mensagens, ...pendentes]);
       setPassosAoVivo([]);
-      setAvisoDoHistorico(null);
+      setAvisoDoHistorico(pendentes.length ? "Há mensagens desta conversa que ainda não foram guardadas. Tente guardar novamente." : null);
       setIdDaConversa(aberta.conversa.id);
+      contextoGravado.current = JSON.stringify(aberta.notasDeContexto ?? []);
+      mudarContexto(aberta.notasDeContexto ?? []);
+      definirIndisponiveis([]);
+      onRascunhoChange("");
       campo.current?.focus();
     } catch (falha) {
       if (pedido === ultimaAbertura.current) setErro(falha instanceof Error ? falha.message : "Não consegui abrir a conversa.");
@@ -148,7 +243,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
 
   async function enviar() {
     const texto = rascunho.trim();
-    if (!texto || pensando || abrindo) return;
+    if (!texto || pensando || abrindo || idsDeContexto.some((id) => indisponiveis.includes(id))) return;
     // Uma conversa aberta do histórico no meio da resposta não pode receber o fim desta.
     const idDestaConversa = idDaConversa;
 
@@ -164,7 +259,9 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     const historico = [...mensagens, doUsuario];
 
     setMensagens(historico);
-    guardar(idDestaConversa, [doUsuario]);
+    // Com anexos, aguarda o recibo do servidor antes de guardar os metadados.
+    let perguntaGuardada = false;
+    if (!idsDeContexto.length) { guardar(idDestaConversa, [doUsuario]); perguntaGuardada = true; }
     onRascunhoChange("");
     setPensando(true);
     setPassosAoVivo([]);
@@ -174,6 +271,18 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
     // Os passos desta resposta e as notas lidas (as "Fontes"). Só o fluxo traz os ids delas.
     const recebidos: LinhaDePasso[] = [];
     const fontes = new Map<IdDeNota, FonteDaResposta>();
+    const receberContexto = (anexos: AnexoDeNota[]) => {
+      if (perguntaGuardada) return;
+      if (anexos.length !== idsDeContexto.length || anexos.some((anexo) => !idsDeContexto.includes(anexo.id))) throw new Error("Não consegui confirmar as notas de contexto. Tente novamente.");
+      doUsuario.anexos = anexos;
+      setMensagens((atuais) => atuais.map((m) => m.id === doUsuario.id ? { ...m, anexos } : m));
+      guardar(idDestaConversa, [doUsuario]);
+      perguntaGuardada = true;
+      for (const anexo of anexos) {
+        fontes.set(anexo.id, { id: anexo.id, titulo: anexo.titulo });
+        aoPassoDoAgente?.({ tipo: "leitura", id: anexo.id });
+      }
+    };
 
     try {
       const resposta = await fetch("/api/chat", {
@@ -182,6 +291,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
         headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
         body: JSON.stringify({
           mensagens: janelaParaOAgente(historico),
+          ...(idsDeContexto.length ? { notasDeContexto: idsDeContexto } : {}),
         }),
       });
 
@@ -207,7 +317,9 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
         if (passo) aoPassoDoAgente?.(passo);
         if (passo?.tipo === "leitura" && !fontes.has(passo.id)) fontes.set(passo.id, { id: passo.id, titulo: tituloDaFonte(passo.id, linha, tituloDaNota) });
         avisarEscrita(linha, true);
-      });
+      }, receberContexto);
+
+      if (!perguntaGuardada) receberContexto(dados.anexos ?? []);
 
       const doAgente: TipoMensagem = {
         id: crypto.randomUUID(),
@@ -221,6 +333,10 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
       onRespostaAgente?.();
       for (const ferramenta of dados.ferramentas) avisarEscrita(ferramenta, false);
     } catch (falha) {
+      if (falha instanceof ErroDaRespostaDoChat && falha.indisponiveis.length) definirIndisponiveis(falha.indisponiveis);
+      // Validação recusada: devolve o pedido ao campo sem duplicar no histórico.
+      if (!perguntaGuardada) setMensagens((atuais) => atuais.filter((m) => m.id !== doUsuario.id));
+      onRascunhoChange(rascunhoAtual.current.trim() ? `${texto}\n${rascunhoAtual.current}` : texto);
       // Falhou depois de gravar: a escrita aconteceu, então a conversa guarda os passos e o
       // "Abrir" da nota — sem isso a pessoa tentaria de novo e criaria a nota duas vezes.
       if (recebidos.some((linha) => !linha.erro && linha.notaId)) {
@@ -245,7 +361,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
       cliente={conversas}
       antesDeListar={aguardarGravacoes}
       idAtual={idDaConversa}
-      temMensagens={mensagens.length > 0}
+      temMensagens={mensagens.length > 0 || idsDeContexto.length > 0}
       ocupado={pensando || abrindo}
       aoNovaConversa={novaConversa}
       aoEscolher={abrirConversa}
@@ -304,9 +420,12 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
         {avisoDoHistorico && (
           <p role="status" className="mx-auto mb-2 max-w-2xl rounded-lg bg-destaque-suave px-3 py-2 text-xs text-destaque-texto">
             {avisoDoHistorico}
+            <button type="button" disabled={pensando || abrindo} onClick={tentarGuardarNovamente} className="ml-2 min-h-10 rounded-full px-3 text-controle text-texto underline disabled:opacity-50">Tentar guardar novamente</button>
           </p>
         )}
 
+        <ContextoDoChat ids={idsDeContexto} notas={notasDisponiveis} abertas={notasAbertas} ocupado={pensando || abrindo} indisponiveis={indisponiveis.filter((id) => idsDeContexto.includes(id))} aoMudar={(ids) => { mudarContexto(ids); campo.current?.focus(); }} aoAbrir={aoAbrirNota} />
+        {avisoDeContexto && <p role="status" className="mx-auto mb-2 max-w-2xl text-controle text-erro">{avisoDeContexto}</p>}
         <div className="mx-auto flex max-w-2xl items-end gap-2">
           <label className="flex min-w-0 flex-1">
             <span className="sr-only">Pergunta para o Bimo</span>
@@ -325,7 +444,7 @@ export default function Chat({ rascunho, onRascunhoChange, onRespostaAgente, ati
           <button
             type="button"
             onClick={enviar}
-            disabled={rascunho.trim() === "" || pensando || abrindo}
+            disabled={rascunho.trim() === "" || pensando || abrindo || idsDeContexto.some((id) => indisponiveis.includes(id))}
             className="h-11 shrink-0 rounded-full bg-destaque px-5 text-controle font-semibold text-sobre-destaque transition-[background-color,transform] hover:bg-destaque-hover disabled:cursor-not-allowed disabled:bg-desabilitado disabled:text-desabilitado-texto motion-safe:enabled:active:scale-[0.96] md:h-10"
           >
             Enviar

@@ -10,6 +10,7 @@ import {
   LIMITE_DE_MENSAGENS_ABERTAS,
   prepararMensagens,
   tituloDaConversa,
+  validarContexto,
   type RepositorioDeConversas,
   type ResumoDeConversa,
 } from "./tipos";
@@ -23,6 +24,16 @@ function paraResumo({ id, titulo, atualizadaEm }: LinhaDeResumo): ResumoDeConver
 /** Toda consulta filtra por `user_id`: o app conecta como dono do banco, então a RLS não protege aqui. */
 export function criarRepositorioDeConversasDoBanco(userId: string): RepositorioDeConversas {
   return {
+    async atualizarContexto(id, ids) {
+      const notasDeContexto = validarContexto(ids);
+      if (!REGEX_UUID.test(id)) throw new ErroDeConversa("invalida", "Identificador inválido.");
+      await db.transaction(async (tx) => {
+        await tx.insert(conversas).values({ id, userId, titulo: "Nova conversa" }).onConflictDoNothing();
+        const alteradas = await tx.update(conversas).set({ notasDeContexto })
+          .where(and(eq(conversas.id, id), eq(conversas.userId, userId))).returning({ id: conversas.id });
+        if (!alteradas.length) throw new ErroDeConversa("nao-encontrada", "Conversa não encontrada.");
+      });
+    },
     async listar(limite = LIMITE_DA_LISTA) {
       const linhas = await db
         .select({ id: conversas.id, titulo: conversas.titulo, atualizadaEm: conversas.atualizadaEm })
@@ -36,7 +47,7 @@ export function criarRepositorioDeConversasDoBanco(userId: string): RepositorioD
     async obter(id) {
       if (!REGEX_UUID.test(id)) return null;
       const [conversa] = await db
-        .select({ id: conversas.id, titulo: conversas.titulo, atualizadaEm: conversas.atualizadaEm })
+        .select({ id: conversas.id, titulo: conversas.titulo, atualizadaEm: conversas.atualizadaEm, notasDeContexto: conversas.notasDeContexto })
         .from(conversas)
         .where(and(eq(conversas.id, id), eq(conversas.userId, userId)));
       if (!conversa) return null;
@@ -48,18 +59,20 @@ export function criarRepositorioDeConversasDoBanco(userId: string): RepositorioD
           conteudo: mensagensDeConversa.conteudo,
           ferramentas: mensagensDeConversa.ferramentas,
           fontes: mensagensDeConversa.fontes,
+          anexos: mensagensDeConversa.anexos,
         })
         .from(mensagensDeConversa)
         .where(and(eq(mensagensDeConversa.conversaId, id), eq(mensagensDeConversa.userId, userId)))
         .orderBy(desc(mensagensDeConversa.seq))
         .limit(LIMITE_DE_MENSAGENS_ABERTAS);
 
-      const mensagens: Mensagem[] = recentes.reverse().map(({ ferramentas, fontes, ...resto }) => ({
+      const mensagens: Mensagem[] = recentes.reverse().map(({ ferramentas, fontes, anexos, ...resto }) => ({
         ...resto,
         ...(ferramentas?.length ? { ferramentas } : {}),
         ...(fontes?.length ? { fontes } : {}),
+        ...(anexos?.length ? { anexos } : {}),
       }));
-      return { conversa: paraResumo(conversa), mensagens };
+      return { conversa: paraResumo(conversa), mensagens, notasDeContexto: conversa.notasDeContexto };
     },
 
     async acrescentar(id, mensagens) {
@@ -70,8 +83,10 @@ export function criarRepositorioDeConversasDoBanco(userId: string): RepositorioD
 
       return db.transaction(async (tx) => {
         await tx.insert(conversas).values({ id, userId, titulo: tituloDaConversa(novas) }).onConflictDoNothing();
-        const [dona] = await tx.select({ userId: conversas.userId }).from(conversas).where(eq(conversas.id, id));
+        const [dona] = await tx.select({ userId: conversas.userId }).from(conversas).where(and(eq(conversas.id, id), eq(conversas.userId, userId)));
         if (dona?.userId !== userId) throw new ErroDeConversa("nao-encontrada", "Conversa não encontrada.");
+        const [anterior] = await tx.select({ id: mensagensDeConversa.id }).from(mensagensDeConversa)
+          .where(and(eq(mensagensDeConversa.conversaId, id), eq(mensagensDeConversa.userId, userId))).limit(1);
 
         const gravadas = await tx
           .insert(mensagensDeConversa)
@@ -83,6 +98,7 @@ export function criarRepositorioDeConversasDoBanco(userId: string): RepositorioD
             conteudo: m.conteudo,
             ferramentas: m.ferramentas ?? null,
             fontes: m.fontes ?? null,
+            anexos: m.anexos ?? null,
           })))
           .onConflictDoNothing()
           .returning({ id: mensagensDeConversa.id });
@@ -91,7 +107,7 @@ export function criarRepositorioDeConversasDoBanco(userId: string): RepositorioD
         const dela = and(eq(conversas.id, id), eq(conversas.userId, userId));
         const colunas = { id: conversas.id, titulo: conversas.titulo, atualizadaEm: conversas.atualizadaEm };
         const [resumo] = gravadas.length > 0
-          ? await tx.update(conversas).set({ atualizadaEm: sql`now()` }).where(dela).returning(colunas)
+          ? await tx.update(conversas).set({ atualizadaEm: sql`now()`, ...(!anterior ? { titulo: tituloDaConversa(novas) } : {}) }).where(dela).returning(colunas)
           : await tx.select(colunas).from(conversas).where(dela);
         return paraResumo(resumo);
       });

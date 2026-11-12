@@ -1,9 +1,29 @@
 import { exigirSessao } from "@/lib/autenticacao";
-import { esquemaDeAcrescentar, esquemaDeIdDeConversa, SEM_CACHE, tratarErroDeConversas } from "@/lib/conversas/http";
+import { esquemaDeAcrescentar, esquemaDeContexto, esquemaDeIdDeConversa, SEM_CACHE, tratarErroDeConversas } from "@/lib/conversas/http";
 import { obterRepositorioDeConversas } from "@/lib/conversas";
 import { exigirMesmaOrigem, lerJsonComLimite, respostaDeErro } from "@/lib/http-de-notas";
 
 type Contexto = { params: Promise<{ id: string }> };
+
+/** Guarda a seleção mesmo antes da primeira mensagem ou depois de remover o último anexo. */
+export async function PATCH(request: Request, { params }: Contexto) {
+  const semSessao = exigirSessao(request);
+  if (semSessao) return semSessao;
+  const outraOrigem = exigirMesmaOrigem(request);
+  if (outraOrigem) return outraOrigem;
+  const id = esquemaDeIdDeConversa.safeParse((await params).id);
+  if (!id.success) return respostaDeErro(400, "Identificador de conversa inválido.");
+  const corpo = await lerJsonComLimite(request);
+  if (!corpo.ok) return corpo.resposta;
+  const validado = esquemaDeContexto.safeParse(corpo.dados);
+  if (!validado.success) return respostaDeErro(400, "Selecione até dez notas válidas.");
+  try {
+    await (await obterRepositorioDeConversas()).atualizarContexto(id.data, validado.data.notasDeContexto);
+    return new Response(null, { status: 204 });
+  } catch (erro) {
+    return tratarErroDeConversas(erro, "PATCH /api/conversas/[id]");
+  }
+}
 
 /**
  * Acrescenta mensagens ao fim da conversa, criando-a se ainda não existir. O id de cada

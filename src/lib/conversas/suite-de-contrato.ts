@@ -24,6 +24,29 @@ export function executarContratoDoRepositorioDeConversas(
   fabrica: () => Promise<{ repo: RepositorioDeConversas; outraPessoa: RepositorioDeConversas }>,
 ) {
   describe(`contrato do repositório de conversas (${nome})`, () => {
+    it("guarda a seleção antes da primeira mensagem e lembra remoções posteriores", async () => {
+      const { repo, outraPessoa } = await fabrica();
+      const id = randomUUID();
+      await repo.atualizarContexto(id, ["n1", "n1", "n2"]);
+      expect((await repo.obter(id))?.notasDeContexto).toEqual(["n1", "n2"]);
+      const anexo = { id: "n1", titulo: "Plano", pasta: "Projeto", revisao: 3 };
+      await repo.acrescentar(id, [mensagem("usuario", "Compare", { anexos: [anexo] })]);
+      await repo.atualizarContexto(id, []);
+      const aberta = await repo.obter(id);
+      expect(aberta?.conversa.titulo).toBe("Compare");
+      expect(aberta?.notasDeContexto).toEqual([]);
+      expect(aberta?.mensagens[0].anexos).toEqual([anexo]);
+      expect(await outraPessoa.obter(id)).toBeNull();
+      await expect(outraPessoa.atualizarContexto(id, ["n3"])).rejects.toMatchObject({ motivo: "nao-encontrada" });
+      expect((await repo.obter(id))?.notasDeContexto).toEqual([]);
+    });
+    it("recusa contexto inválido e conversas antigas começam sem anexos", async () => {
+      const { repo } = await fabrica();
+      const id = randomUUID();
+      await expect(repo.atualizarContexto(id, Array.from({ length: 11 }, (_, i) => String(i)))).rejects.toMatchObject({ motivo: "invalida" });
+      await repo.acrescentar(id, [mensagem("usuario", "Olá")]);
+      expect((await repo.obter(id))?.notasDeContexto).toEqual([]);
+    });
     it("cria a conversa na primeira mensagem, com o título da primeira pergunta", async () => {
       const { repo } = await fabrica();
       const id = randomUUID();

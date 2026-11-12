@@ -16,6 +16,7 @@ const CAMPO = "Pergunte, peça uma nota nova ou uma edição…";
 
 function clienteFalso(guardadas: ConversaCompleta[] = []): ClienteDeConversas & { [K in keyof ClienteDeConversas]: ReturnType<typeof vi.fn> } {
   return {
+    atualizarContexto: vi.fn(async () => {}),
     listar: vi.fn(async (): Promise<ResumoDeConversa[]> => guardadas.map((c) => c.conversa)),
     abrir: vi.fn(async (id: string) => {
       const achada = guardadas.find((c) => c.conversa.id === id);

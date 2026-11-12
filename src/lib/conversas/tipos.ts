@@ -7,6 +7,7 @@
  */
 
 import type { Mensagem, UsoDeFerramenta } from "../types";
+import { esquemaDeAnexos, esquemaDeNotasDeContexto } from "../contexto-de-notas";
 
 export type IdDeConversa = string;
 
@@ -17,9 +18,10 @@ export type ResumoDeConversa = {
   atualizadaEm: string;
 };
 
-export type ConversaCompleta = { conversa: ResumoDeConversa; mensagens: Mensagem[] };
+export type ConversaCompleta = { conversa: ResumoDeConversa; mensagens: Mensagem[]; notasDeContexto?: string[] };
 
 export interface RepositorioDeConversas {
+  atualizarContexto(id: IdDeConversa, ids: string[]): Promise<void>;
   /** As conversas mais recentes primeiro. */
   listar(limite?: number): Promise<ResumoDeConversa[]>;
   /** `null` quando a conversa não existe ou é de outra pessoa. */
@@ -69,6 +71,7 @@ export function prepararMensagens(mensagens: Mensagem[]): Mensagem[] {
     if (!papelValido || !m.id || m.conteudo.trim() === "" || m.conteudo.length > MAXIMO_DE_CARACTERES_DA_MENSAGEM) {
       throw new ErroDeConversa("invalida", "Mensagem inválida.");
     }
+    if (m.anexos && !esquemaDeAnexos.safeParse(m.anexos).success) throw new ErroDeConversa("invalida", "Anexos inválidos.");
   }
   return mensagens.map(mensagemParaGuardar);
 }
@@ -95,7 +98,14 @@ export function mensagemParaGuardar(mensagem: Mensagem): Mensagem {
     id: mensagem.id,
     papel: mensagem.papel,
     conteudo: mensagem.conteudo,
+    ...(mensagem.anexos?.length ? { anexos: esquemaDeAnexos.parse(mensagem.anexos) } : {}),
     ...(mensagem.ferramentas?.length ? { ferramentas: mensagem.ferramentas.map(ferramentaParaGuardar) } : {}),
     ...(mensagem.fontes?.length ? { fontes: mensagem.fontes.map(({ id, titulo }) => ({ id, titulo })) } : {}),
   };
+}
+
+export function validarContexto(ids: string[]): string[] {
+  const validado = esquemaDeNotasDeContexto.safeParse(ids);
+  if (!validado.success) throw new ErroDeConversa("invalida", "Selecione até dez notas válidas.");
+  return validado.data;
 }

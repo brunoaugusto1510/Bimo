@@ -11,13 +11,14 @@ import {
   LIMITE_DE_MENSAGENS_ABERTAS,
   prepararMensagens,
   tituloDaConversa,
+  validarContexto,
   type ConversaCompleta,
   type IdDeConversa,
   type RepositorioDeConversas,
   type ResumoDeConversa,
 } from "./tipos";
 
-type Guardada = { id: IdDeConversa; dono: string; titulo: string; atualizadaEm: number; mensagens: Mensagem[] };
+type Guardada = { id: IdDeConversa; dono: string; titulo: string; atualizadaEm: number; mensagens: Mensagem[]; notasDeContexto: string[] };
 
 /** As conversas de todos os donos; cada repositório só enxerga as do seu dono. */
 export type ArmazemDeConversas = Map<IdDeConversa, Guardada>;
@@ -41,6 +42,14 @@ export function criarRepositorioDeConversasEmMemoria(armazem: ArmazemDeConversas
   };
 
   return {
+    async atualizarContexto(id, ids) {
+      const notasDeContexto = validarContexto(ids);
+      const existente = armazem.get(id);
+      if (existente && existente.dono !== dono) throw new ErroDeConversa("nao-encontrada", "Conversa não encontrada.");
+      const conversa = existente ?? { id, dono, titulo: "Nova conversa", atualizadaEm: agora(), mensagens: [], notasDeContexto: [] };
+      conversa.notasDeContexto = [...notasDeContexto];
+      armazem.set(id, conversa);
+    },
     async listar(limite = LIMITE_DA_LISTA) {
       return [...armazem.values()]
         .filter((c) => c.dono === dono)
@@ -51,7 +60,7 @@ export function criarRepositorioDeConversasEmMemoria(armazem: ArmazemDeConversas
 
     async obter(id): Promise<ConversaCompleta | null> {
       const conversa = doDono(id);
-      return conversa ? { conversa: paraResumo(conversa), mensagens: conversa.mensagens.slice(-LIMITE_DE_MENSAGENS_ABERTAS).map((m) => ({ ...m })) } : null;
+      return conversa ? { conversa: paraResumo(conversa), notasDeContexto: [...conversa.notasDeContexto], mensagens: conversa.mensagens.slice(-LIMITE_DE_MENSAGENS_ABERTAS).map((m) => structuredClone(m)) } : null;
     },
 
     async acrescentar(id, mensagens) {
@@ -59,7 +68,8 @@ export function criarRepositorioDeConversasEmMemoria(armazem: ArmazemDeConversas
       const existente = armazem.get(id);
       if (existente && existente.dono !== dono) throw new ErroDeConversa("nao-encontrada", "Conversa não encontrada.");
 
-      const conversa: Guardada = existente ?? { id, dono, titulo: tituloDaConversa(novas), atualizadaEm: 0, mensagens: [] };
+      const conversa: Guardada = existente ?? { id, dono, titulo: tituloDaConversa(novas), atualizadaEm: 0, mensagens: [], notasDeContexto: [] };
+      if (conversa.mensagens.length === 0) conversa.titulo = tituloDaConversa(novas);
       const jaGuardadas = new Set(conversa.mensagens.map((m) => m.id));
       const aindaNaoGuardadas = novas.filter((m) => !jaGuardadas.has(m.id));
       conversa.mensagens.push(...aindaNaoGuardadas);

@@ -301,7 +301,7 @@ describe("PaginaPrincipal — aba Notas", () => {
     expect(screen.getByRole("tab", { name: "Ler" })).toBeInTheDocument();
   });
 
-  it("'Perguntar ao Bimo' volta para o chat com a pergunta já escrita", async () => {
+  it("'Perguntar ao Bimo' anexa a nota do grafo sem enviar nem preencher a pergunta", async () => {
     const usuario = renderizar();
     await usuario.click(abaNotas());
     await usuario.click(screen.getByRole("button", { name: "clicar no nó Ler" }));
@@ -310,7 +310,9 @@ describe("PaginaPrincipal — aba Notas", () => {
 
     expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
     expect(campoDoChat()).toBeVisible();
-    expect(campoDoChat()).toHaveValue('O que eu anotei em "Ler"?');
+    expect(campoDoChat()).toHaveValue("");
+    expect(campoDoChat()).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Remover Ler do contexto" })).toBeInTheDocument();
   });
 
   it("'Ver vizinhos' pede à câmera para enquadrar a nota e as ligadas a ela", async () => {
@@ -429,7 +431,8 @@ describe("PaginaPrincipal — abas e paleta", () => {
     await usuario.click(screen.getByRole("button", { name: "Mais opções" }));
     await usuario.click(screen.getByRole("menuitem", { name: "Perguntar ao Bimo" }));
 
-    expect(campoDoChat()).toHaveValue('uma ideia pela metade\nO que eu anotei em "Ler"?');
+    expect(campoDoChat()).toHaveValue("uma ideia pela metade");
+    expect(screen.getByRole("button", { name: "Remover Ler do contexto" })).toBeInTheDocument();
   });
 
   it("a área de conteúdo é o landmark principal da página", () => {
@@ -438,7 +441,7 @@ describe("PaginaPrincipal — abas e paleta", () => {
     expect(screen.getByRole("main")).toBeInTheDocument();
   });
 
-  it("'Perguntar ao Bimo' numa nota aberta leva ao chat com a pergunta escrita", async () => {
+  it("'Perguntar ao Bimo' numa nota aberta leva ao chat com a nota anexada", async () => {
     const usuario = renderizar();
     await usuario.click(within(menuDeNotas()).getByRole("button", { name: /Ler/ }));
     await screen.findByText("texto da nota");
@@ -447,7 +450,8 @@ describe("PaginaPrincipal — abas e paleta", () => {
     await usuario.click(screen.getByRole("menuitem", { name: "Perguntar ao Bimo" }));
 
     expect(abaBimo()).toHaveAttribute("aria-pressed", "true");
-    expect(campoDoChat()).toHaveValue('O que eu anotei em "Ler"?');
+    expect(campoDoChat()).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Remover Ler do contexto" })).toBeInTheDocument();
   });
 
   it("as abas abertas voltam quando a página é recarregada", async () => {

@@ -6,6 +6,10 @@ import { exigirMesmaOrigem, lerJsonComLimite, respostaDeErro, tratarErroDeReposi
 import { ErroDeConfiguracao } from "@/lib/repositorio-de-notas/config";
 import { descreverErro } from "@/lib/registro-de-erros";
 import type { Mensagem } from "@/lib/types";
+import { carregarContextoDeNotas, ErroDeContexto, esquemaDeNotasDeContexto } from "@/lib/contexto-de-notas";
+import { obterRepositorio } from "@/lib/repositorio-de-notas";
+
+type ContextoDeNotas = Awaited<ReturnType<typeof carregarContextoDeNotas>>;
 
 // O agente tem 150 s; a plataforma precisa de margem para finalizar o fluxo.
 export const maxDuration = 180;
@@ -42,12 +46,22 @@ export async function POST(request: Request) {
   }
 
   if (!process.env.OPENAI_API_KEY?.trim()) return respostaDeErro(503, "O Bimo está indisponível no momento. Tente mais tarde.");
+  const entradaDeContexto = (corpo.dados as Record<string, unknown>).notasDeContexto;
+  const ids = esquemaDeNotasDeContexto.safeParse(entradaDeContexto === undefined ? [] : entradaDeContexto);
+  if (!ids.success) return respostaDeErro(400, "Selecione até dez notas válidas.");
+  let contexto: ContextoDeNotas | undefined;
+  try {
+    if (ids.data.length) contexto = await carregarContextoDeNotas(await obterRepositorio(), ids.data);
+  } catch (erro) {
+    if (erro instanceof ErroDeContexto) return Response.json({ erro: erro.message, indisponiveis: erro.indisponiveis }, { status: erro.status });
+    return tratarErroDeRepositorio(erro, "POST /api/chat contexto");
+  }
   agendarManutencaoWiki();
-  if (aceitaNdjson(request)) return respostaEmFluxo(mensagens, request.signal);
+  if (aceitaNdjson(request)) return respostaEmFluxo(mensagens, request.signal, contexto);
 
   try {
-    const resultado = await responder(mensagens, { signal: request.signal });
-    return NextResponse.json(resultado);
+    const resultado = await responder(mensagens, { signal: request.signal, ...(contexto ? { contextoDeNotas: contexto.texto } : {}) });
+    return NextResponse.json({ ...resultado, ...(contexto ? { anexos: contexto.anexos } : {}) });
   } catch (erro) {
     // Configuração das notas faltando continua sendo explicada (503 com as variáveis); o resto é genérico e só vai ao log.
     if (erro instanceof ErroDeConfiguracao) return tratarErroDeRepositorio(erro, "POST /api/chat");
@@ -91,7 +105,7 @@ function linhaDoPasso({ ferramenta, ids }: PassoDoServidor) {
  * foi feita antes, em JSON com status HTTP; daqui em diante o status é 200 e o
  * desfecho vai no corpo.
  */
-function respostaEmFluxo(mensagens: Parameters<typeof responder>[0], sinal: AbortSignal): Response {
+function respostaEmFluxo(mensagens: Parameters<typeof responder>[0], sinal: AbortSignal, contexto?: ContextoDeNotas): Response {
   const controle = new AbortController();
   const cancelar = () => controle.abort();
   sinal.addEventListener("abort", cancelar, { once: true });
@@ -112,8 +126,9 @@ function respostaEmFluxo(mensagens: Parameters<typeof responder>[0], sinal: Abor
       };
 
       try {
-        const resultado = await responder(mensagens, { aoPasso: (passo) => enviar(linhaDoPasso(passo)), signal: controle.signal });
-        enviar({ tipo: "resposta", resposta: resultado.resposta, ferramentas: resultado.ferramentas });
+        if (contexto) enviar({ tipo: "contexto", anexos: contexto.anexos });
+        const resultado = await responder(mensagens, { aoPasso: (passo) => enviar(linhaDoPasso(passo)), signal: controle.signal, ...(contexto ? { contextoDeNotas: contexto.texto } : {}) });
+        enviar({ tipo: "resposta", resposta: resultado.resposta, ferramentas: resultado.ferramentas, ...(contexto ? { anexos: contexto.anexos } : {}) });
       } catch (erro) {
         if (!controle.signal.aborted) enviar({ tipo: "erro", erro: mensagemDoErro(erro) });
       } finally {

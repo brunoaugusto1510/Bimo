@@ -7,9 +7,10 @@
  */
 
 import type { PassoDoAgente } from "./rastro-do-agente";
-import type { IdDeNota, UsoDeFerramenta } from "./types";
+import type { AnexoDeNota, IdDeNota, UsoDeFerramenta } from "./types";
+import { esquemaDeAnexos } from "./contexto-de-notas";
 
-export type RespostaDoChat = { resposta: string; ferramentas: UsoDeFerramenta[] };
+export type RespostaDoChat = { resposta: string; ferramentas: UsoDeFerramenta[]; anexos?: AnexoDeNota[] };
 
 export type LinhaDePasso = {
   tipo: "passo";
@@ -21,7 +22,11 @@ export type LinhaDePasso = {
   notaId?: IdDeNota;
 };
 
-type LinhaDoFluxo = LinhaDePasso | ({ tipo: "resposta" } & RespostaDoChat) | { tipo: "erro"; erro: string };
+type LinhaDoFluxo = LinhaDePasso | { tipo: "contexto"; anexos: AnexoDeNota[] } | ({ tipo: "resposta" } & RespostaDoChat) | { tipo: "erro"; erro: string };
+
+export class ErroDaRespostaDoChat extends Error {
+  constructor(mensagem: string, readonly indisponiveis: string[] = []) { super(mensagem); }
+}
 
 /** O suficiente de um `Response` — os testes antigos simulam só `ok` e `json`. */
 type RespostaRecebida = {
@@ -37,18 +42,21 @@ const ERRO_DE_INTERRUPCAO = "A resposta do Bimo foi interrompida. Tente de novo.
 export async function lerRespostaDoChat(
   resposta: RespostaRecebida,
   aoPasso?: (linha: LinhaDePasso) => void,
+  aoContexto?: (anexos: AnexoDeNota[]) => void,
 ): Promise<RespostaDoChat> {
   const tipo = resposta.headers?.get("content-type") ?? "";
   if (resposta.ok && resposta.body && tipo.includes("application/x-ndjson")) {
-    return lerFluxo(resposta.body, aoPasso);
+    return lerFluxo(resposta.body, aoPasso, aoContexto);
   }
 
-  const dados = (await resposta.json()) as Partial<RespostaDoChat> & { erro?: string };
-  if (!resposta.ok) throw new Error(dados.erro || ERRO_GENERICO);
-  return { resposta: dados.resposta ?? "", ferramentas: dados.ferramentas ?? [] };
+  const dados = (await resposta.json()) as Partial<RespostaDoChat> & { erro?: string; indisponiveis?: unknown };
+  if (!resposta.ok) throw new ErroDaRespostaDoChat(dados.erro || ERRO_GENERICO, Array.isArray(dados.indisponiveis) ? dados.indisponiveis.filter(ehId) : []);
+  const anexos = esquemaDeAnexos.parse(dados.anexos ?? []);
+  aoContexto?.(anexos);
+  return { resposta: dados.resposta ?? "", ferramentas: dados.ferramentas ?? [], ...(anexos.length ? { anexos } : {}) };
 }
 
-async function lerFluxo(corpo: ReadableStream<Uint8Array>, aoPasso?: (linha: LinhaDePasso) => void): Promise<RespostaDoChat> {
+async function lerFluxo(corpo: ReadableStream<Uint8Array>, aoPasso?: (linha: LinhaDePasso) => void, aoContexto?: (anexos: AnexoDeNota[]) => void): Promise<RespostaDoChat> {
   const leitor = corpo.getReader();
   const decodificador = new TextDecoder();
   let pendente = "";
@@ -58,7 +66,11 @@ async function lerFluxo(corpo: ReadableStream<Uint8Array>, aoPasso?: (linha: Lin
     const linha = interpretar(texto);
     if (!linha) return null;
     if (linha.tipo === "erro") throw new Error(linha.erro || ERRO_GENERICO);
-    if (linha.tipo === "resposta") return { resposta: linha.resposta, ferramentas: linha.ferramentas ?? [] };
+    if (linha.tipo === "contexto") {
+      aoContexto?.(esquemaDeAnexos.parse(linha.anexos));
+      return null;
+    }
+    if (linha.tipo === "resposta") return { resposta: linha.resposta, ferramentas: linha.ferramentas ?? [], ...(linha.anexos ? { anexos: esquemaDeAnexos.parse(linha.anexos) } : {}) };
     try {
       aoPasso?.(linha);
     } catch {

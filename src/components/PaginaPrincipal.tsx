@@ -17,6 +17,7 @@ import BarraDoGrafo from "@/components/BarraDoGrafo";
 import BarraLateral from "@/components/BarraLateral";
 import CartaoDeFoco from "@/components/CartaoDeFoco";
 import Chat from "@/components/Chat";
+import { MAXIMO_DE_NOTAS_DE_CONTEXTO } from "@/lib/contexto-de-notas";
 import EspacoDeTrabalho from "@/components/EspacoDeTrabalho";
 import GrafoDeFundo, { type ControleDoGrafo } from "@/components/GrafoDeFundo";
 import MarcaBimo from "@/components/MarcaBimo";
@@ -108,6 +109,9 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   // novo, se ela já era a selecionada (ver `focoPedido` no GrafoDeFundo).
   const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
   const [rascunho, setRascunho] = useState("");
+  const [notasDeContexto, definirNotasDeContexto] = useState<string[]>([]);
+  const [pedidoDeFocoDoChat, pedirFocoDoChat] = useState(0);
+  const [avisoDoContexto, avisarContexto] = useState("");
   const [paletaAberta, setPaletaAberta] = useState(false);
 
   // No celular não cabem os dois painéis lado a lado, então a lista vira um menu.
@@ -122,6 +126,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   // nova começa um rastro novo; o anterior fica marcado até lá. O relógio é o do
   // `requestAnimationFrame` (`performance.now`), o mesmo que o grafo usa para desenhar.
   const [rastro, definirRastro] = useState<Rastro | null>(null);
+  const agenteOcupado = useRef(false);
+  const registrarOcupacaoDoChat = useCallback((ocupado: boolean) => { agenteOcupado.current = ocupado; }, []);
   const iniciarRastroDoAgente = useCallback(() => definirRastro(iniciarRastro(performance.now())), []);
   // A hora é lida no evento, fora do updater: o React pode rodar o updater mais tarde (ou duas
   // vezes no StrictMode), e o rastro tem que guardar quando o passo chegou, não quando renderizou.
@@ -150,6 +156,8 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   const idsExistentes = useMemo(() => new Set(indexarNotas(itens).keys()), [itens]);
   const idsLocais = useMemo(() => new Set(notasLocais.keys()), [notasLocais]);
   const { estado, despachar } = useEspacoDeTrabalho(idsExistentes, idsLocais);
+  const notasDisponiveisDoChat = useMemo(() => [...notasPorId.values()], [notasPorId]);
+  const notasAbertasDoChat = useMemo(() => estado.abas.flatMap((aba) => aba.tipo === "nota" ? [idAtual(aba)] : []), [estado.abas]);
 
   const aba = abaAtiva(estado);
   const noGrafico = estado.ativa === ABA_DO_GRAFICO;
@@ -290,11 +298,12 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   }
 
   function perguntarAoBimo(id: IdDeNota | null) {
-    // O que a pessoa já tinha digitado no chat é dela: a pergunta vai depois, nunca por cima.
     if (id) {
-      const pergunta = `O que eu anotei em "${notasPorId.get(id)?.titulo ?? "esta nota"}"?`;
-      setRascunho((atual) => (atual.trim() === "" ? pergunta : `${atual}\n${pergunta}`));
+      if (agenteOcupado.current) return;
+      if (!notasDeContexto.includes(id) && notasDeContexto.length >= MAXIMO_DE_NOTAS_DE_CONTEXTO) avisarContexto("Você pode anexar até dez notas. Remova uma para adicionar outra.");
+      else { avisarContexto(""); definirNotasDeContexto((atuais) => atuais.includes(id) ? atuais : [...atuais, id]); }
     }
+    pedirFocoDoChat((atual) => atual + 1);
     mudarModo("bimo");
   }
 
@@ -490,15 +499,22 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             {/* O chat fica montado mesmo no modo Notas (só escondido): a conversa vive no estado dele. */}
             <div className="relative h-full" hidden={emNotas}>
               <Chat
+                notasDeContexto={notasDeContexto}
+                aoMudarContexto={(ids) => { definirNotasDeContexto(ids); avisarContexto(""); }}
+                notasDisponiveis={notasDisponiveisDoChat}
+                notasAbertas={notasAbertasDoChat}
+                pedidoDeFoco={pedidoDeFocoDoChat}
+                aoMudarOcupacao={registrarOcupacaoDoChat}
+                avisoDeContexto={avisoDoContexto}
                 ativo={!emNotas}
                 aoAbrirNota={(id, resumo) => { if (resumo && !notasPorId.has(id)) registrarNota({ id, ...resumo }); if (neuronios.has(id)) abrirNeuronio(id); else abrirNota(id); }}
                 aoNotaDoAgente={registrarNota}
                 rascunho={rascunho}
                 onRascunhoChange={setRascunho}
                 onRespostaAgente={() => setPulsoDoGrafo((n) => n + 1)}
-                aoIniciarResposta={iniciarRastroDoAgente}
+                aoIniciarResposta={() => { agenteOcupado.current = true; iniciarRastroDoAgente(); }}
                 aoPassoDoAgente={registrarPassoDoAgente}
-                aoEncerrarResposta={encerrarRastroDoAgente}
+                aoEncerrarResposta={() => { agenteOcupado.current = false; encerrarRastroDoAgente(); }}
                 aoMostrarNoCerebro={mostrarNoCerebro}
                 tituloDaNota={tituloDaNota}
                 conversas={clienteDeConversas}

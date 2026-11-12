@@ -30,13 +30,16 @@ export default function Mensagem({ mensagem, aoAbrirNota, aoMostrarNoCerebro }: 
 }) {
   if (mensagem.papel === "usuario") {
     return (
-      <div className="flex justify-end motion-safe:animate-entrada">
+      <div className="flex flex-col items-end gap-1 motion-safe:animate-entrada">
         {/* O lado da tela já diz quem falou; para leitor de tela, o rótulo continua existindo. */}
         <span className="sr-only">Você</span>
         {/* `whitespace-pre-wrap` preserva as quebras de linha que a pessoa digitou. */}
         <p className="max-w-[85%] rounded-bolha rounded-br-sm bg-bolha-usuario px-3.5 py-2.5 text-corpo whitespace-pre-wrap text-pretty text-bolha-usuario-texto md:max-w-[70%]">
           {mensagem.conteudo}
         </p>
+        {!!mensagem.anexos?.length && <ul aria-label="Notas anexadas ao pedido" className="flex max-w-full flex-wrap justify-end gap-1">
+          {mensagem.anexos.map((anexo) => <li key={anexo.id}><button type="button" disabled={!aoAbrirNota} onClick={() => aoAbrirNota?.(anexo.id, { titulo: anexo.titulo, pasta: anexo.pasta })} title={`${anexo.pasta ?? "Notas"} · Versão salva ${anexo.revisao}`} className="min-h-10 max-w-full rounded-full border border-borda bg-painel px-3 text-controle text-texto transition-[background-color,transform] hover:bg-painel-alt motion-safe:active:scale-[0.96]">{anexo.titulo}</button></li>)}
+        </ul>}
       </div>
     );
   }

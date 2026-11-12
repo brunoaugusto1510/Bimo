@@ -1,13 +1,14 @@
 import { sql } from "drizzle-orm";
 import { bigint, check, foreignKey, index, jsonb, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { usuariosAuth } from "./auth";
-import type { FonteDaResposta, UsoDeFerramenta } from "../../types";
+import type { AnexoDeNota, FonteDaResposta, UsoDeFerramenta } from "../../types";
 
 /** O histórico do chat. Só o backend grava; a policy deixa a pessoa ler apenas o que é dela. */
 export const conversas = pgTable("conversas", {
   id: uuid("id").primaryKey(),
   userId: uuid("user_id").notNull().references(() => usuariosAuth.id, { onDelete: "cascade" }),
   titulo: text("titulo").notNull(),
+  notasDeContexto: jsonb("notas_de_contexto").$type<string[]>().notNull().default([]),
   criadaEm: timestamp("criada_em", { withTimezone: true }).notNull().defaultNow(),
   atualizadaEm: timestamp("atualizada_em", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -29,6 +30,7 @@ export const mensagensDeConversa = pgTable("mensagens_de_conversa", {
   conteudo: text("conteudo").notNull(),
   ferramentas: jsonb("ferramentas").$type<UsoDeFerramenta[]>(),
   fontes: jsonb("fontes").$type<FonteDaResposta[]>(),
+  anexos: jsonb("anexos").$type<AnexoDeNota[]>(),
   criadaEm: timestamp("criada_em", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   foreignKey({ columns: [t.conversaId, t.userId], foreignColumns: [conversas.id, conversas.userId] }).onDelete("cascade"),

@@ -70,8 +70,12 @@ it("não substitui sem leitura anterior na mesma execução", async () => {
   const atualizar = vi.spyOn(notas, "atualizarNota");
   buscar.mockResolvedValueOnce(chamada("editar_nota", { caminho: "Redes/TCP.md", conteudo: "novo", modo: "substituir" }, "editar"))
     .mockResolvedValueOnce(final());
-  const resultado = await responder(pergunta);
+  const resultado = await responder(pergunta, { contextoDeNotas: JSON.stringify([{ caminho: "Redes/TCP.md", conteudo: "original", revisao: 1 }]) });
   expect(atualizar).not.toHaveBeenCalled();
+  const pedido = JSON.parse(buscar.mock.calls[0][1].body);
+  expect(pedido.input.at(-2).content).toContain("original");
+  expect(pedido.input.at(-1).content).toBe(pergunta[0].conteudo);
+  expect(pedido.instructions).toContain("Priorize as notas anexadas");
   expect(resultado.ferramentas[0].erro).toBe(true);
   expect(JSON.parse(buscar.mock.calls[1][1].body).input.at(-1).output).toContain("ler_nota");
 });

@@ -24,6 +24,14 @@ const passo = (extra: Partial<LinhaDePasso> = {}): LinhaDePasso => ({
 });
 
 describe("lerRespostaDoChat", () => {
+  it("entrega o recibo antes das ferramentas e preserva-o na resposta", async () => {
+    const anexos = [{ id: "n1", titulo: "Nota", pasta: null, revisao: 2 }];
+    const aoContexto = vi.fn(), aoPasso = vi.fn();
+    const linhas = [{ tipo: "contexto", anexos }, passo(), { tipo: "resposta", resposta: "Ok", ferramentas: [], anexos }].map((linha) => JSON.stringify(linha)).join("\n");
+    expect((await lerRespostaDoChat(respostaEmFluxo([linhas]), aoPasso, aoContexto)).anexos).toEqual(anexos);
+    expect(aoContexto.mock.invocationCallOrder[0]).toBeLessThan(aoPasso.mock.invocationCallOrder[0]);
+    expect(aoContexto).toHaveBeenCalledWith(anexos);
+  });
   it("repassa cada passo na ordem e devolve a resposta final", async () => {
     const linhas = [
       JSON.stringify(passo({ nome: "buscar_notas", ids: ["n1", "n2"], resumo: 'Buscou "tcp" — 2 nota(s)' })),
