@@ -276,3 +276,41 @@
 - Suíte offline: 184 arquivos, 2.195 testes; 2.194 passaram na rodada completa. Única falha era a expectativa antiga de contador/botão visíveis durante Edição em AbaDeNota.revalidacao.test.tsx. Atualizada para conferir ligações em Leitura, ocultação durante Edição, checkpoint pelo menu e preservação ao voltar à Leitura. Reexecução do arquivo: 2/2 passam; lint do arquivo limpo. Nenhuma falha pendente conhecida nesta verificação. Avisos de act/NaN de jsdom ainda aparecem em algumas suítes.
 - Excluídos os quatro arquivos que acessam banco real: repositorio-de-notas/banco.test.ts, conversas/banco.test.ts, wiki/banco.test.ts e tests/busca-textual.integration.test.ts. PGlite rodou apenas em memória. Nenhuma migração, acesso de teste ao Supabase real ou chamada de modelo real.
 - Sem push/deploy: origin/main continua em 9a50857. Próximo passo, se solicitado: publicar a main local. O registro acima é histórico; o commit final de teste/documentação vem após 38d03f7.
+
+## 2026-11-12 — diagnóstico de latência na criação de notas
+
+- Revisado o caminho do botão até o POST e a transação do banco. Identificada espera obrigatória pela criação, múltiplas operações sequenciais e possível contenção no lock por usuário; cache evita nova leitura após sucesso. Sem medições, alteração de código ou escrita no banco. Recomendada instrumentação antes de atribuir a demora a uma etapa específica.
+
+## 2026-11-12 — organização de notas na barra lateral
+
+- Criados controles de nova nota por pasta e arraste de notas para pasta, raiz e lixeira; operações em notas abertas passam pela fila de salvamento, e exclusão pede confirmação. Adicionada cobertura de interação da barra lateral. Sem banco real ou deploy; verificar experiência tátil.
+
+## 2026-11-12 — 16h08 (America/Sao_Paulo) — notas como contexto no chat
+
+- Implementado o plano aprovado: pílulas e seletor, anexar pela nota/grafo, seleção por conversa, última versão salva, recibos por pedido, fontes/rastro, validação de limites/indisponibilidade e preservação de texto nas falhas.
+- Contratos de conversas estendidos e PATCH autenticado com mesma origem; banco/memória persistem seleção e recibos. Migração 0014 gerada por Drizzle com endereço local fictício; aplicada apenas em Postgres PGlite. Nenhuma migração no Supabase real nem chamada ao modelo real.
+- Regressão ampla offline: 188 arquivos, 2.228/2.230. Duas falhas do alerta vazio de organização das notas, em alteração simultânea, corrigidas por ajuste de semântica; repetição correspondente 15/15. Foco de 14 arquivos: 171/171. Último refinamento da fila mantém pergunta antes da resposta após falha; cinco arquivos repetidos, 36/36. Tipos e lint limpos.
+- QA em Chrome com cópia temporária e sete notas fictícias, temas claro/escuro, 1440×1024 e 390×844: seleção múltipla, persistência local via API, sem overflow horizontal, toque 40 px, pedido preservado no 503 esperado por falta de chave. Provedor real e banco remoto ficaram fora.
+- Documentação: documentacao/Bimo - Notas como Contexto no Chat.md; índice/domínio/hot atualizados. Alterações simultâneas de organização e memória preservadas. Sem commit, push ou deploy; aplicar 0014 antes de publicar.
+
+- Conferência final: rotas e persistência isolada 49/49 após validação de null e filtro por dono. Servidor temporário encerrado; servidor original preservado.
+
+## 2026-11-12 — 16h15 (America/Sao_Paulo) — migração 0014 aplicada
+
+- Usuário pediu explicitamente aplicar a migração. Usado o conector Supabase no projeto Bimo (gibqmmbukwtucylxpuag), sem acessar valores de .env.
+- Pré-verificação: 15 registros Drizzle, último timestamp/hash da 0013 conferidos; colunas de contexto/anexos ausentes; RLS ativa nas duas tabelas.
+- Aplicada apenas a 0014 por apply_migration (0014_notas_de_contexto), com DDL e registro Drizzle em um bloco atômico, bloqueio exclusivo do histórico e pré-condições revalidadas sob lock. Hash 92d3bb8b8f903c2d2a0d049cf0963534ea9b326c294aa2254edcbc39319b5fef; timestamp 1794509197779.
+- Pós-verificação: histórico com 16 registros, duas colunas com tipos/nulabilidade/padrão esperados, RLS mantida; zero seleções iniciais divergentes de [] e zero recibos preenchidos. Nenhuma nota, conversa ou mensagem criada/editada/apagada para teste. Sem deploy.
+- Pendência da 0014 resolvida; hot, índice e documento da funcionalidade atualizados. Próximo passo: revisar o fluxo local e publicar quando solicitado.
+
+## 2026-11-12 — filtro e organização das notas
+
+Barra lateral recebeu filtro de autoria e ordenação por nome e datas, mantendo hierarquia e busca. Metadados de criação e atualização percorrem repositório e árvore; verificação local com 114 testes, TypeScript e ESLint passou. Sem deploy ou revisão visual.
+
+## [2026-11-12 16:18 -03:00] Consulta | Autonomia e três notas de pensamento computacional
+
+Revisados código da fila, gatilhos, configuração, cron e documentação LLM Wiki para explicar elegibilidade, processamento, resultados e limites. Não verificados estado atual da fila, notas específicas ou implantação; nenhuma mudança de código, configuração ou dados remotos.
+
+## [2026-11-12 16:25 -03:00] Publicação | Organização e contexto do chat
+
+Preparada publicação da main solicitada pelo usuário. Commits fff31d6 e c8e004b separam organização/filtros das notas e anexos ao chat; incluídos também os sete commits previamente pendentes. Conferência de remoto sem divergência após fetch. TypeScript e lint aprovados; suíte offline em execução, sem testes que acessam o banco real.

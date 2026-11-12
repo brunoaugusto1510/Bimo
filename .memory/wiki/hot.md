@@ -2,6 +2,15 @@
 
 *This file is read first by agents to get immediate context. Agents must update this at the end of every session.*
 
+## 12/11/2026 — notas anexadas ao contexto do chat
+
+- Implementação local: pílulas, busca/seleção múltipla, prioridade para notas abertas, última versão salva por pedido, seleção persistente até remoção e restaurada pelo histórico. “Perguntar ao Bimo” anexa/foca sem substituir o rascunho; Novo chat limpa anexos. Árvore Chat/Grafo preservada.
+- Servidor lê por ID autorizado, limita a dez notas/60 mil caracteres JSON, recusa indisponíveis/excesso sem truncar, entrega recibos de título/pasta/revisão e mantém `ler_nota` obrigatório antes de substituir. Seleção/mensagens usam fila única, com repetição idempotente das pendências em ordem.
+- **12/11, 16h15: migração 0014 aplicada no Supabase real, após autorização explícita.** Banco identificado como Bimo; conferidos 15 registros e última 0013 antes de aplicar. Duas colunas criadas atomicamente e hash/timestamp registrados no Drizzle (agora 16 registros); RLS preservada, conversas existentes com seleção vazia e recibos nulos. Nenhuma nota/mensagem editada nem deploy. Implementação inicial havia sido validada somente em PGlite; a pendência remota está resolvida.
+- Tipos/lint aprovados; 171 testes focados em 14 arquivos aprovados. Depois do refinamento da fila, 36 testes em cinco arquivos repetidos passam (inclui novo caso de falha na pergunta). Regressão ampla: 2.228/2.230 na rodada; duas falhas por alerta vazio em alteração simultânea foram corrigidas, e os 15 testes correspondentes repetidos passam.
+- QA em cópia temporária com notas fictícias, desktop/mobile e temas claro/escuro; seleção gravada pelas rotas reais em memória e texto/anexos preservados em falha 503 deliberada. [Entrega e contratos](documentacao/Bimo%20-%20Notas%20como%20Contexto%20no%20Chat.md).
+- Alterações simultâneas de organização das notas e MemWiki foram preservadas. Próximo passo: revisar o fluxo local e publicar o código quando solicitado; a migração 0014 já está aplicada.
+
 ## Estado atual — 10/11/2026
 
 - **10/11, resumo para LinkedIn:** inventário e texto de publicação preparados a partir do código em `feat/historico-de-conversas`, HEAD `959cbdf`, da documentação e da gravação anterior. O recorte distingue funções implementadas, ingestão no backend, protótipo mobile com serviços simulados e planos de memória pessoal/multiusuário. Estado do deploy atual não verificado. Próximo passo: revisão da publicação pelo usuário.
@@ -167,3 +176,30 @@
 - Suíte offline: 184 arquivos, 2.195 testes; 2.194 passaram na rodada completa. Única falha era a expectativa antiga de contador/botão visíveis durante Edição em AbaDeNota.revalidacao.test.tsx. Atualizada para conferir ligações em Leitura, ocultação durante Edição, checkpoint pelo menu e preservação ao voltar à Leitura. Reexecução do arquivo: 2/2 passam; lint do arquivo limpo. Nenhuma falha pendente conhecida nesta verificação. Avisos de act/NaN de jsdom ainda aparecem em algumas suítes.
 - Excluídos os quatro arquivos que acessam banco real: repositorio-de-notas/banco.test.ts, conversas/banco.test.ts, wiki/banco.test.ts e tests/busca-textual.integration.test.ts. PGlite rodou apenas em memória. Nenhuma migração, acesso de teste ao Supabase real ou chamada de modelo real.
 - Sem push/deploy: origin/main continua em 9a50857. Próximo passo, se solicitado: publicar a main local. O registro acima é histórico; o commit final de teste/documentação vem após 38d03f7.
+
+## 12/11/2026 — revisão da demora ao criar nota
+
+- Fluxo revisado em código: o editor aguarda o POST e o commit antes de abrir; a resposta já semeia o cache, evitando GET adicional. O aviso de criação aparece após 800 ms, sem ser uma espera artificial.
+- No banco, a criação aguarda sondagem da Wiki, transação com lock por usuário, consultas de pastas e título, inserções da nota/versão e eventual registro da fila da Wiki. Latência de rede e contenção podem somar-se; colisões de título automático geram novos POSTs. Não foram medidos tempos nem criadas notas no banco real.
+- Próximo passo: instrumentar e medir POST, aquisição do lock e etapas da transação, em ambiente seguro, antes de escolher a otimização; avaliar editor provisório com recuperação de falhas e conflitos.
+
+## 12/11/2026 — organização de notas pela barra lateral
+
+- Implementada criação de nota pelo botão + de cada pasta e arraste de notas para pastas, raiz (título Estrutura das notas) ou lixeira com confirmação. A alteração é local, sem deploy.
+- Nota aberta usa a fila de edição existente; rascunhos pendentes e conflitos impedem operações inseguras. Notas fechadas são lidas antes de gravar com revisão; a movimentação reaproveita a reescrita de ligações do repositório. O arraste HTML nativo depende do navegador; experiência tátil não foi verificada.
+- Próximo passo: validar o fluxo visual e tátil no navegador; revisar as alterações locais já existentes antes de qualquer publicação.
+
+## 12/11/2026 — filtros e organização da barra lateral
+
+- Adicionado painel de filtro por autoria (todas, criadas pelo Bimo ou pela pessoa) e ordenação por nome, criação ou atualização, crescente ou decrescente. Ordenação ocorre dentro de cada pasta; busca e filtro combinam e datas desconhecidas ficam por último.
+- Datas e autoria original passam do repositório à árvore e sobrevivem à indexação e mesclagem de notas locais. “Criadas pelo Bimo” inclui notas criadas pelo agente, inclusive automações; edições posteriores não mudam a autoria original.
+- Verificação local: 114 testes em seis arquivos, TypeScript e ESLint dos arquivos alterados passaram. Sem verificação visual em navegador, migração, commit ou deploy. Próximo passo: revisar a experiência na interface.
+
+## 12/11/2026 — explicação da autonomia da Wiki
+
+- Revisado o fluxo local a pedido do usuário: estabilidade de 90 s após salvamento é elegibilidade, não temporizador de execução; atividade pode acelerar uma rodada, e cron configurado para 05:00 UTC depende de deploy/segredo e automação ativa. Última evidência local de 11/11 registrou automação desligada e chave OpenAI ausente; estado atual e situação das três notas não foram verificados. Nenhum dado remoto ou configuração alterado.
+- Próximo passo, se solicitado: diagnosticar somente leitura a fila e configuração do ambiente efetivamente usado para as três notas antes de propor ativação ou processamento.
+
+## 12/11/2026 — publicação preparada
+
+- Usuário solicitou publicar a main para testar na web. Criados commits fff31d6 (organização/filtros) e c8e004b (notas no contexto do chat), além dos sete commits anteriormente pendentes. Migração 0014 já estava aplicada no banco real. TypeScript e lint passaram; suíte offline em execução. Próximo passo: confirmar testes, enviar main e verificar implantação; verificar configuração real da automação separadamente antes de concluir que o processamento está ativo.

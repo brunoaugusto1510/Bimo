@@ -18,6 +18,8 @@ Diretório central do conhecimento de desenvolvimento. Leia `hot.md` primeiro; u
 - [Mobile](dominios/mobile.md): Expo, serviços simulados, estado e testes separados.
 - [Plano do sistema de memória do aplicativo](documentacao/Bimo%20-%20Plano%20do%20Sistema%20de%20Memoria.md): proposta de 27/10; conversas persistentes, preferências, decisões, pendências, recuperação, esquecimento, orçamento, fases F0–F8 e 30 critérios de aceite. Não implementado; distinto desta MemWiki.
 
+- [Notas como contexto no chat](documentacao/Bimo%20-%20Notas%20como%20Contexto%20no%20Chat.md): implementação de 12/11; pílulas, seleção persistente, recibos de revisão, contratos e limites. Migração 0014 aplicada no banco remoto às 16h15.
+
 ## Fontes brutas ingeridas
 
 Resumos das fontes em `.memory/.raw/` (imutáveis; a página resume e confronta, o arquivo bruto é a fonte da verdade).

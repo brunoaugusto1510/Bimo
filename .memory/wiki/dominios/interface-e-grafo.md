@@ -66,3 +66,15 @@ Relacionadas: [notas](notas-e-autenticacao.md), [agente](agente-e-ingestao.md) e
 - Verificação: 130 testes em dez arquivos passaram; após os últimos ajustes, 44 testes relevantes repetidos passam. Lint dos sete arquivos alterados limpo. tsc global segue com problemas preexistentes de referência gerada a rota removida em .next e @electric-sql/pglite ausente em três testes. Há avisos act/NaN de jsdom em testes existentes; nenhum erro no console do navegador observado.
 - Revisão autenticada no IAB de edição de notas existentes, menu, propriedades e Escape; temas claro/escuro em 1488×1058 e mobile 390×844. Nenhuma nota real criada/editada/apagada durante revisão. Tema automático e viewport padrão restaurados. design-qa.md registra comparação e resultado passed. Evidências em C:/Users/bruno/.codex/visualizations/2026/11/11/01a1cc50-bbb8-7f90-9fab-a7f90940d703/ (editor-desktop-claro.png, editor-desktop.png, editor-mobile.png, editor-comparacao.png).
 - Código apenas local, sem commit/deploy. Alterações anteriores da lixeira, AGENTS e MemWiki preservadas. Próximo passo: usuário revisar a edição local; publicação depende de pedido posterior.
+
+### Organização pela barra lateral — 12/11/2026
+
+O botão de cada pasta cria uma nota naquele caminho. O arraste nativo envia notas a uma pasta, à raiz pelo cabeçalho ou à lixeira com confirmação. A operação numa nota montada usa a fila do editor; nas demais, consulta a revisão e impede a operação se houver cópia local pendente. O repositório continua responsável por atualizar ligações. A interação tátil não foi validada.
+
+### Notas anexadas ao chat — 12/11/2026
+
+Pílulas no compositor com título/pasta e remoção individual, seletor pesquisável com múltiplas notas e abertas primeiro. A seleção pertence à conversa e permanece após o envio; Novo chat limpa, histórico restaura. Perguntar ao Bimo anexa/foca sem escrever ou enviar a pergunta. Usa última versão salva por pedido, com recibo de revisão nas mensagens e fontes da resposta. Notas indisponíveis bloqueiam envio; máximo dez e 60 mil caracteres serializados, sem truncar. Preservada a árvore de Chat/Grafo. Detalhes, validações e migração 0014 pendente no banco remoto em [Notas como contexto no chat](../documentacao/Bimo%20-%20Notas%20como%20Contexto%20no%20Chat.md).
+
+Atualização em 12/11/2026 às 16h15: a migração 0014 citada acima como pendente foi aplicada no Supabase real, com histórico Drizzle e colunas conferidos. A pendência remota está resolvida; código ainda sem deploy nesta tarefa.
+
+- A barra lateral filtra notas pela autoria original e ordena notas dentro de cada pasta por nome, data de criação ou última atualização. Datas e autoria viajam com a árvore; metadados ausentes não são inferidos e datas desconhecidas ficam no fim.
