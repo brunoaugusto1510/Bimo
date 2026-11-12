@@ -7,6 +7,9 @@ import AtualizadorDasNotas from "./AtualizadorDasNotas";
 import { esquecerSemente, EVENTO_LIXEIRA_ALTERADA } from "@/lib/cliente-de-notas";
 import type { NotaCompleta } from "@/lib/repositorio-de-notas/tipos";
 import Lixeira from "./Lixeira";
+import Dialogo from "./Dialogo";
+import { avisarLixeiraAlterada, buscarNota, mudarLixeira, salvarNota } from "@/lib/cliente-de-notas";
+import { EVENTO_NOTAS_REESCRITAS } from "@/lib/espaco-de-trabalho/usar-edicao-de-nota";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AlternadorDeTema from "@/components/AlternadorDeTema";
@@ -70,6 +73,9 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
   // Uma resposta iniciada antes da remoção não pode fazer a nota reaparecer.
   const [removidas, definirRemovidas] = useState<ReadonlyMap<string, number>>(new Map());
   const [lixeiraAberta, abrirLixeira] = useState(false);
+  const [notaParaLixeira, definirNotaParaLixeira] = useState<string | null>(null);
+  const [erroOrganizacao, definirErroOrganizacao] = useState("");
+  const organizando = useRef(false);
   const [avisoLixeira, avisarLixeira] = useState("");
   const itens = useMemo(() => removidas.size ? construirArvore([...indexarNotas(itensBase).values()].filter((n) => !removidas.has(n.id))) : itensBase, [itensBase, removidas]);
   const grafo = useMemo(() => removidas.size ? { ...grafoBase, nos: grafoBase.nos.filter((n) => !removidas.has(n.id)), arestas: grafoBase.arestas.filter((a) => !removidas.has(a.de) && !removidas.has(a.para)) } : grafoBase, [grafoBase, removidas]);
@@ -224,6 +230,30 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
       setModo("notas"); setMenuAberto(false); setPaletaAberta(false);
     },
   });
+  async function organizarNota(id: string, destino: { pasta: string | null } | { lixeira: true }) {
+    if (organizando.current) return;
+    organizando.current = true; definirErroOrganizacao("");
+    try {
+      const abasDaNota = estado.abas.filter((aba) => aba.tipo === "nota" && idAtual(aba) === id);
+      if (abasDaNota.length > 1) throw new Error("Feche as abas duplicadas desta nota antes de movê-la.");
+      const pedido: { id: string; pasta?: string | null; lixeira?: boolean; promessa?: Promise<unknown> } = { id, ...destino };
+      window.dispatchEvent(new CustomEvent("bimo:organizar-nota", { detail: pedido }));
+      if (pedido.promessa) await pedido.promessa;
+      else {
+        if (abasDaNota.length) throw new Error("Aguarde o carregamento da nota antes de movê-la.");
+        try { if (localStorage.getItem(`bimo_rascunho:${id}`)) throw new Error("Abra a nota e resolva o rascunho antes de movê-la."); }
+        catch (erro) { if (erro instanceof Error && erro.message.startsWith("Abra a nota")) throw erro; throw new Error("Não foi possível verificar o rascunho. Abra a nota antes de movê-la."); }
+        const { nota } = await buscarNota(id);
+        const resultado = "lixeira" in destino ? await mudarLixeira(id, nota.revisao) : await salvarNota(id, { pasta: destino.pasta }, { revisaoBase: nota.revisao, checkpoint: true });
+        if (resultado.tipo !== "ok") throw new Error(resultado.tipo === "titulo-em-uso" ? "Já existe uma nota com esse título na pasta de destino." : resultado.tipo === "erro" ? resultado.mensagem : "Não foi possível mover a nota. Atualize e tente novamente.");
+        if ("lixeira" in destino) avisarLixeiraAlterada(resultado.nota, true);
+        else { registrarNota(resultado.nota); window.dispatchEvent(new CustomEvent(EVENTO_NOTAS_REESCRITAS, { detail: { id } })); window.dispatchEvent(new Event("bimo:nota-criada")); }
+      }
+      definirNotaParaLixeira(null);
+      if (!("lixeira" in destino)) avisarLixeira("Nota movida para a pasta.");
+    } catch (erro) { definirErroOrganizacao(erro instanceof Error ? erro.message : "Não foi possível mover a nota."); }
+    finally { organizando.current = false; }
+  }
   const pastaAtual = idDaNotaAberta ? notasPorId.get(idDaNotaAberta)?.pasta ?? null : null;
   const criarNova = () => criacao.criar({ pasta: pastaAtual });
   const criarNovaAtual = useRef(criarNova);
@@ -362,6 +392,12 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
           </button>
         </div>
       </header>
+      {notaParaLixeira && <Dialogo titulo="Mover para a lixeira?" aoFechar={() => definirNotaParaLixeira(null)}>
+        <p>A nota «{notasPorId.get(notaParaLixeira)?.titulo}» poderá ser restaurada depois.</p>
+        {erroOrganizacao && <p role="alert">{erroOrganizacao}</p>}
+        <button type="button" className="min-h-10 rounded-full bg-destaque-suave px-4 text-destaque-texto" onClick={() => { void organizarNota(notaParaLixeira, { lixeira: true }); }}>Mover para a lixeira</button>
+      </Dialogo>}
+      <p role={erroOrganizacao && !notaParaLixeira ? "alert" : undefined} aria-live="assertive" className={erroOrganizacao ? "border-b border-borda bg-painel px-4 py-2 text-texto" : "sr-only"}>{erroOrganizacao}</p>
       {lixeiraAberta && <Lixeira aoFechar={() => abrirLixeira(false)} />}
       <p role="status" className="sr-only">{avisoLixeira}</p>
 
@@ -389,6 +425,9 @@ export default function PaginaPrincipal({ itens: itensIniciais, grafo: grafoInic
             onSelecionarNota={(nota) => escolherNoMenu(nota.id)}
             marcas={marcasNaLista}
             aoAbrirLixeira={capacidades.escrita ? () => abrirLixeira(true) : undefined}
+            aoCriarNaPasta={capacidades.escrita ? (pasta) => { void criacao.criar({ pasta }); } : undefined}
+            aoMoverNota={capacidades.escrita ? (id, pasta) => { if (notasPorId.get(id)?.pasta !== pasta) void organizarNota(id, { pasta }); } : undefined}
+            aoEnviarLixeira={capacidades.escrita ? (id) => { definirErroOrganizacao(""); definirNotaParaLixeira(id); } : undefined}
           />
         </div>
 

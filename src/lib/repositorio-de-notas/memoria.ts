@@ -43,6 +43,7 @@ function paraResumo(nota: NotaCompleta): ResumoDeNota {
     titulo: nota.titulo,
     pasta: nota.pasta,
     tags: [...nota.tags],
+    criadoPor: nota.criadoPor,
     criadoEm: nota.criadoEm,
     atualizadoEm: nota.atualizadoEm,
     revisao: nota.revisao,
@@ -72,7 +73,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
     return [...notas.values()].find((nota) => nota.id !== ignorar && chaveDeTitulo(nota.pasta, nota.titulo) === chave);
   }
 
-  function inserir(entrada: EntradaDeNota): ResultadoDeEscrita {
+  function inserir(entrada: EntradaDeNota, criadoPor: "usuario" | "agente" = "usuario"): ResultadoDeEscrita {
     const pasta = adotarGrafiaDaPasta(normalizarPasta(entrada.pasta), pastasExistentes());
 
     const existente = acharPorTitulo(pasta, entrada.titulo);
@@ -85,6 +86,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       pasta,
       tags: [...(entrada.tags ?? [])],
       conteudo: entrada.conteudo ?? "",
+      criadoPor,
       criadoEm: momento,
       atualizadoEm: momento,
       revisao: 1,
@@ -104,7 +106,7 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       if (nota.revisao !== entrada.alvo.revisao) throw new ErroWiki("A página foi alterada. Preserve a edição manual.", 409);
       const nova = { ...nota, conteudo: entrada.conteudo, revisao: nota.revisao + 1, atualizadoEm: agora() };
       notas.set(nova.id, nova); versao++; resultado = { tipo: "ok", nota: copiar(nova) };
-    } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta, conteudo: entrada.conteudo });
+    } else resultado = inserir({ titulo: entrada.titulo, pasta: entrada.pasta, conteudo: entrada.conteudo }, "agente");
     if (resultado.tipo === "ok") paginas.set(resultado.nota.id, copiarWiki({ notaId: resultado.nota.id, revisaoPublicada: resultado.nota.revisao, fontes: compactarFontes(entrada.fontes, entrada.afirmacoes), afirmacoes: entrada.afirmacoes, estrutura: { ligacoes: entrada.ligacoes, lacunas: entrada.lacunas, divergencias: entrada.divergencias ?? [],
       ...(entrada.resumo ? { resumo: entrada.resumo } : {}), ...(entrada.editorial ? { editorial: entrada.editorial } : {}) } }));
     return resultado;
@@ -225,8 +227,8 @@ export function criarRepositorioEmMemoria(iniciais: readonly EntradaDeNota[] = [
       }));
     },
 
-    async criarNota(entrada) {
-      const resultado = inserir(entrada); if (resultado.tipo === "ok") automacao.registrar(resultado.nota); return resultado;
+    async criarNota(entrada, autor) {
+      const resultado = inserir(entrada, autor.criadoPor); if (resultado.tipo === "ok") automacao.registrar(resultado.nota); return resultado;
     },
 
     async atualizarNota(id, mudancas, { revisaoBase }) {

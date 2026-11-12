@@ -22,7 +22,7 @@ const TEMPO_LIMITE_DE_LOCK = "5s";
 const TEMPO_LIMITE_DE_INSTRUCAO = "15s";
 const colunasDoResumo = {
   id: sql<string>`${notas.id}::text`, titulo: notas.titulo, pasta: notas.pasta,
-  tags: notas.tags, revisao: notas.revisao, criadoEm: notas.criadoEm, atualizadoEm: notas.atualizadoEm,
+  tags: notas.tags, criadoPor: notas.criadoPor, revisao: notas.revisao, criadoEm: notas.criadoEm, atualizadoEm: notas.atualizadoEm,
 };
 const colunasDaNota = { ...colunasDoResumo, conteudo: notas.conteudo };
 type LinhaDoResumo = Omit<ResumoDeNota, "tags" | "criadoEm" | "atualizadoEm"> & {

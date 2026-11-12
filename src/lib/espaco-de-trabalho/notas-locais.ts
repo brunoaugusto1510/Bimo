@@ -4,7 +4,7 @@ export type NotaLocal = { resumo: NotaParaArvore; criadoEm: number };
 export type NotasLocais = ReadonlyMap<string, NotaLocal>;
 
 export function mesclarNotasLocais(base: ReadonlyMap<string, NotaParaArvore>, locais: NotasLocais): Map<string, NotaParaArvore> {
-  return new Map([...base, ...[...locais].map(([id, local]) => [id, local.resumo] as const)]);
+  return new Map([...base, ...[...locais].map(([id, local]) => [id, { ...base.get(id), ...local.resumo }] as const)]);
 }
 
 /** Só uma leitura posterior à escrita pode confirmar a listagem que a substitui. */

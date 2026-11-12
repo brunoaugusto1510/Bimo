@@ -16,7 +16,11 @@ export type Mensagem = {
   ferramentas?: UsoDeFerramenta[];
   /** Notas que o agente leu para responder — as "Fontes" que o chat acende no cérebro. */
   fontes?: FonteDaResposta[];
+  /** Recibo das versões salvas que acompanharam este pedido. */
+  anexos?: AnexoDeNota[];
 };
+
+export type AnexoDeNota = { id: IdDeNota; titulo: string; pasta: string | null; revisao: number };
 
 export type FonteDaResposta = { id: IdDeNota; titulo: string };
 
@@ -43,7 +47,7 @@ export type ItemDeNotas =
       caminho: string;
       filhos: ItemDeNotas[];
     }
-  | { tipo: "nota"; id: IdDeNota; nome: string; pasta: string | null };
+  | { tipo: "nota"; id: IdDeNota; nome: string; pasta: string | null; criadoEm?: string | null; atualizadoEm?: string | null; criadoPor?: "usuario" | "agente" };
 
 /** Um uso de ferramenta pelo agente, para mostrar na interface o que ele consultou. */
 export type UsoDeFerramenta = {

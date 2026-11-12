@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import BarraLateral from "./BarraLateral";
@@ -34,6 +34,19 @@ function renderizar(props: Partial<React.ComponentProps<typeof BarraLateral>> = 
 }
 
 describe("BarraLateral", () => {
+  it("cria na pasta escolhida e encaminha arrastos para pasta e lixeira", async () => {
+    const criar = vi.fn(), mover = vi.fn(), lixeira = vi.fn();
+    const { usuario } = renderizar({ aoCriarNaPasta: criar, aoMoverNota: mover, aoEnviarLixeira: lixeira, aoAbrirLixeira: vi.fn() });
+    await usuario.click(screen.getByRole("button", { name: "Criar nota em Estudos/Redes" }));
+    expect(criar).toHaveBeenCalledWith("Estudos/Redes");
+    const dados = new Map<string, string>();
+    const dataTransfer = { types: ["application/x-bimo-nota"], setData: (tipo: string, valor: string) => dados.set(tipo, valor), getData: (tipo: string) => dados.get(tipo) ?? "", effectAllowed: "" };
+    fireEvent.dragStart(screen.getByRole("button", { name: "Inbox" }), { dataTransfer });
+    fireEvent.drop(screen.getByRole("button", { name: /^Redes/ }), { dataTransfer });
+    expect(mover).toHaveBeenCalledWith("inbox", "Estudos/Redes");
+    fireEvent.drop(screen.getByRole("button", { name: "Abrir lixeira" }), { dataTransfer });
+    expect(lixeira).toHaveBeenCalledWith("inbox");
+  });
   it("mostra o rótulo da seção e o total de notas", () => {
     renderizar();
 
@@ -172,4 +185,23 @@ describe("BarraLateral — rastro do Bimo", () => {
 
     expect(screen.getByRole("button", { name: /^TCP.*criada pelo Bimo$/ })).toHaveTextContent("nova");
   });
+});
+
+it("filtra autoria e ordena por data sem perder a estrutura", async () => {
+  const itens: ItemDeNotas[] = [{ tipo: "pasta", nome: "P", caminho: "P", filhos: [
+    { tipo: "nota", id: "a", nome: "Antiga", pasta: "P", criadoPor: "agente", atualizadoEm: "2024-01-01T00:00:00Z" },
+    { tipo: "nota", id: "b", nome: "Nova", pasta: "P", criadoPor: "agente", atualizadoEm: "2025-01-01T00:00:00Z" },
+    { tipo: "nota", id: "c", nome: "Minha", pasta: "P", criadoPor: "usuario" },
+  ] }];
+  const { usuario } = renderizar({ itens });
+  await usuario.click(screen.getByRole("button", { name: "Filtrar e organizar" }));
+  await usuario.selectOptions(screen.getByLabelText("Mostrar"), "agente");
+  await usuario.selectOptions(screen.getByLabelText("Ordenar por"), "recentes");
+  expect(screen.queryByRole("button", { name: "Minha" })).not.toBeInTheDocument();
+  expect(screen.getByText("2 de 3 notas")).toBeInTheDocument();
+  const nomes = screen.getByRole("navigation").querySelectorAll("button");
+  expect(Array.from(nomes).map((botao) => botao.textContent)).toEqual(["▾P2 notas", "Nova", "Antiga"]);
+  await usuario.type(screen.getByRole("searchbox"), "Antiga");
+  expect(screen.queryByRole("button", { name: "Nova" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Antiga" })).toBeInTheDocument();
 });

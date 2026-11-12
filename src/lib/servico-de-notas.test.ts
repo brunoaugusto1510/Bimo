@@ -78,7 +78,7 @@ describe("obterDadosDaPagina", () => {
     const id = await idDe(repo, "Café");
 
     expect(dados.grafo.nos).toContainEqual({ tipo: "nota", id, titulo: "Café", grupo: "Raiz" });
-    expect(dados.itens).toContainEqual({ tipo: "nota", id, nome: "Café", pasta: null });
+    expect(dados.itens).toContainEqual(expect.objectContaining({ tipo: "nota", id, nome: "Café", pasta: null, criadoPor: "usuario", criadoEm: expect.any(String), atualizadoEm: expect.any(String) }));
   });
 
   it("repassa o aviso do repositório", async () => {

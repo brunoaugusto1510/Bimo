@@ -7,7 +7,7 @@
 import { juntarCaminho, normalizarTexto } from "./caminho-da-nota";
 import type { IdDeNota, ItemDeNotas } from "./types";
 
-export type NotaParaArvore = { id: IdDeNota; titulo: string; pasta: string | null };
+export type NotaParaArvore = { id: IdDeNota; titulo: string; pasta: string | null; criadoEm?: string | null; atualizadoEm?: string | null; criadoPor?: "usuario" | "agente" };
 
 type NoPasta = { nome: string; caminho: string; filhos: Map<string, NoPasta>; notas: NotaParaArvore[] };
 
@@ -47,7 +47,7 @@ export function construirArvore(notas: readonly NotaParaArvore[]): ItemDeNotas[]
 
     const itensDeNota = [...no.notas]
       .sort((a, b) => comparar(a.titulo, b.titulo))
-      .map((nota): ItemDeNotas => ({ tipo: "nota", id: nota.id, nome: nota.titulo, pasta: nota.pasta }));
+      .map((nota): ItemDeNotas => ({ tipo: "nota", id: nota.id, nome: nota.titulo, pasta: nota.pasta, ...(nota.criadoEm !== undefined && { criadoEm: nota.criadoEm }), ...(nota.atualizadoEm !== undefined && { atualizadoEm: nota.atualizadoEm }), ...(nota.criadoPor !== undefined && { criadoPor: nota.criadoPor }) }));
 
     return [...pastas, ...itensDeNota];
   }
@@ -61,7 +61,7 @@ export function indexarNotas(
   mapa: Map<IdDeNota, NotaParaArvore> = new Map(),
 ): Map<IdDeNota, NotaParaArvore> {
   for (const item of itens) {
-    if (item.tipo === "nota") mapa.set(item.id, { id: item.id, titulo: item.nome, pasta: item.pasta });
+    if (item.tipo === "nota") mapa.set(item.id, { id: item.id, titulo: item.nome, pasta: item.pasta, ...(item.criadoEm !== undefined && { criadoEm: item.criadoEm }), ...(item.atualizadoEm !== undefined && { atualizadoEm: item.atualizadoEm }), ...(item.criadoPor !== undefined && { criadoPor: item.criadoPor }) });
     else indexarNotas(item.filhos, mapa);
   }
   return mapa;

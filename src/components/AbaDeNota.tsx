@@ -95,6 +95,15 @@ export default function AbaDeNota({
   });
   useEffect(() => { pendenciaAtual.current = edicao.pendente; }, [edicao.pendente]);
   useEffect(() => {
+    function organizar(evento: Event) {
+      const pedido = (evento as CustomEvent<{ id: string; pasta?: string | null; lixeira?: boolean; promessa?: Promise<unknown> }>).detail;
+      if (pedido.id !== id || pedido.promessa) return;
+      pedido.promessa = pedido.lixeira ? edicao.moverParaLixeira() : edicao.atualizarMetadados({ pasta: pedido.pasta }).then((resposta) => { aoRenomear?.(resposta.nota); return resposta; });
+    }
+    window.addEventListener("bimo:organizar-nota", organizar);
+    return () => window.removeEventListener("bimo:organizar-nota", organizar);
+  });
+  useEffect(() => {
     if (edicao.ocupado || !focoNoTextoPendente.current) return;
     focoNoTextoPendente.current = false;
     artigo.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });

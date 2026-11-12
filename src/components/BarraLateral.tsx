@@ -13,6 +13,9 @@ type Props = {
   /** Por onde o Bimo passou na pergunta atual: a lista marca essas notas junto com o grafo. */
   marcas?: ReadonlyMap<IdDeNota, MarcaDoRastro>;
   aoAbrirLixeira?: () => void;
+  aoCriarNaPasta?: (pasta: string) => void;
+  aoMoverNota?: (id: string, pasta: string | null) => void;
+  aoEnviarLixeira?: (id: string) => void;
 };
 
 /** Recuo por nível de pasta, em pixels. */
@@ -37,13 +40,17 @@ const SEM_MARCAS: ReadonlyMap<IdDeNota, MarcaDoRastro> = new Map();
  * rótulo de seção com o total, pastas com caret e contagem, e a nota
  * selecionada em azul.
  */
-export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota, marcas = SEM_MARCAS, aoAbrirLixeira }: Props) {
+export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota, marcas = SEM_MARCAS, aoAbrirLixeira, aoCriarNaPasta, aoMoverNota, aoEnviarLixeira }: Props) {
   const [consulta, setConsulta] = useState("");
+  const [opcoesAbertas, definirOpcoesAbertas] = useState(false);
+  const [ordem, definirOrdem] = useState("nome");
+  const [autoria, definirAutoria] = useState("todas");
 
   const totalDeNotas = useMemo(() => contarNotas(itens), [itens]);
-  const itensVisiveis = useMemo(() => filtrarArvore(itens, consulta), [itens, consulta]);
+  const itensVisiveis = useMemo(() => organizar(filtrarArvore(itens, consulta), ordem, autoria), [itens, consulta, ordem, autoria]);
   const buscando = consulta.trim() !== "";
-  const notasEncontradas = buscando ? contarNotas(itensVisiveis) : totalDeNotas;
+  const filtrando = buscando || autoria !== "todas";
+  const notasEncontradas = filtrando ? contarNotas(itensVisiveis) : totalDeNotas;
 
   return (
     // "Superfície Alt" do design system: a barra lateral fica um tom abaixo do painel do chat.
@@ -73,12 +80,27 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota,
         </label>
       </div>
 
-      <div className="flex items-center justify-between px-4 pt-4 pb-1.5">
+      <div className="px-3 pt-2">
+        <button type="button" aria-expanded={opcoesAbertas} aria-controls="opcoes-das-notas" onClick={() => definirOpcoesAbertas(!opcoesAbertas)} className="flex min-h-10 w-full items-center gap-2 rounded-tag px-3 text-left text-controle text-texto transition-colors hover:bg-painel">
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="size-4"><path d="M4 7h16M7 12h10m-7 5h4" /></svg>
+          Filtrar e organizar{(autoria !== "todas" || ordem !== "nome") && <span className="ml-auto text-destaque-texto">Ativo</span>}
+        </button>
+        {opcoesAbertas && <div id="opcoes-das-notas" className="space-y-3 rounded-bloco border border-borda bg-painel p-3">
+          <label className="block text-controle text-texto">Mostrar
+            <select value={autoria} onChange={(e) => definirAutoria(e.target.value)} className="mt-1 min-h-10 w-full rounded-tag border border-borda bg-painel-alt px-2 text-controle"><option value="todas">Todas as notas</option><option value="agente">Criadas pelo Bimo</option><option value="usuario">Criadas por mim</option></select>
+          </label>
+          <label className="block text-controle text-texto">Ordenar por
+            <select value={ordem} onChange={(e) => definirOrdem(e.target.value)} className="mt-1 min-h-10 w-full rounded-tag border border-borda bg-painel-alt px-2 text-controle"><option value="nome">Nome (A–Z)</option><option value="recentes">Atualizadas recentemente</option><option value="antigas">Atualizadas há mais tempo</option><option value="criacao">Criadas recentemente</option><option value="criacao-antiga">Criadas há mais tempo</option></select>
+          </label>
+        </div>}
+      </div>
+
+      <div className="flex items-center justify-between px-4 pt-4 pb-1.5" onDragOver={(evento) => { if (aoMoverNota && evento.dataTransfer.types.includes("application/x-bimo-nota")) evento.preventDefault(); }} onDrop={(evento) => { evento.preventDefault(); const id = evento.dataTransfer.getData("application/x-bimo-nota"); if (id) aoMoverNota?.(id, null); }} title={aoMoverNota ? "Arraste uma nota aqui para removê-la da pasta" : undefined}>
         <h2 className="text-secao font-semibold tracking-[0.08em] text-suave uppercase">
           Estrutura das notas
         </h2>
         <span className="text-xs text-suave tabular-nums">
-          {buscando
+          {filtrando
             ? `${notasEncontradas} de ${totalDeNotas} notas`
             : `${totalDeNotas} nota${totalDeNotas === 1 ? "" : "s"}`}
         </span>
@@ -90,7 +112,7 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota,
       <nav aria-label="Pastas e notas" className="relative flex-1 overflow-y-auto px-2 pb-2">
         {itensVisiveis.length === 0 ? (
           <p className="px-2 py-4 text-sm text-suave">
-            Nenhuma nota encontrada para “{consulta.trim()}”.
+            {buscando ? `Nenhuma nota encontrada para “${consulta.trim()}”.` : "Nenhuma nota corresponde ao filtro."}
           </p>
         ) : (
           itensVisiveis.map((item) => (
@@ -98,15 +120,17 @@ export default function BarraLateral({ itens, notaSelecionada, onSelecionarNota,
               key={chaveDoItem(item)}
               item={item}
               nivel={0}
-              forcarAberta={buscando}
+              forcarAberta={filtrando}
               notaSelecionada={notaSelecionada}
               onSelecionarNota={onSelecionarNota}
               marcas={marcas}
+              aoCriarNaPasta={aoCriarNaPasta}
+              aoMoverNota={aoMoverNota}
             />
           ))
         )}
       </nav>
-      {aoAbrirLixeira && <div className="shrink-0 border-t border-borda p-2"><button type="button" aria-label="Abrir lixeira" onClick={aoAbrirLixeira} className="flex min-h-10 w-full items-center gap-2 rounded-tag px-3 text-controle text-suave hover:bg-painel hover:text-texto"><svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="size-4"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg>Lixeira</button></div>}
+      {aoAbrirLixeira && <div className="shrink-0 border-t border-borda p-2"><button type="button" onDragOver={(e) => { if (aoEnviarLixeira && e.dataTransfer.types.includes("application/x-bimo-nota")) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("application/x-bimo-nota"); if (id) aoEnviarLixeira?.(id); }} aria-label="Abrir lixeira" onClick={aoAbrirLixeira} className="flex min-h-10 w-full items-center gap-2 rounded-tag px-3 text-controle text-suave hover:bg-painel hover:text-texto"><svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="size-4"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg>Lixeira</button></div>}
     </aside>
   );
 }
@@ -123,6 +147,8 @@ function ItemDaArvore({
   notaSelecionada,
   onSelecionarNota,
   marcas,
+  aoCriarNaPasta,
+  aoMoverNota,
 }: {
   item: ItemDeNotas;
   nivel: number;
@@ -131,6 +157,8 @@ function ItemDaArvore({
   notaSelecionada: IdDeNota | null;
   onSelecionarNota: Props["onSelecionarNota"];
   marcas: ReadonlyMap<IdDeNota, MarcaDoRastro>;
+  aoCriarNaPasta?: Props["aoCriarNaPasta"];
+  aoMoverNota?: Props["aoMoverNota"];
 }) {
   // Pastas de primeiro nível começam abertas; as de dentro, fechadas.
   const [aberta, setAberta] = useState(nivel === 0);
@@ -152,6 +180,8 @@ function ItemDaArvore({
     return (
       <button
         type="button"
+        draggable={!!aoMoverNota}
+        onDragStart={(evento) => { evento.dataTransfer.setData("application/x-bimo-nota", item.id); evento.dataTransfer.effectAllowed = "move"; }}
         style={{ paddingLeft: `${recuoBase + RECUO_DA_NOTA}px` }}
         onClick={() => onSelecionarNota({ id: item.id, nome: item.nome })}
         aria-current={selecionada ? "true" : undefined}
@@ -177,6 +207,7 @@ function ItemDaArvore({
 
   return (
     <div>
+      <div className="flex items-center" onDragOver={(evento) => { if (aoMoverNota && evento.dataTransfer.types.includes("application/x-bimo-nota")) evento.preventDefault(); }} onDrop={(evento) => { evento.preventDefault(); evento.stopPropagation(); const id = evento.dataTransfer.getData("application/x-bimo-nota"); if (id) { aoMoverNota?.(id, item.caminho); setAberta(true); } }}>
       <button
         type="button"
         style={{ paddingLeft: `${recuoBase + RECUO_DA_PASTA}px` }}
@@ -193,6 +224,8 @@ function ItemDaArvore({
           <span className="sr-only"> nota{totalDeNotas === 1 ? "" : "s"}</span>
         </span>
       </button>
+      {aoCriarNaPasta && <button type="button" aria-label={`Criar nota em ${item.caminho}`} title="Criar nota nesta pasta" onClick={() => { setAberta(true); aoCriarNaPasta(item.caminho); }} className="min-h-10 min-w-10 rounded-full text-destaque-texto hover:bg-painel">+</button>}
+      </div>
 
       {estaAberta && (
         <div>
@@ -205,6 +238,8 @@ function ItemDaArvore({
               notaSelecionada={notaSelecionada}
               onSelecionarNota={onSelecionarNota}
               marcas={marcas}
+              aoCriarNaPasta={aoCriarNaPasta}
+              aoMoverNota={aoMoverNota}
             />
           ))}
         </div>
@@ -216,4 +251,23 @@ function ItemDaArvore({
 /** O React precisa de uma chave estável por item de lista. */
 function chaveDoItem(item: ItemDeNotas): string {
   return item.tipo === "nota" ? `nota:${item.id}` : `pasta:${item.caminho}`;
+}
+
+/** Mantém as pastas em ordem alfabética e ordena as notas dentro de cada pasta. */
+function organizar(itens: ItemDeNotas[], ordem: string, autoria: string): ItemDeNotas[] {
+  const resultado = itens.flatMap((item): ItemDeNotas[] => {
+    if (item.tipo === "nota") return autoria === "todas" || item.criadoPor === autoria ? [item] : [];
+    const filhos = organizar(item.filhos, ordem, autoria);
+    return filhos.length ? [{ ...item, filhos }] : [];
+  });
+  if (ordem === "nome") return resultado;
+  const campo = ordem.startsWith("criacao") ? "criadoEm" : "atualizadoEm";
+  const crescente = ordem === "antigas" || ordem === "criacao-antiga";
+  return resultado.sort((a, b) => {
+    if (a.tipo === "pasta" || b.tipo === "pasta") return a.tipo === b.tipo ? a.nome.localeCompare(b.nome, "pt-BR") : a.tipo === "pasta" ? -1 : 1;
+    const dataA = Date.parse(a[campo] ?? "");
+    const dataB = Date.parse(b[campo] ?? "");
+    if (!Number.isFinite(dataA) || !Number.isFinite(dataB)) return Number.isFinite(dataA) ? -1 : Number.isFinite(dataB) ? 1 : a.nome.localeCompare(b.nome, "pt-BR");
+    return (crescente ? dataA - dataB : dataB - dataA) || a.nome.localeCompare(b.nome, "pt-BR");
+  });
 }

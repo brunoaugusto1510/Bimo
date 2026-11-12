@@ -18,6 +18,7 @@ export type ResumoDeNota = {
   /** Caminho da pasta (`A/B`); `null` é a raiz. Organização pura, não identidade. */
   pasta: string | null;
   tags: string[];
+  criadoPor?: "usuario" | "agente";
   /** ISO 8601, ou `null` quando a fonte não sabe. */
   criadoEm: string | null;
   atualizadoEm: string | null;
